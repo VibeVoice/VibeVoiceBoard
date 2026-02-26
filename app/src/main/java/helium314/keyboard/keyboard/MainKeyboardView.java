@@ -45,6 +45,7 @@ import helium314.keyboard.keyboard.internal.SlidingKeyInputDrawingPreview;
 import helium314.keyboard.keyboard.internal.TimerHandler;
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode;
 import helium314.keyboard.latin.R;
+import helium314.keyboard.latin.LatinIME;
 import helium314.keyboard.latin.RichInputMethodSubtype;
 import helium314.keyboard.latin.SuggestedWords;
 import helium314.keyboard.latin.common.ColorType;
@@ -133,8 +134,8 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     public MainKeyboardView(final Context context, final AttributeSet attrs, final int defStyle) {
         super(context, attrs, defStyle);
 
-        final DrawingPreviewPlacerView drawingPreviewPlacerView =
-                new DrawingPreviewPlacerView(new ContextThemeWrapper(context, R.style.platformActivityTheme), attrs);
+        final DrawingPreviewPlacerView drawingPreviewPlacerView = new DrawingPreviewPlacerView(
+                new ContextThemeWrapper(context, R.style.platformActivityTheme), attrs);
 
         final TypedArray mainKeyboardViewAttr = context.obtainStyledAttributes(
                 attrs, R.styleable.MainKeyboardView, defStyle, R.style.MainKeyboardView);
@@ -234,7 +235,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             // TODO: Stop returning null.
             return null;
         }
-        final ObjectAnimator animator = (ObjectAnimator)AnimatorInflater.loadAnimator(
+        final ObjectAnimator animator = (ObjectAnimator) AnimatorInflater.loadAnimator(
                 getContext(), resId);
         if (animator != null) {
             animator.setTarget(target);
@@ -253,7 +254,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             animatorToCancel.cancel();
             startFraction = 1.0f - animatorToCancel.getAnimatedFraction();
         }
-        final long startTime = (long)(animatorToStart.getDuration() * startFraction);
+        final long startTime = (long) (animatorToStart.getDuration() * startFraction);
         animatorToStart.start();
         animatorToStart.setCurrentPlayTime(startTime);
     }
@@ -261,8 +262,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     // Implements {@link DrawingProxy#startWhileTypingAnimation(int)}.
     /**
      * Called when a while-typing-animation should be started.
-     * @param fadeInOrOut {@link DrawingProxy#FADE_IN} starts while-typing-fade-in animation.
-     * {@link DrawingProxy#FADE_OUT} starts while-typing-fade-out animation.
+     * 
+     * @param fadeInOrOut {@link DrawingProxy#FADE_IN} starts while-typing-fade-in
+     *                    animation.
+     *                    {@link DrawingProxy#FADE_OUT} starts while-typing-fade-out
+     *                    animation.
      */
     @Override
     public void startWhileTypingAnimation(final int fadeInOrOut) {
@@ -284,19 +288,23 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         PointerTracker.setKeyboardActionListener(listener);
     }
 
-    // TODO: We should reconsider which coordinate system should be used to represent keyboard event.
+    // TODO: We should reconsider which coordinate system should be used to
+    // represent keyboard event.
     public int getKeyX(final int x) {
         return Constants.isValidCoordinate(x) ? mKeyDetector.getTouchX(x) : x;
     }
 
-    // TODO: We should reconsider which coordinate system should be used to represent keyboard event.
+    // TODO: We should reconsider which coordinate system should be used to
+    // represent keyboard event.
     public int getKeyY(final int y) {
         return Constants.isValidCoordinate(y) ? mKeyDetector.getTouchY(y) : y;
     }
 
     /**
-     * Attaches a keyboard to this view. The keyboard can be switched at any time and the
+     * Attaches a keyboard to this view. The keyboard can be switched at any time
+     * and the
      * view will re-layout itself to accommodate the keyboard.
+     * 
      * @see Keyboard
      * @see #getKeyboard()
      * @param keyboard the keyboard to display in this view
@@ -326,8 +334,10 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     }
 
     /**
-     * Enables or disables the key preview popup. This is a popup that shows a magnified
+     * Enables or disables the key preview popup. This is a popup that shows a
+     * magnified
      * version of the depressed key. By default the preview is enabled.
+     * 
      * @param previewEnabled whether or not to enable the key feedback preview
      */
     public void setKeyPreviewPopupEnabled(final boolean previewEnabled) {
@@ -434,7 +444,8 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         }
     }
 
-    // Implements {@link DrawingProxy#dismissGestureFloatingPreviewTextWithoutDelay()}.
+    // Implements {@link
+    // DrawingProxy#dismissGestureFloatingPreviewTextWithoutDelay()}.
     @Override
     public void dismissGestureFloatingPreviewTextWithoutDelay() {
         mGestureFloatingTextDrawingPreview.dismissGestureFloatingPreviewText();
@@ -480,7 +491,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     @Override
     @Nullable
     public PopupKeysPanel showPopupKeysKeyboard(@NonNull final Key key,
-                                                @NonNull final PointerTracker tracker) {
+            @NonNull final PointerTracker tracker) {
         final PopupKeySpec[] popupKeys = key.getPopupKeys();
         if (popupKeys == null) {
             return null;
@@ -488,10 +499,13 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         Keyboard popupKeysKeyboard = mPopupKeysKeyboardCache.get(key);
         if (popupKeysKeyboard == null) {
             // {@link KeyPreviewDrawParams#mPreviewVisibleWidth} should have been set at
-            // {@link KeyPreviewChoreographer#placeKeyPreview(Key,TextView,KeyboardIconsSet,KeyDrawParams,int,int[]},
-            // though there may be some chances that the value is zero. <code>width == 0</code>
+            // {@link
+            // KeyPreviewChoreographer#placeKeyPreview(Key,TextView,KeyboardIconsSet,KeyDrawParams,int,int[]},
+            // though there may be some chances that the value is zero. <code>width ==
+            // 0</code>
             // will cause zero-division error at
-            // {@link PopupKeysKeyboardParams#setParameters(int,int,int,int,int,int,boolean,int)}.
+            // {@link
+            // PopupKeysKeyboardParams#setParameters(int,int,int,int,int,int,boolean,int)}.
             final boolean isSinglePopupKeyWithPreview = mKeyPreviewDrawParams.isPopupEnabled()
                     && key.hasPreview() && popupKeys.length == 1
                     && mKeyPreviewDrawParams.getVisibleWidth() > 0;
@@ -505,22 +519,25 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
 
         final View container = key.hasActionKeyPopups() ? mPopupKeysKeyboardForActionContainer
                 : mPopupKeysKeyboardContainer;
-        final PopupKeysKeyboardView popupKeysKeyboardView =
-                container.findViewById(R.id.popup_keys_keyboard_view);
+        final PopupKeysKeyboardView popupKeysKeyboardView = container.findViewById(R.id.popup_keys_keyboard_view);
         popupKeysKeyboardView.setKeyboard(popupKeysKeyboard);
         container.measure(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 
         final int[] lastCoords = CoordinateUtils.newInstance();
         tracker.getLastCoordinates(lastCoords);
         final boolean keyPreviewEnabled = mKeyPreviewDrawParams.isPopupEnabled() && key.hasPreview();
-        // The popup keys keyboard is usually horizontally aligned with the center of the parent key.
-        // If showPopupKeysKeyboardAtTouchedPoint is true and the key preview is disabled, the more
+        // The popup keys keyboard is usually horizontally aligned with the center of
+        // the parent key.
+        // If showPopupKeysKeyboardAtTouchedPoint is true and the key preview is
+        // disabled, the more
         // keys keyboard is placed at the touch point of the parent key.
         final int pointX = (mConfigShowPopupKeysKeyboardAtTouchedPoint && !keyPreviewEnabled)
                 ? CoordinateUtils.x(lastCoords)
                 : key.getX() + key.getWidth() / 2;
-        // The popup keys keyboard is usually vertically aligned with the top edge of the parent key
-        // (plus vertical gap). If the key preview is enabled, the popup keys keyboard is vertically
+        // The popup keys keyboard is usually vertically aligned with the top edge of
+        // the parent key
+        // (plus vertical gap). If the key preview is enabled, the popup keys keyboard
+        // is vertically
         // aligned with the bottom edge of the visible part of the key preview.
         // {@code mPreviewVisibleOffset} has been set appropriately in
         // {@link KeyboardView#showKeyPreview(PointerTracker)}.
@@ -600,7 +617,8 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final int index = event.getActionIndex();
         final int id = event.getPointerId(index);
         final PointerTracker tracker = PointerTracker.getPointerTracker(id);
-        // When a popup keys panel is showing, we should ignore other fingers' single touch events
+        // When a popup keys panel is showing, we should ignore other fingers' single
+        // touch events
         // other than the finger that is showing the popup keys panel.
         if (isShowingPopupKeysPanel() && !tracker.isShowingPopupKeysPanel()
                 && PointerTracker.getActivePointerTrackerCount() == 1) {
@@ -747,7 +765,8 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
 
         final List<Locale> secondaryLocales = Settings.getValues().mSecondaryLocales;
         // avoid showing same language twice
-        final List<Locale> secondaryLocalesToUse = withoutDuplicateLanguages(secondaryLocales, subtype.getLocale().getLanguage());
+        final List<Locale> secondaryLocalesToUse = withoutDuplicateLanguages(secondaryLocales,
+                subtype.getLocale().getLanguage());
         if (!secondaryLocalesToUse.isEmpty()) {
             StringBuilder sb = new StringBuilder(subtype.getMiddleDisplayName());
             final Locale displayLocale = ConfigurationCompatKt.locale(getResources().getConfiguration());
@@ -787,7 +806,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     }
 
     private List<Locale> withoutDuplicateLanguages(List<Locale> locales, String mainLanguage) {
-        ArrayList<String> languages = new ArrayList<String>() {{ add(mainLanguage); }};
+        ArrayList<String> languages = new ArrayList<String>() {
+            {
+                add(mainLanguage);
+            }
+        };
         ArrayList<Locale> newLocales = new ArrayList<>();
         for (Locale locale : locales) {
             boolean keep = true;
@@ -814,13 +837,15 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         paint.setTextSize(mLanguageOnSpacebarTextSize);
         final String customText = Settings.getValues().mSpaceBarText;
         final String spaceText;
-        if (!customText.isEmpty()) {
+        final LatinIME latinIME = KeyboardSwitcher.getInstance().getLatinIME();
+        if (latinIME != null && latinIME.isRecordingVoice()) {
+            spaceText = "VibeVoice...";
+        } else if (!customText.isEmpty()) {
             spaceText = customText;
         } else if (DebugFlags.DEBUG_ENABLED) {
             final String l = KeyboardSwitcher.getInstance().getLocaleAndConfidenceInfo();
             spaceText = l != null ? l : layoutLanguageOnSpacebar(paint, keyboard.mId.mSubtype, width);
-        }
-        else
+        } else
             spaceText = layoutLanguageOnSpacebar(paint, keyboard.mId.mSubtype, width);
         paint.setTypeface(KeyboardTypeface.resolve(spaceText, Typeface.DEFAULT));
         // Draw language text with shadow

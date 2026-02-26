@@ -1482,6 +1482,10 @@ public class LatinIME extends InputMethodService implements
     // should
     // completely replace #onCodeInput.
     public void onEvent(@NonNull final Event event) {
+        if (mIsRecordingVoice && event.getKeyCode() == Constants.CODE_SPACE) {
+            handleVoiceInput();
+            return;
+        }
         if (KeyCode.VOICE_INPUT == event.getKeyCode()) {
             handleVoiceInput();
             return;
@@ -1496,6 +1500,11 @@ public class LatinIME extends InputMethodService implements
     private VibeVoiceClient mVibeVoiceClient;
     private android.os.Handler mUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private String mVoiceComposingText = "";
+
+    public boolean isRecordingVoice() {
+        return mIsRecordingVoice;
+    }
+
     private boolean mIsRecordingVoice = false;
     private boolean mIsStoppingVoice = false;
 
@@ -1505,10 +1514,13 @@ public class LatinIME extends InputMethodService implements
             if (mSuggestionStripView != null) {
                 mSuggestionStripView.updateVoiceKey(isRecording);
             }
+            if (mKeyboardSwitcher != null && mKeyboardSwitcher.getMainKeyboardView() != null) {
+                mKeyboardSwitcher.getMainKeyboardView().invalidateAllKeys();
+            }
         });
     }
 
-    private void handleVoiceInput() {
+    public void handleVoiceInput() {
         try {
             if (androidx.core.content.ContextCompat.checkSelfPermission(this,
                     android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
