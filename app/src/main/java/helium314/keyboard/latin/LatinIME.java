@@ -40,6 +40,7 @@ import helium314.keyboard.compat.EditorInfoCompatUtils;
 import helium314.keyboard.compat.ImeCompat;
 import helium314.keyboard.latin.vibevoice.PermissionActivity;
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient;
+import helium314.keyboard.latin.vibevoice.VibeVoiceDebugLogger;
 import helium314.keyboard.latin.vibevoice.VibeVoiceListener;
 import helium314.keyboard.event.HapticEvent;
 import helium314.keyboard.keyboard.KeyboardActionListener;
@@ -549,6 +550,7 @@ public class LatinIME extends InputMethodService implements
         mSettings.startListener();
         KeyboardIconsSet.Companion.getInstance().loadIcons(this);
         mRichImm = RichInputMethodManager.getInstance();
+        VibeVoiceDebugLogger.init(this);
         AudioAndHapticFeedbackManager.init(this);
         AccessibilityUtils.init(this);
         mStatsUtilsManager.onCreate(this, mDictionaryFacilitator);
@@ -1521,6 +1523,8 @@ public class LatinIME extends InputMethodService implements
     }
 
     public void handleVoiceInput() {
+        VibeVoiceDebugLogger
+                .log("handleVoiceInput called, recording=" + mIsRecordingVoice + ", stopping=" + mIsStoppingVoice);
         try {
             if (androidx.core.content.ContextCompat.checkSelfPermission(this,
                     android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -1553,6 +1557,7 @@ public class LatinIME extends InputMethodService implements
 
             mVoiceComposingText = ""; // Clear state at start
             mIsStoppingVoice = false;
+            VibeVoiceDebugLogger.log("Starting new session");
             android.widget.Toast.makeText(this, "Listening...", android.widget.Toast.LENGTH_SHORT).show();
             updateVoiceInputState(true);
 
@@ -1569,6 +1574,11 @@ public class LatinIME extends InputMethodService implements
 
                 @Override
                 public void onFinal(@NonNull String text) {
+                    if (text.trim().isEmpty()) {
+                        VibeVoiceDebugLogger.log("[EMPTY_RESULT] onFinal received empty text");
+                    } else {
+                        VibeVoiceDebugLogger.log("onFinal received, length=" + text.length());
+                    }
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null)
                             return;
@@ -1607,6 +1617,11 @@ public class LatinIME extends InputMethodService implements
     }
 
     private void finishVoiceSession(String text, boolean addNewline) {
+        if (text.trim().isEmpty()) {
+            VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession called with empty text");
+        } else {
+            VibeVoiceDebugLogger.log("finishVoiceSession: length=" + text.length() + ", newline=" + addNewline);
+        }
         if (mVibeVoiceClient == null)
             return;
         mInputLogic.mConnection.commitText(text + (addNewline ? "\n" : " "), 1);

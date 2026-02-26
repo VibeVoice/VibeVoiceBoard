@@ -7,6 +7,7 @@
 package helium314.keyboard.keyboard;
 
 import static java.lang.Math.abs;
+import java.lang.Object;
 
 import android.content.res.Resources;
 import android.content.res.TypedArray;
@@ -1206,7 +1207,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         }
         if (code == Constants.CODE_SPACE) {
             cancelKeyTracking();
-            sListener.onReleaseKey(code, false);
+            // sListener.onReleaseKey(code, false); // Removed to avoid inserting space on
+            // long press
             return;
         }
         if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +38,7 @@ class VibeVoiceClient(
     private var isStreaming = false
     private var audioRecord: AudioRecord? = null
     private var audioJob: Job? = null
+    private var totalRead = 0L
     private val scope = CoroutineScope(Dispatchers.IO)
 
     @SuppressLint("MissingPermission")
@@ -49,6 +51,7 @@ class VibeVoiceClient(
             .build()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                VibeVoiceDebugLogger.log("WS Open")
                 // Send API key as first message
                 val authJson = JSONObject().put("api_key", apiKey).toString()
                 webSocket.send(authJson)
@@ -60,24 +63,30 @@ class VibeVoiceClient(
                     if (json.has("text")) {
                         val resultText = json.getString("text")
                         val isFinal = json.optBoolean("is_final", false)
+                        VibeVoiceDebugLogger.log("WS msg text len: ${resultText.length}, final: $isFinal")
                         if (isFinal) {
                             listener.onFinal(resultText)
                         } else {
                             listener.onPartial(resultText)
                         }
+                    } else {
+                         VibeVoiceDebugLogger.log("WS msg no text: $text")
                     }
                 } catch (e: Exception) {
+                    VibeVoiceDebugLogger.log("WS msg parse error: ${e.message}")
                     e.printStackTrace()
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 isStreaming = false
+                VibeVoiceDebugLogger.log("WS Failure: ${t.message}")
                 listener.onError(t.message ?: "WebSocket Error")
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 isStreaming = false
+                VibeVoiceDebugLogger.log("WS Closed: $code / $reason")
                 listener.onClosed()
             }
         })
@@ -88,22 +97,33 @@ class VibeVoiceClient(
         val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 4
 
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
             sampleRate,
             channelConfig,
             audioFormat,
             bufferSize
         )
 
+        Log.d("VibeVoiceClient", "AudioRecord state: ${audioRecord?.state}, bufferSize: $bufferSize")
         audioRecord?.startRecording()
+        Log.d("VibeVoiceClient", "AudioRecord recordingState: ${audioRecord?.recordingState}")
+        totalRead = 0L // Reset for new session
         audioJob = scope.launch {
             val buffer = ByteArray(bufferSize)
             while (isActive && isStreaming) {
                 val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                 if (read > 0) {
+                    totalRead += read
                     webSocket?.send(buffer.copyOfRange(0, read).toByteString())
+                    if (totalRead % (bufferSize * 10) == 0L) { // Periodic log
+                         Log.d("VibeVoiceClient", "Total bytes read: $totalRead")
+                         VibeVoiceDebugLogger.log("Audio KB read: ${totalRead / 1024}")
+                    }
+                } else if (read < 0) {
+                     Log.e("VibeVoiceClient", "AudioRecord read error: $read")
                 }
             }
+            Log.d("VibeVoiceClient", "Exit recording loop. Final total bytes: $totalRead")
         }
     }
 
@@ -118,6 +138,7 @@ class VibeVoiceClient(
         webSocket?.send("END_STREAM")
         // Close later after receiving finals or just close now
         scope.launch {
+            VibeVoiceDebugLogger.log("Closing WS in 1s. Total bytes read: $totalRead")
             delay(1000)
             webSocket?.close(1000, "Done")
             webSocket = null
