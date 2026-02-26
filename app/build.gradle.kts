@@ -147,6 +147,10 @@ dependencies {
     implementation("sh.calvin.reorderable:reorderable:3.1.0") // for easier re-ordering
     implementation("com.github.skydoves:colorpicker-compose:1.1.3") // for user-defined colors
 
+    // vibevoice
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
     // test
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")

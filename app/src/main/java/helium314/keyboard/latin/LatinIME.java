@@ -38,6 +38,9 @@ import helium314.keyboard.accessibility.AccessibilityUtils;
 import helium314.keyboard.compat.ConfigurationCompatKt;
 import helium314.keyboard.compat.EditorInfoCompatUtils;
 import helium314.keyboard.compat.ImeCompat;
+import helium314.keyboard.latin.vibevoice.PermissionActivity;
+import helium314.keyboard.latin.vibevoice.VibeVoiceClient;
+import helium314.keyboard.latin.vibevoice.VibeVoiceListener;
 import helium314.keyboard.event.HapticEvent;
 import helium314.keyboard.keyboard.KeyboardActionListener;
 import helium314.keyboard.keyboard.KeyboardActionListenerImpl;
@@ -1409,7 +1412,8 @@ public class LatinIME extends InputMethodService implements
     // completely replace #onCodeInput.
     public void onEvent(@NonNull final Event event) {
         if (KeyCode.VOICE_INPUT == event.getKeyCode()) {
-            mRichImm.switchToShortcutIme(this);
+            handleVoiceInput();
+            return;
         }
         final InputTransaction completeInputTransaction =
                 mInputLogic.onCodeInput(mSettings.getCurrent(), event,
@@ -1417,6 +1421,74 @@ public class LatinIME extends InputMethodService implements
                         mKeyboardSwitcher.getCurrentKeyboardScript(), mHandler);
         updateStateAfterInputTransaction(completeInputTransaction);
         mKeyboardSwitcher.onEvent(event, getCurrentAutoCapsState(), getCurrentRecapitalizeState());
+    }
+
+    private VibeVoiceClient mVibeVoiceClient;
+    private android.os.Handler mUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private String mVoiceComposingText = "";
+
+    private void handleVoiceInput() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            android.content.Intent intent = new android.content.Intent(this, PermissionActivity.class);
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            return;
+        }
+
+        if (mVibeVoiceClient != null) {
+            mVibeVoiceClient.stopStreaming();
+            mVibeVoiceClient = null;
+            android.widget.Toast.makeText(this, "Voice dictation stopped", android.widget.Toast.LENGTH_SHORT).show();
+            if (!mVoiceComposingText.isEmpty()) {
+                mInputLogic.mConnection.commitText(mVoiceComposingText, 1);
+                mVoiceComposingText = "";
+            }
+            return;
+        }
+
+        android.content.SharedPreferences prefs = helium314.keyboard.latin.utils.KtxKt.prefs(this);
+        String apiKey = prefs.getString("vibevoice_api_key", null);
+        if (apiKey == null) {
+            android.widget.Toast.makeText(this, "Please link VibeVoice in Settings", android.widget.Toast.LENGTH_LONG).show();
+            launchSettings();
+            return;
+        }
+
+        android.widget.Toast.makeText(this, "Listening...", android.widget.Toast.LENGTH_SHORT).show();
+        mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
+            @Override
+            public void onPartial(@NonNull String text) {
+                mUiHandler.post(() -> {
+                    mVoiceComposingText = text;
+                    mInputLogic.mConnection.setComposingText(text, 1);
+                });
+            }
+
+            @Override
+            public void onFinal(@NonNull String text) {
+                mUiHandler.post(() -> {
+                    mVoiceComposingText = "";
+                    mInputLogic.mConnection.commitText(text + " ", 1);
+                    mKeyboardSwitcher.requestUpdatingShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
+                });
+            }
+
+            @Override
+            public void onError(@NonNull String error) {
+                mUiHandler.post(() -> {
+                    android.widget.Toast.makeText(LatinIME.this, "Voice Error: " + error, android.widget.Toast.LENGTH_SHORT).show();
+                    if (mVibeVoiceClient != null) {
+                        mVibeVoiceClient.stopStreaming();
+                        mVibeVoiceClient = null;
+                        if (!mVoiceComposingText.isEmpty()) {
+                            mInputLogic.mConnection.commitText(mVoiceComposingText, 1);
+                            mVoiceComposingText = "";
+                        }
+                    }
+                });
+            }
+        });
+        mVibeVoiceClient.startStreaming();
     }
 
     public void onTextInput(final String rawText) {
