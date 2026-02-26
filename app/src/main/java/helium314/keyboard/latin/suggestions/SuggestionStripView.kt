@@ -90,6 +90,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val wordViews = ArrayList<TextView>()
     private val debugInfoViews = ArrayList<TextView>()
     private val dividerViews = ArrayList<View>()
+    private val voiceAnimators = WeakHashMap<View, ObjectAnimator>()
 
     init {
         val inflater = LayoutInflater.from(context)
@@ -535,8 +536,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             stopTiltingAnimation(button)
         }
     }
-
-    private val voiceAnimators = WeakHashMap<View, ObjectAnimator>()
 
     private fun startTiltingAnimation(view: View) {
         if (voiceAnimators.containsKey(view)) return
