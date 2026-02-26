@@ -1482,7 +1482,7 @@ public class LatinIME extends InputMethodService implements
     // should
     // completely replace #onCodeInput.
     public void onEvent(@NonNull final Event event) {
-        if (mIsRecordingVoice && event.getKeyCode() == Constants.CODE_SPACE) {
+        if (mIsRecordingVoice && event.getCodePoint() == Constants.CODE_SPACE) {
             handleVoiceInput();
             return;
         }
