@@ -1,25 +1,29 @@
 package helium314.keyboard.latin.vibevoice
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import android.widget.Toast
 
-class PermissionActivity : ComponentActivity() {
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        finish()
-    }
-
+class PermissionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+        try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                finish()
+            } else {
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 101)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Permission Error: " + e.message, Toast.LENGTH_LONG).show()
             finish()
-        } else {
-            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        finish()
     }
 }

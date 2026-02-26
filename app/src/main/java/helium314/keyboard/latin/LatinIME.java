@@ -1426,43 +1426,56 @@ public class LatinIME extends InputMethodService implements
     private VibeVoiceClient mVibeVoiceClient;
     private android.os.Handler mUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private String mVoiceComposingText = "";
+    private boolean mIsRecordingVoice = false;
+
+    private void updateVoiceInputState(boolean isRecording) {
+        mIsRecordingVoice = isRecording;
+        mUiHandler.post(() -> {
+            if (mSuggestionStripView != null) {
+                mSuggestionStripView.updateVoiceKey(isRecording);
+            }
+        });
+    }
 
     private void handleVoiceInput() {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            android.content.Intent intent = new android.content.Intent(this, PermissionActivity.class);
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            return;
-        }
-
-        if (mVibeVoiceClient != null) {
-            mVibeVoiceClient.stopStreaming();
-            mVibeVoiceClient = null;
-            android.widget.Toast.makeText(this, "Voice dictation stopped", android.widget.Toast.LENGTH_SHORT).show();
-            if (!mVoiceComposingText.isEmpty()) {
-                mInputLogic.mConnection.commitText(mVoiceComposingText, 1);
-                mVoiceComposingText = "";
+        try {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                android.content.Intent intent = new android.content.Intent(this, PermissionActivity.class);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                return;
             }
-            return;
-        }
 
-        android.content.SharedPreferences prefs = helium314.keyboard.latin.utils.KtxKt.prefs(this);
-        String apiKey = prefs.getString("vibevoice_api_key", null);
-        if (apiKey == null) {
-            android.widget.Toast.makeText(this, "Please link VibeVoice in Settings", android.widget.Toast.LENGTH_LONG).show();
-            launchSettings();
-            return;
-        }
-
-        android.widget.Toast.makeText(this, "Listening...", android.widget.Toast.LENGTH_SHORT).show();
-        mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
-            @Override
-            public void onPartial(@NonNull String text) {
-                mUiHandler.post(() -> {
-                    mVoiceComposingText = text;
-                    mInputLogic.mConnection.setComposingText(text, 1);
-                });
+            if (mVibeVoiceClient != null) {
+                mVibeVoiceClient.stopStreaming();
+                mVibeVoiceClient = null;
+                updateVoiceInputState(false);
+                android.widget.Toast.makeText(this, "Voice dictation stopped", android.widget.Toast.LENGTH_SHORT).show();
+                if (!mVoiceComposingText.isEmpty()) {
+                    mInputLogic.mConnection.commitText(mVoiceComposingText, 1);
+                    mVoiceComposingText = "";
+                }
+                return;
             }
+
+            android.content.SharedPreferences prefs = helium314.keyboard.latin.utils.KtxKt.prefs(this);
+            String apiKey = prefs.getString("vibevoice_api_key", null);
+            if (apiKey == null) {
+                android.widget.Toast.makeText(this, "Please link VibeVoice in Settings", android.widget.Toast.LENGTH_LONG).show();
+                launchSettings();
+                return;
+            }
+
+            android.widget.Toast.makeText(this, "Listening...", android.widget.Toast.LENGTH_SHORT).show();
+            updateVoiceInputState(true);
+            mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
+                @Override
+                public void onPartial(@NonNull String text) {
+                    mUiHandler.post(() -> {
+                        mVoiceComposingText = text;
+                        mInputLogic.mConnection.setComposingText(text, 1);
+                    });
+                }
 
             @Override
             public void onFinal(@NonNull String text) {
@@ -1480,6 +1493,7 @@ public class LatinIME extends InputMethodService implements
                     if (mVibeVoiceClient != null) {
                         mVibeVoiceClient.stopStreaming();
                         mVibeVoiceClient = null;
+                        updateVoiceInputState(false);
                         if (!mVoiceComposingText.isEmpty()) {
                             mInputLogic.mConnection.commitText(mVoiceComposingText, 1);
                             mVoiceComposingText = "";
@@ -1489,6 +1503,10 @@ public class LatinIME extends InputMethodService implements
             }
         });
         mVibeVoiceClient.startStreaming();
+        } catch (Throwable t) {
+            android.widget.Toast.makeText(this, "Crash in Voice: " + t.getMessage(), android.widget.Toast.LENGTH_LONG).show();
+            android.util.Log.e("VibeVoice", "handleVoiceInput error", t);
+        }
     }
 
     public void onTextInput(final String rawText) {

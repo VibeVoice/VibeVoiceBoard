@@ -504,10 +504,18 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
-    fun updateVoiceKey() {
+    @JvmOverloads
+    fun updateVoiceKey(isActivated: Boolean = false) {
         val show = Settings.getValues().mShowsVoiceInputKey
-        toolbar.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
-        pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
+        val voiceKeyToolbar = toolbar.findViewWithTag<View>(ToolbarKey.VOICE)
+        voiceKeyToolbar?.isVisible = show
+        voiceKeyToolbar?.isActivated = isActivated
+        voiceKeyToolbar?.background = if (isActivated) enabledToolKeyBackground else defaultToolbarBackground.constantState?.newDrawable(resources)
+
+        val voiceKeyPinned = pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE)
+        voiceKeyPinned?.isVisible = show
+        voiceKeyPinned?.isActivated = isActivated
+        voiceKeyPinned?.background = if (isActivated) enabledToolKeyBackground else defaultToolbarBackground.constantState?.newDrawable(resources)
     }
 
     private fun updateKeys() {
