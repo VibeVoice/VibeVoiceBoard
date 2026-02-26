@@ -1209,11 +1209,13 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             sListener.onReleaseKey(code, false);
             return;
         }
-        if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA) {
+        if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
+                || code == KeyCode.ALPHA) {
             // Long pressing the space key invokes IME switcher dialog.
             if (sListener.onCustomRequest(Constants.CUSTOM_CODE_SHOW_INPUT_METHOD_PICKER)) {
                 cancelKeyTracking();
-                sListener.onReleaseKey(code, false);
+                // sListener.onReleaseKey(code, false); // Removed to avoid layout switch on
+                // long press
                 return;
             }
         }

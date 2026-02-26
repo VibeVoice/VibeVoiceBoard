@@ -25,8 +25,10 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
+import android.graphics.drawable.Drawable;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import helium314.keyboard.accessibility.AccessibilityUtils;
 import helium314.keyboard.accessibility.MainKeyboardAccessibilityDelegate;
@@ -124,6 +126,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
 
     private final TimerHandler mTimerHandler;
     private final int mLanguageOnSpacebarHorizontalMargin;
+    private final Drawable mImeSwitcherIcon;
 
     private MainKeyboardAccessibilityDelegate mAccessibilityDelegate;
 
@@ -222,6 +225,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
 
         mLanguageOnSpacebarHorizontalMargin = (int) getResources().getDimension(
                 R.dimen.config_language_on_spacebar_horizontal_margin);
+        mImeSwitcherIcon = ContextCompat.getDrawable(context, R.drawable.ic_ime_switcher);
     }
 
     @Override
@@ -733,9 +737,26 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             if (key.isLongPressEnabled() && mHasMultipleEnabledIMEsOrSubtypes) {
                 drawKeyPopupHint(key, canvas, paint, params);
             }
-        } else if (code == KeyCode.LANGUAGE_SWITCH) {
-            drawKeyPopupHint(key, canvas, paint, params);
+        } else if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
+                || code == KeyCode.ALPHA) {
+            drawImeSwitcherIconOnKey(key, canvas);
         }
+    }
+
+    private void drawImeSwitcherIconOnKey(final Key key, final Canvas canvas) {
+        if (mImeSwitcherIcon == null)
+            return;
+        final int keyWidth = key.getDrawWidth();
+        final int keyHeight = key.getHeight();
+        final float iconSize = Math.min(keyWidth, keyHeight) * 0.35f;
+        final float margin = iconSize * 0.15f;
+        final float x = keyWidth - iconSize - margin;
+        final float y = margin;
+        mImeSwitcherIcon.setBounds(0, 0, (int) iconSize, (int) iconSize);
+        Settings.getValues().mColors.setColor(mImeSwitcherIcon, ColorType.KEY_TEXT);
+        canvas.translate(x, y);
+        mImeSwitcherIcon.draw(canvas);
+        canvas.translate(-x, -y);
     }
 
     private boolean fitsTextIntoWidth(final int width, final String text, final Paint paint) {
