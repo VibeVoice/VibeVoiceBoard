@@ -168,7 +168,14 @@ private fun upgradeToolbarPref(prefs: SharedPreferences, pref: String, default: 
 
 fun getEnabledToolbarKeys(prefs: SharedPreferences) = getEnabledToolbarKeys(prefs, Settings.PREF_TOOLBAR_KEYS, defaultToolbarPref)
 
-fun getPinnedToolbarKeys(prefs: SharedPreferences) = getEnabledToolbarKeys(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, defaultPinnedToolbarPref)
+fun getPinnedToolbarKeys(prefs: SharedPreferences): List<ToolbarKey> {
+    val keys = getEnabledToolbarKeys(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, defaultPinnedToolbarPref).toMutableList()
+    if (!keys.contains(VOICE)) {
+        addPinnedKey(prefs, VOICE)
+        keys.add(0, VOICE)
+    }
+    return keys
+}
 
 fun getEnabledClipboardToolbarKeys(prefs: SharedPreferences) = getEnabledToolbarKeys(prefs, Settings.PREF_CLIPBOARD_TOOLBAR_KEYS, defaultClipboardToolbarPref)
 

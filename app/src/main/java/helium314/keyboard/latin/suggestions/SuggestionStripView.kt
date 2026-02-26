@@ -379,7 +379,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 addKeyToPinnedKeys(tag)
                 toolbar.findViewWithTag<View>(tag).background = enabledToolKeyBackground
                 addPinnedKey(context.prefs(), tag)
-            } else {
+            } else if (tag != ToolbarKey.VOICE) {
                 removePinnedKey(context.prefs(), tag)
                 toolbar.findViewWithTag<View>(tag).background = defaultToolbarBackground.constantState?.newDrawable(resources)
                 pinnedKeys.removeView(pinnedKeyView)
