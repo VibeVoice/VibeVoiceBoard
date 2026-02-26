@@ -55,10 +55,6 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
             latinIME.handleVoiceInput()
             return
         }
-        if (primaryCode == KeyCode.SYMBOL) {
-            latinIME.switchToNextSubtype()
-            return
-        }
         metaOnLongPressKey(primaryCode)
         performHapticFeedback(HapticEvent.KEY_LONG_PRESS)
     }
