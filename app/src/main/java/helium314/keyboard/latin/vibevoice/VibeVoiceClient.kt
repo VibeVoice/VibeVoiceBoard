@@ -25,6 +25,7 @@ interface VibeVoiceListener {
     fun onPartial(text: String)
     fun onFinal(text: String)
     fun onError(error: String)
+    fun onClosed()
 }
 
 class VibeVoiceClient(
@@ -77,6 +78,7 @@ class VibeVoiceClient(
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 isStreaming = false
+                listener.onClosed()
             }
         })
 
