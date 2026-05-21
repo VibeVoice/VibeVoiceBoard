@@ -1627,14 +1627,15 @@ public class LatinIME extends InputMethodService implements
     }
 
     private void finishVoiceSession(String text, boolean addNewline) {
-        if (text.trim().isEmpty()) {
-            VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession called with empty text");
-        } else {
-            VibeVoiceDebugLogger.log("finishVoiceSession: length=" + text.length() + ", newline=" + addNewline);
-        }
         if (mVibeVoiceClient == null)
             return;
-        mInputLogic.mConnection.commitText(text + (addNewline ? "\n" : " "), 1);
+        if (text.trim().isEmpty()) {
+            VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession: skipping empty commit");
+            mInputLogic.mConnection.commitText("", 1); // clear any composing text, insert nothing
+        } else {
+            VibeVoiceDebugLogger.log("finishVoiceSession: length=" + text.length() + ", newline=" + addNewline);
+            mInputLogic.mConnection.commitText(text + (addNewline ? "\n" : " "), 1);
+        }
         mVoiceComposingText = "";
         mVibeVoiceClient.stopStreaming();
         mVibeVoiceClient = null;
