@@ -217,7 +217,9 @@ class VibeVoiceClient(
                     }
                 } else if (read < 0) {
                     Log.e("VibeVoiceClient", "AudioRecord read error: $read")
-                    VibeVoiceDebugLogger.log("AudioRecord read error: $read — stopping")
+                    VibeVoiceDebugLogger.log("AudioRecord read error: $read — stopping session")
+                    listener.onError("Microphone read error: $read")
+                    stopStreaming()
                     break
                 }
             }
@@ -298,10 +300,11 @@ class VibeVoiceClient(
                 .post(body)
                 .build()
             try {
-                val response = sharedHttpClient.newCall(request).execute()
-                if (response.isSuccessful) {
-                    response.body?.string()?.let { JSONObject(it) }
-                } else null
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { JSONObject(it) }
+                    } else null
+                }
             } catch (e: Exception) {
                 null
             }
@@ -316,9 +319,10 @@ class VibeVoiceClient(
                 .post(body)
                 .build()
             try {
-                val response = sharedHttpClient.newCall(request).execute()
                 // RFC 8628: authorization_pending is signalled via HTTP 400 + JSON body, not a network error
-                response.body?.string()?.let { JSONObject(it) }
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    response.body?.string()?.let { JSONObject(it) }
+                }
             } catch (e: Exception) {
                 null
             }

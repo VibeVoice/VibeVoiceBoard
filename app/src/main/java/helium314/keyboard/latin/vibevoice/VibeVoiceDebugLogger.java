@@ -42,13 +42,9 @@ public class VibeVoiceDebugLogger {
         Log.d(TAG, entry.trim());
 
         try {
-            if (mLogFile.length() > MAX_FILE_SIZE) {
-                // Simple rotation: clear the file if too large
-                try (FileOutputStream fos = new FileOutputStream(mLogFile, false)) {
-                    fos.write("[LOG ROTATED]\n".getBytes());
-                }
-            }
-            try (FileOutputStream fos = new FileOutputStream(mLogFile, true)) {
+            boolean rotate = mLogFile.length() > MAX_FILE_SIZE;
+            try (FileOutputStream fos = new FileOutputStream(mLogFile, !rotate)) {
+                if (rotate) fos.write("[LOG ROTATED]\n".getBytes());
                 fos.write(entry.getBytes());
             }
         } catch (IOException e) {
