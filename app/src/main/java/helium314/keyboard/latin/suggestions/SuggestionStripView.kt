@@ -513,9 +513,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     @JvmOverloads
     fun updateVoiceKey(isActivated: Boolean = false) {
-        val show = Settings.getValues().mShowsVoiceInputKey
-        updateVoiceKeyButton(toolbar.findViewWithTag(ToolbarKey.VOICE), show, isActivated)
-        updateVoiceKeyButton(pinnedKeys.findViewWithTag(ToolbarKey.VOICE), show, isActivated)
+        // VibeVoice key is always visible — it is not gated on system voice IME availability
+        updateVoiceKeyButton(toolbar.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+        updateVoiceKeyButton(pinnedKeys.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
     }
 
     private fun updateVoiceKeyButton(view: View?, show: Boolean, isActivated: Boolean) {

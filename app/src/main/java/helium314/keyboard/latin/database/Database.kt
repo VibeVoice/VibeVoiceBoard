@@ -26,19 +26,19 @@ class Database private constructor(context: Context, name: String = NAME) : SQLi
         private const val VERSION = 2
         const val NAME = "vibevoiceboard.db"
         private const val LEGACY_NAME = "heliboard.db"
-        private var instance: Database? = null
-        fun getInstance(context: Context): Database {
-            if (instance == null) {
-                val oldDb = context.getDatabasePath(LEGACY_NAME)
-                val newDb = context.getDatabasePath(NAME)
-                if (oldDb.exists() && !newDb.exists()) {
-                    oldDb.renameTo(newDb)
-                    Log.i(TAG, "Migrated database from $LEGACY_NAME to $NAME")
+        @Volatile private var instance: Database? = null
+        fun getInstance(context: Context): Database =
+            instance ?: synchronized(this) {
+                instance ?: run {
+                    val oldDb = context.getDatabasePath(LEGACY_NAME)
+                    val newDb = context.getDatabasePath(NAME)
+                    if (oldDb.exists() && !newDb.exists()) {
+                        oldDb.renameTo(newDb)
+                        Log.i(TAG, "Migrated database from $LEGACY_NAME to $NAME")
+                    }
+                    Database(context).also { instance = it }
                 }
-                instance = Database(context)
             }
-            return instance!!
-        }
 
         // needs to be in sync with db version
         fun copyFromDb(file: File, context: Context) {

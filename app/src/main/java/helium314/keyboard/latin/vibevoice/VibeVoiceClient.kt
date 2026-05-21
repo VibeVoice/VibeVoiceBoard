@@ -123,7 +123,7 @@ class VibeVoiceClient(
                             }
                         }
                     } else if (json.has("error")) {
-                        val errorMsg = json.getString("error")
+                        val errorMsg = json.optString("error", "Unknown server error")
                         VibeVoiceDebugLogger.log("WS server error: $errorMsg")
                         listener.onError(errorMsg)
                     } else {
@@ -131,7 +131,7 @@ class VibeVoiceClient(
                     }
                 } catch (e: Exception) {
                     VibeVoiceDebugLogger.log("WS msg parse error: ${e.message}")
-                    e.printStackTrace()
+                    Log.e(TAG, "WS msg parse error", e)
                 }
             }
 
@@ -269,7 +269,9 @@ class VibeVoiceClient(
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
         private const val TAG = "VibeVoiceClient"
 
-        @JvmField val sharedHttpClient = OkHttpClient()
+        @JvmField val sharedHttpClient = OkHttpClient.Builder()
+            .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
 
         @Volatile private var cachedPrefs: SharedPreferences? = null
 

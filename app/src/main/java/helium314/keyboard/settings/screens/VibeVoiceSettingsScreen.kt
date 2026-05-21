@@ -28,6 +28,7 @@ import helium314.keyboard.latin.R
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
 import helium314.keyboard.settings.SearchSettingsScreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @Composable
@@ -63,7 +64,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
 
                 // Poll
                 var polling = true
-                while (polling) {
+                while (polling && isActive) {
                     delay(interval * 1000L)
                     val tokenRes = VibeVoiceClient.pollForToken(deviceCode)
                     if (tokenRes != null) {
