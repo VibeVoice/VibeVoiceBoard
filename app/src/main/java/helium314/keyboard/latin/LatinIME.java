@@ -1548,7 +1548,7 @@ public class LatinIME extends InputMethodService implements
             String apiKey = helium314.keyboard.latin.vibevoice.VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
                 android.widget.Toast
-                        .makeText(this, "Please link VibeVoice in Settings", android.widget.Toast.LENGTH_LONG).show();
+                        .makeText(this, R.string.vibevoice_not_linked, android.widget.Toast.LENGTH_LONG).show();
                 launchSettings();
                 return;
             }
@@ -1556,7 +1556,7 @@ public class LatinIME extends InputMethodService implements
             mVoiceComposingText = ""; // Clear state at start
             mIsStoppingVoice = false;
             VibeVoiceDebugLogger.log("Starting new session");
-            android.widget.Toast.makeText(this, "Listening...", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(this, R.string.vibevoice_listening, android.widget.Toast.LENGTH_SHORT).show();
             updateVoiceInputState(true);
 
             mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
@@ -1599,7 +1599,7 @@ public class LatinIME extends InputMethodService implements
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null) return;
                         android.widget.Toast
-                                .makeText(LatinIME.this, "Voice Error: " + error, android.widget.Toast.LENGTH_SHORT)
+                                .makeText(LatinIME.this, getString(R.string.vibevoice_error, error), android.widget.Toast.LENGTH_SHORT)
                                 .show();
                         finishVoiceSession(mVoiceComposingText, false);
                     });

@@ -2,6 +2,7 @@ package helium314.keyboard.latin.vibevoice
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -9,7 +10,6 @@ import android.media.MediaRecorder
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import helium314.keyboard.latin.utils.prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,14 +38,14 @@ class VibeVoiceClient(
     private val apiKey: String,
     private val listener: VibeVoiceListener
 ) {
-    private var webSocket: WebSocket? = null
+    @Volatile private var webSocket: WebSocket? = null
     @Volatile private var isStreaming = false
-    private var audioRecord: AudioRecord? = null
-    private var audioJob: Job? = null
-    private var totalRead = 0L
-    private var lastFullText = ""
+    @Volatile private var audioRecord: AudioRecord? = null
+    @Volatile private var audioJob: Job? = null
+    @Volatile private var totalRead = 0L
+    @Volatile private var lastFullText = ""
     private val scope = CoroutineScope(Dispatchers.IO)
-    private var closureJob: Job? = null
+    @Volatile private var closureJob: Job? = null
 
     @SuppressLint("MissingPermission")
     fun startStreaming() {
@@ -120,8 +120,12 @@ class VibeVoiceClient(
                                 }
                             }
                         }
+                    } else if (json.has("error")) {
+                        val errorMsg = json.getString("error")
+                        VibeVoiceDebugLogger.log("WS server error: $errorMsg")
+                        listener.onError(errorMsg)
                     } else {
-                         VibeVoiceDebugLogger.log("WS msg no text: $text")
+                        VibeVoiceDebugLogger.log("WS msg no text: $text")
                     }
                 } catch (e: Exception) {
                     VibeVoiceDebugLogger.log("WS msg parse error: ${e.message}")
@@ -172,6 +176,9 @@ class VibeVoiceClient(
 
         Log.d("VibeVoiceClient", "AudioRecord state: ${audioRecord?.state}, bufferSize: $bufferSize")
         try {
+            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                throw IllegalStateException("not initialized, state=${audioRecord?.state}")
+            }
             audioRecord?.startRecording()
             if (audioRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                 throw IllegalStateException("recordingState=${audioRecord?.recordingState}")
@@ -192,7 +199,7 @@ class VibeVoiceClient(
                 val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                 if (read > 0) {
                     totalRead += read
-                    val bytesToSend = buffer.copyOfRange(0, read).toByteString()
+                    val bytesToSend = buffer.toByteString(0, read)
                     synchronized(preOpenBuffer) {
                         if (isWsOpen) {
                             webSocket?.send(bytesToSend)
@@ -253,8 +260,15 @@ class VibeVoiceClient(
 
         @JvmField val sharedHttpClient = OkHttpClient()
 
+        @Volatile private var cachedPrefs: SharedPreferences? = null
+
         @JvmStatic
-        fun vibeVoicePrefs(context: Context): SharedPreferences = try {
+        fun vibeVoicePrefs(context: Context): SharedPreferences =
+            cachedPrefs ?: synchronized(VibeVoiceClient::class.java) {
+                cachedPrefs ?: createVibeVoicePrefs(context.applicationContext).also { cachedPrefs = it }
+            }
+
+        private fun createVibeVoicePrefs(context: Context): SharedPreferences = try {
             val masterKey = MasterKey.Builder(context)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
@@ -266,8 +280,8 @@ class VibeVoiceClient(
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (_: Exception) {
-            Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to regular preferences")
-            context.prefs()
+            Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to plain prefs")
+            context.getSharedPreferences("vibevoice_prefs", MODE_PRIVATE)
         }
 
         @JvmStatic
@@ -303,9 +317,8 @@ class VibeVoiceClient(
                 .build()
             try {
                 val response = sharedHttpClient.newCall(request).execute()
-                if (response.isSuccessful) {
-                    response.body?.string()?.let { JSONObject(it) }
-                } else null
+                // RFC 8628: authorization_pending is signalled via HTTP 400 + JSON body, not a network error
+                response.body?.string()?.let { JSONObject(it) }
             } catch (e: Exception) {
                 null
             }
