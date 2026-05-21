@@ -52,7 +52,7 @@ class VibeVoiceClient(
 
         val preOpenBuffer = ArrayDeque<okio.ByteString>()
         var preOpenBufferBytes = 0
-        val maxPreOpenBufferBytes = PRE_OPEN_AUDIO_SECONDS * 16000 * 2
+        val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
         var isWsOpen = false
 
         val request = Request.Builder()
@@ -223,7 +223,7 @@ class VibeVoiceClient(
 
     companion object {
         private val JSON = "application/json".toMediaType()
-        private const val PRE_OPEN_AUDIO_SECONDS = 5
+        private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
 
         suspend fun requestDeviceCode(deviceName: String, clientVersion: String): JSONObject? = withContext(Dispatchers.IO) {
             val client = OkHttpClient()
