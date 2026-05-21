@@ -143,16 +143,28 @@ fun upgradeToolbarPrefs(prefs: SharedPreferences) {
     upgradeToolbarPref(prefs, Settings.PREF_TOOLBAR_KEYS, defaultToolbarPref)
     upgradeToolbarPref(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, defaultPinnedToolbarPref)
     upgradeToolbarPref(prefs, Settings.PREF_CLIPBOARD_TOOLBAR_KEYS, defaultClipboardToolbarPref)
+    // One-time fix: VOICE was previously added as disabled=false due to a bug in upgradeToolbarPref.
+    // Enable it in both toolbar and pinned toolbar if it exists but is currently disabled.
+    enableKeyIfDisabled(prefs, Settings.PREF_TOOLBAR_KEYS, VOICE)
+    enableKeyIfDisabled(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, VOICE)
+}
+
+private fun enableKeyIfDisabled(prefs: SharedPreferences, pref: String, key: ToolbarKey) {
+    val string = prefs.getString(pref, null) ?: return
+    val entry = "${key.name}${Separators.KV}false"
+    if (string.split(Separators.ENTRY).contains(entry)) {
+        prefs.edit { putString(pref, string.replace(entry, "${key.name}${Separators.KV}true")) }
+    }
 }
 
 private fun upgradeToolbarPref(prefs: SharedPreferences, pref: String, default: String) {
     if (!prefs.contains(pref)) return
     val list = prefs.getString(pref, default)!!.split(Separators.ENTRY).toMutableList()
-    val splitDefault = defaultToolbarPref.split(Separators.ENTRY)
+    val splitDefault = default.split(Separators.ENTRY)
     splitDefault.forEach { entry ->
         val keyWithSeparator = entry.substringBefore(Separators.KV) + Separators.KV
         if (list.none { it.startsWith(keyWithSeparator) })
-            list.add("${keyWithSeparator}false")
+            list.add(entry) // preserve the default enabled/disabled state for new keys
     }
     // likely not needed, but better prepare for possibility of key removal
     list.removeAll {
