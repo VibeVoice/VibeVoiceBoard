@@ -217,7 +217,9 @@ class VibeVoiceClient(
                          Log.d("VibeVoiceClient", "Total bytes read: $totalRead")
                          VibeVoiceDebugLogger.log("Audio KB read: ${totalRead / 1024}")
                     }
-                } else if (read < 0) {
+                } else if (read == 0) {
+                    delay(10)
+                } else {
                     Log.e("VibeVoiceClient", "AudioRecord read error: $read")
                     VibeVoiceDebugLogger.log("AudioRecord read error: $read — stopping session")
                     listener.onError("Microphone read error: $read")
@@ -289,7 +291,7 @@ class VibeVoiceClient(
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (_: Exception) {
-            Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to plain prefs")
+            Log.e(TAG, "EncryptedSharedPreferences unavailable — API key will be stored in cleartext")
             context.getSharedPreferences("vibevoice_prefs", MODE_PRIVATE)
         }
 
