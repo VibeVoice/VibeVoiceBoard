@@ -51,7 +51,7 @@ class VibeVoiceClient(
         closureJob = null
 
         val preOpenBuffer = ArrayDeque<okio.ByteString>()
-        var preOpenBufferBytes = 0
+        var preOpenBufferSizeBytes = 0
         val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
         var isWsOpen = false
 
@@ -71,7 +71,7 @@ class VibeVoiceClient(
                         webSocket.send(bytes)
                     }
                     preOpenBuffer.clear()
-                    preOpenBufferBytes = 0
+                    preOpenBufferSizeBytes = 0
                 }
             }
 
@@ -176,9 +176,9 @@ class VibeVoiceClient(
                             webSocket?.send(bytesToSend)
                         } else {
                             preOpenBuffer.addLast(bytesToSend)
-                            preOpenBufferBytes += bytesToSend.size
-                            while (preOpenBufferBytes > maxPreOpenBufferBytes && preOpenBuffer.isNotEmpty()) {
-                                preOpenBufferBytes -= preOpenBuffer.removeFirst().size
+                            preOpenBufferSizeBytes += bytesToSend.size
+                            while (preOpenBufferSizeBytes > maxPreOpenBufferBytes && preOpenBuffer.isNotEmpty()) {
+                                preOpenBufferSizeBytes -= preOpenBuffer.removeFirst().size
                             }
                         }
                     }

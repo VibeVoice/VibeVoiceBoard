@@ -3,6 +3,7 @@ package helium314.keyboard.settings.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -143,6 +144,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
 }
 
 private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
+private const val TAG = "VibeVoiceSettingsScreen"
 
 private fun vibeVoicePrefs(context: Context) = try {
     val masterKey = MasterKey.Builder(context)
@@ -156,5 +158,6 @@ private fun vibeVoicePrefs(context: Context) = try {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 } catch (_: Exception) {
+    Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to regular preferences")
     context.prefs()
 }
