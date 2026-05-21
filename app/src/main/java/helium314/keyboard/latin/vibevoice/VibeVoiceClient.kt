@@ -23,8 +23,8 @@ import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
 
 interface VibeVoiceListener {
-    fun onPartial(text: String)
-    fun onFinal(text: String)
+    fun onPartial(text: String, isNewSegment: Boolean)
+    fun onFinal(text: String, isNewSegment: Boolean)
     fun onError(error: String)
     fun onClosed()
 }
@@ -39,12 +39,19 @@ class VibeVoiceClient(
     private var audioRecord: AudioRecord? = null
     private var audioJob: Job? = null
     private var totalRead = 0L
+    private var lastFullText = ""
     private val scope = CoroutineScope(Dispatchers.IO)
+    private var closureJob: Job? = null
 
     @SuppressLint("MissingPermission")
     fun startStreaming() {
         if (isStreaming) return
         isStreaming = true
+        closureJob?.cancel()
+        closureJob = null
+
+        val preOpenBuffer = mutableListOf<okio.ByteString>()
+        var isWsOpen = false
 
         val request = Request.Builder()
             .url("wss://vibevoice.net/stream")
@@ -55,6 +62,14 @@ class VibeVoiceClient(
                 // Send API key as first message
                 val authJson = JSONObject().put("api_key", apiKey).toString()
                 webSocket.send(authJson)
+                
+                synchronized(preOpenBuffer) {
+                    isWsOpen = true
+                    for (bytes in preOpenBuffer) {
+                        webSocket.send(bytes)
+                    }
+                    preOpenBuffer.clear()
+                }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -65,9 +80,38 @@ class VibeVoiceClient(
                         val isFinal = json.optBoolean("is_final", false)
                         VibeVoiceDebugLogger.log("WS msg text len: ${resultText.length}, final: $isFinal")
                         if (isFinal) {
-                            listener.onFinal(resultText)
+                            if (resultText.isBlank()) {
+                                VibeVoiceDebugLogger.log("[EMPTY_RESULT] onFinal received empty text")
+                            }
+                            
+                            val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
+                            if (isNewSegment) {
+                                VibeVoiceDebugLogger.log("New segment detected onFinal. Prev: '${lastFullText.take(20)}...', New: '${resultText.take(20)}...'")
+                            }
+                            lastFullText = resultText
+                            
+                            listener.onFinal(resultText, isNewSegment)
+                            if (!isStreaming) {
+                                VibeVoiceDebugLogger.log("Closing WS immediately after final result")
+                                closureJob?.cancel()
+                                webSocket.close(1000, "Done after Final")
+                            }
                         } else {
-                            listener.onPartial(resultText)
+                            val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
+                            if (isNewSegment) {
+                                VibeVoiceDebugLogger.log("New segment detected onPartial. Prev: '${lastFullText.take(20)}...', New: '${resultText.take(20)}...'")
+                            }
+                            lastFullText = resultText
+                            
+                            listener.onPartial(resultText, isNewSegment)
+                            if (!isStreaming) {
+                                VibeVoiceDebugLogger.log("Shortening timeout after partial result")
+                                closureJob?.cancel()
+                                closureJob = scope.launch {
+                                    delay(500)
+                                    webSocket.close(1000, "Done after Flush")
+                                }
+                            }
                         }
                     } else {
                          VibeVoiceDebugLogger.log("WS msg no text: $text")
@@ -97,7 +141,7 @@ class VibeVoiceClient(
         val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 4
 
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
             sampleRate,
             channelConfig,
             audioFormat,
@@ -108,13 +152,21 @@ class VibeVoiceClient(
         audioRecord?.startRecording()
         Log.d("VibeVoiceClient", "AudioRecord recordingState: ${audioRecord?.recordingState}")
         totalRead = 0L // Reset for new session
+        lastFullText = ""
         audioJob = scope.launch {
             val buffer = ByteArray(bufferSize)
             while (isActive && isStreaming) {
                 val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                 if (read > 0) {
                     totalRead += read
-                    webSocket?.send(buffer.copyOfRange(0, read).toByteString())
+                    val bytesToSend = buffer.copyOfRange(0, read).toByteString()
+                    synchronized(preOpenBuffer) {
+                        if (isWsOpen) {
+                            webSocket?.send(bytesToSend)
+                        } else {
+                            preOpenBuffer.add(bytesToSend)
+                        }
+                    }
                     if (totalRead % (bufferSize * 10) == 0L) { // Periodic log
                          Log.d("VibeVoiceClient", "Total bytes read: $totalRead")
                          VibeVoiceDebugLogger.log("Audio KB read: ${totalRead / 1024}")
@@ -137,11 +189,12 @@ class VibeVoiceClient(
 
         webSocket?.send("END_STREAM")
         // Close later after receiving finals or just close now
-        scope.launch {
-            VibeVoiceDebugLogger.log("Closing WS in 1s. Total bytes read: $totalRead")
-            delay(1000)
-            webSocket?.close(1000, "Done")
+        closureJob = scope.launch {
+            VibeVoiceDebugLogger.log("Closing WS in 1.5s timer started. Total bytes read: $totalRead")
+            delay(1500)
+            webSocket?.close(1000, "Done (timeout)")
             webSocket = null
+            closureJob = null
         }
     }
 

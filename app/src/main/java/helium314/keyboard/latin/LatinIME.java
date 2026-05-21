@@ -1542,7 +1542,6 @@ public class LatinIME extends InputMethodService implements
                 }
                 mIsStoppingVoice = true;
                 mVibeVoiceClient.stopStreaming();
-                android.widget.Toast.makeText(this, "Finishing recording...", android.widget.Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -1563,17 +1562,22 @@ public class LatinIME extends InputMethodService implements
 
             mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
                 @Override
-                public void onPartial(@NonNull String text) {
+                public void onPartial(@NonNull String text, boolean isNewSegment) {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null)
                             return;
+                        if (isNewSegment) {
+                            if (!mVoiceComposingText.isEmpty()) {
+                                mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
+                            }
+                        }
                         mVoiceComposingText = text;
                         mInputLogic.mConnection.setComposingText(text, 1);
                     });
                 }
 
                 @Override
-                public void onFinal(@NonNull String text) {
+                public void onFinal(@NonNull String text, boolean isNewSegment) {
                     if (text.trim().isEmpty()) {
                         VibeVoiceDebugLogger.log("[EMPTY_RESULT] onFinal received empty text");
                     } else {
@@ -1582,6 +1586,11 @@ public class LatinIME extends InputMethodService implements
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null)
                             return;
+                        if (isNewSegment) {
+                             if (!mVoiceComposingText.isEmpty()) {
+                                mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
+                            }
+                        }
                         finishVoiceSession(text, mIsStoppingVoice);
                     });
                 }
@@ -1589,6 +1598,7 @@ public class LatinIME extends InputMethodService implements
                 @Override
                 public void onError(@NonNull String error) {
                     mUiHandler.post(() -> {
+                        if (mVibeVoiceClient == null) return;
                         android.widget.Toast
                                 .makeText(LatinIME.this, "Voice Error: " + error, android.widget.Toast.LENGTH_SHORT)
                                 .show();
@@ -1600,7 +1610,7 @@ public class LatinIME extends InputMethodService implements
                 public void onClosed() {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient != null) {
-                            finishVoiceSession(mVoiceComposingText, true);
+                            finishVoiceSession(mVoiceComposingText, mIsStoppingVoice);
                         }
                     });
                 }
