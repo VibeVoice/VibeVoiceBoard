@@ -13,6 +13,7 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -44,7 +45,8 @@ class VibeVoiceClient(
     @Volatile private var audioJob: Job? = null
     @Volatile private var totalRead = 0L
     @Volatile private var lastFullText = ""
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
     @Volatile private var closureJob: Job? = null
 
     @SuppressLint("MissingPermission")
@@ -241,6 +243,11 @@ class VibeVoiceClient(
             webSocket = null
             closureJob = null
         }
+    }
+
+    fun cancel() {
+        stopStreaming()
+        scopeJob.cancel()
     }
 
     private fun cleanupAudioCapture() {

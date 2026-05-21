@@ -1211,21 +1211,19 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             // long press
             return;
         }
-        if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
-                || code == KeyCode.ALPHA) {
-            // Long pressing the space key invokes IME switcher dialog.
-            if (sListener.onCustomRequest(Constants.CUSTOM_CODE_SHOW_INPUT_METHOD_PICKER)) {
-                cancelKeyTracking();
-                // sListener.onReleaseKey(code, false); // Removed to avoid layout switch on
-                // long press
-                return;
-            }
-        }
         if (code == KeyCode.SYMBOL_ALPHA && Settings.getValues().mLongPressSymbolsForNumpad) {
             // toggle numpad with sliding input enabled, forcing return to the alpha layout
             // when done
             sListener.toggleNumpad(true, true);
             return;
+        }
+        if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
+                || code == KeyCode.ALPHA) {
+            // Long pressing these keys invokes IME switcher dialog.
+            if (sListener.onCustomRequest(Constants.CUSTOM_CODE_SHOW_INPUT_METHOD_PICKER)) {
+                cancelKeyTracking();
+                return;
+            }
         }
 
         setReleasedKeyGraphics(key, false);

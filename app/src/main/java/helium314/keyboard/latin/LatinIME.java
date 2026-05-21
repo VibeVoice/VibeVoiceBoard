@@ -719,6 +719,10 @@ public class LatinIME extends InputMethodService implements
         unregisterReceiver(mDictionaryDumpBroadcastReceiver);
         unregisterReceiver(mRestartAfterDeviceUnlockReceiver);
         mStatsUtilsManager.onDestroy(this /* context */);
+        if (mVibeVoiceClient != null) {
+            mVibeVoiceClient.cancel();
+            mVibeVoiceClient = null;
+        }
         super.onDestroy();
         mHandler.removeCallbacksAndMessages(null);
         deallocateMemory();
@@ -1615,13 +1619,16 @@ public class LatinIME extends InputMethodService implements
                 }
             });
             mVibeVoiceClient.startStreaming();
-        } catch (Throwable t) {
-            android.widget.Toast.makeText(this, "Crash in Voice: " + t.getMessage(), android.widget.Toast.LENGTH_LONG)
+        } catch (Exception e) {
+            android.widget.Toast.makeText(this, getString(R.string.vibevoice_error, e.getMessage()), android.widget.Toast.LENGTH_LONG)
                     .show();
-            android.util.Log.e("VibeVoice", "handleVoiceInput error", t);
+            android.util.Log.e("VibeVoice", "handleVoiceInput error", e);
             mIsStoppingVoice = false;
             updateVoiceInputState(false);
-            mVibeVoiceClient = null;
+            if (mVibeVoiceClient != null) {
+                mVibeVoiceClient.cancel();
+                mVibeVoiceClient = null;
+            }
         }
     }
 
