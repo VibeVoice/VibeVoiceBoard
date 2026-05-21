@@ -46,6 +46,28 @@
     <string name="settings_screen_correction">Text correction</string>
     <!-- Settings screen title for advanced settings -->
     <string name="settings_screen_advanced">Advanced</string>
+    <!-- Settings screen title for VibeVoice integration -->
+    <string name="vibevoice_integration_title">VibeVoice Integration</string>
+    <!-- Description text on the VibeVoice account linking screen -->
+    <string name="vibevoice_account_linking_description">VibeVoice account linking allows utilizing cloud transcription directly inside the keyboard.</string>
+    <!-- Status text shown when VibeVoice is linked -->
+    <string name="vibevoice_status_linked">Status: Linked!</string>
+    <!-- Button text for unlinking the current VibeVoice account -->
+    <string name="vibevoice_unlink_device">Unlink Device</string>
+    <!-- Status text while waiting for browser approval -->
+    <string name="vibevoice_waiting_for_approval">Waiting for approval…</string>
+    <!-- Prompt instructing user to enter their code in browser -->
+    <string name="vibevoice_enter_code_in_browser">Please enter the code in your browser:</string>
+    <!-- Status text shown while polling for the device token -->
+    <string name="vibevoice_polling_for_token">Polling for token…</string>
+    <!-- Button text to start VibeVoice account linking -->
+    <string name="vibevoice_link_account">Link VibeVoice Account</string>
+    <!-- Error message shown when linking fails for a returned API error -->
+    <string name="vibevoice_linking_failed">Linking failed: %s</string>
+    <!-- Error message shown when requesting a device code fails -->
+    <string name="vibevoice_failed_request_device_code">Failed to request device code</string>
+    <!-- Spacebar text shown while VibeVoice transcription is active -->
+    <string name="vibevoice_transcribing">Transcribing…</string>
     <!-- Settings screen title for keyboard theme settings -->
     <string name="settings_screen_theme">Theme</string>
     <!-- Settings category title for Preference/Input settings -->

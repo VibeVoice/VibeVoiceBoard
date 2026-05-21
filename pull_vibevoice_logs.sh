@@ -1,18 +1,24 @@
 #!/bin/bash
-DEVICE="192.168.178.70:5555"
+DEVICE="${1:-${ADB_DEVICE_SERIAL:-}}"
 PACKAGE="helium314.keyboard.debug"
 FILENAME="vibevoice_debug.log"
 LOCAL_PATH="./vibevoice_debug.log"
+ADB_CMD=(adb)
 
-echo "Attempting to pull logs from $DEVICE ($PACKAGE)..."
+if [ -n "$DEVICE" ]; then
+    ADB_CMD+=( -s "$DEVICE" )
+    echo "Attempting to pull logs from $DEVICE ($PACKAGE)..."
+else
+    echo "Attempting to pull logs from current ADB device ($PACKAGE)..."
+fi
 
 # Try direct pull first (works on some devices/root)
-adb -s "$DEVICE" pull "/data/data/$PACKAGE/files/$FILENAME" "$LOCAL_PATH" 2>/dev/null
+"${ADB_CMD[@]}" pull "/data/data/$PACKAGE/files/$FILENAME" "$LOCAL_PATH" 2>/dev/null
 
 if [ $? -ne 0 ]; then
     echo "Direct pull failed. Trying via run-as..."
     # If direct pull fails, try to cat it via run-as and redirect
-    adb -s "$DEVICE" shell "run-as $PACKAGE cat files/$FILENAME" > "$LOCAL_PATH"
+    "${ADB_CMD[@]}" shell "run-as $PACKAGE cat files/$FILENAME" > "$LOCAL_PATH"
 fi
 
 if [ -s "$LOCAL_PATH" ]; then
@@ -22,5 +28,5 @@ if [ -s "$LOCAL_PATH" ]; then
 else
     echo "Failed to pull logs or log file is empty."
     echo "Checking if log file exists on device..."
-    adb -s "$DEVICE" shell "run-as $PACKAGE ls -l files/$FILENAME"
+    "${ADB_CMD[@]}" shell "run-as $PACKAGE ls -l files/$FILENAME"
 fi

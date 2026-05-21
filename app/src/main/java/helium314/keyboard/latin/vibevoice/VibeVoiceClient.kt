@@ -50,7 +50,9 @@ class VibeVoiceClient(
         closureJob?.cancel()
         closureJob = null
 
-        val preOpenBuffer = mutableListOf<okio.ByteString>()
+        val preOpenBuffer = ArrayDeque<okio.ByteString>()
+        var preOpenBufferBytes = 0
+        val maxPreOpenBufferBytes = PRE_OPEN_AUDIO_SECONDS * 16000 * 2
         var isWsOpen = false
 
         val request = Request.Builder()
@@ -69,6 +71,7 @@ class VibeVoiceClient(
                         webSocket.send(bytes)
                     }
                     preOpenBuffer.clear()
+                    preOpenBufferBytes = 0
                 }
             }
 
@@ -124,12 +127,20 @@ class VibeVoiceClient(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 isStreaming = false
+                cleanupAudioCapture()
+                closureJob?.cancel()
+                closureJob = null
+                this@VibeVoiceClient.webSocket = null
                 VibeVoiceDebugLogger.log("WS Failure: ${t.message}")
                 listener.onError(t.message ?: "WebSocket Error")
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 isStreaming = false
+                cleanupAudioCapture()
+                closureJob?.cancel()
+                closureJob = null
+                this@VibeVoiceClient.webSocket = null
                 VibeVoiceDebugLogger.log("WS Closed: $code / $reason")
                 listener.onClosed()
             }
@@ -164,7 +175,11 @@ class VibeVoiceClient(
                         if (isWsOpen) {
                             webSocket?.send(bytesToSend)
                         } else {
-                            preOpenBuffer.add(bytesToSend)
+                            preOpenBuffer.addLast(bytesToSend)
+                            preOpenBufferBytes += bytesToSend.size
+                            while (preOpenBufferBytes > maxPreOpenBufferBytes && preOpenBuffer.isNotEmpty()) {
+                                preOpenBufferBytes -= preOpenBuffer.removeFirst().size
+                            }
                         }
                     }
                     if (totalRead % (bufferSize * 10) == 0L) { // Periodic log
@@ -182,10 +197,7 @@ class VibeVoiceClient(
     fun stopStreaming() {
         if (!isStreaming) return
         isStreaming = false
-        audioJob?.cancel()
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
+        cleanupAudioCapture()
 
         webSocket?.send("END_STREAM")
         // Close later after receiving finals or just close now
@@ -198,8 +210,20 @@ class VibeVoiceClient(
         }
     }
 
+    private fun cleanupAudioCapture() {
+        audioJob?.cancel()
+        audioJob = null
+        try {
+            audioRecord?.stop()
+        } catch (_: IllegalStateException) {
+        }
+        audioRecord?.release()
+        audioRecord = null
+    }
+
     companion object {
         private val JSON = "application/json".toMediaType()
+        private const val PRE_OPEN_AUDIO_SECONDS = 5
 
         suspend fun requestDeviceCode(deviceName: String, clientVersion: String): JSONObject? = withContext(Dispatchers.IO) {
             val client = OkHttpClient()

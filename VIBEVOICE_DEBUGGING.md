@@ -11,17 +11,22 @@ The debug log is stored persistently on the Android device at:
 ### Option 1: Use the helper script (Recommended)
 ```bash
 ./pull_vibevoice_logs.sh
+# or pass a specific serial:
+./pull_vibevoice_logs.sh <device-serial>
+# or set once:
+ADB_DEVICE_SERIAL=<device-serial> ./pull_vibevoice_logs.sh
 ```
 This script pulls the log to your local machine and displays the last 20 lines.
 
 ### Option 2: Pull manually via ADB
 ```bash
-adb -s 192.168.178.70:5555 pull /data/data/helium314.keyboard.debug/files/vibevoice_debug.log .
+adb devices
+adb -s <device-serial> pull /data/data/helium314.keyboard.debug/files/vibevoice_debug.log .
 ```
 
 ### Option 3: View directly via ADB
 ```bash
-adb -s 192.168.178.70:5555 shell "cat /data/data/helium314.keyboard.debug/files/vibevoice_debug.log"
+adb -s <device-serial> shell "cat /data/data/helium314.keyboard.debug/files/vibevoice_debug.log"
 ```
 
 ---

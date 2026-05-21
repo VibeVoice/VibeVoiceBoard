@@ -857,7 +857,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final String spaceText;
         final LatinIME latinIME = KeyboardSwitcher.getInstance().getLatinIME();
         if (latinIME != null && latinIME.isRecordingVoice()) {
-            spaceText = "Transcribing";
+            spaceText = getContext().getString(R.string.vibevoice_transcribing);
         } else if (!customText.isEmpty()) {
             spaceText = customText;
         } else if (DebugFlags.DEBUG_ENABLED) {

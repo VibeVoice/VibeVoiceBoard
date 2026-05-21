@@ -110,9 +110,9 @@ fun MainSettingsScreen(
                     icon = R.drawable.ic_settings_advanced
                 ) { NextScreenIcon() }
                 Preference(
-                    name = "VibeVoice Integration",
+                    name = stringResource(R.string.vibevoice_integration_title),
                     onClick = onClickVibeVoice,
-                    icon = R.drawable.ic_ime_switcher // or a mic icon if available
+                    icon = R.drawable.sym_keyboard_voice_holo
                 ) { NextScreenIcon() }
                 Preference(
                     name = stringResource(R.string.settings_screen_about),
