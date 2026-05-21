@@ -1,9 +1,7 @@
 package helium314.keyboard.settings.screens
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,11 +25,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.R
-import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
 import helium314.keyboard.settings.SearchSettingsScreen
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -39,7 +34,7 @@ import kotlinx.coroutines.launch
 fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val prefs = remember(context) { vibeVoicePrefs(context) }
+    val prefs = remember(context) { VibeVoiceClient.vibeVoicePrefs(context) }
 
     var apiKey by remember { mutableStateOf(prefs.getString(VIBEVOICE_API_KEY_PREF, null)) }
     var userCode by remember { mutableStateOf<String?>(null) }
@@ -59,9 +54,12 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 val deviceCode = res.getString("device_code")
                 val interval = res.optInt("interval", 5)
 
-                // Copy verificationUri
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$verificationUri?code=$userCode"))
-                context.startActivity(intent)
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$verificationUri?code=$userCode"))
+                    context.startActivity(intent)
+                } catch (_: android.content.ActivityNotFoundException) {
+                    errorMessage = context.getString(R.string.vibevoice_no_browser)
+                }
 
                 // Poll
                 var polling = true
@@ -144,20 +142,3 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
 }
 
 private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
-private const val TAG = "VibeVoiceSettingsScreen"
-
-private fun vibeVoicePrefs(context: Context) = try {
-    val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-    EncryptedSharedPreferences.create(
-        context,
-        "vibevoice_secure_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
-} catch (_: Exception) {
-    Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to regular preferences")
-    context.prefs()
-}

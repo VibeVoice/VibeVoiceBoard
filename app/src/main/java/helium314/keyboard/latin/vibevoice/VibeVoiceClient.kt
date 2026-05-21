@@ -1,10 +1,15 @@
 package helium314.keyboard.latin.vibevoice
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.SharedPreferences
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import helium314.keyboard.latin.utils.prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,9 +38,8 @@ class VibeVoiceClient(
     private val apiKey: String,
     private val listener: VibeVoiceListener
 ) {
-    private val okHttpClient = OkHttpClient()
     private var webSocket: WebSocket? = null
-    private var isStreaming = false
+    @Volatile private var isStreaming = false
     private var audioRecord: AudioRecord? = null
     private var audioJob: Job? = null
     private var totalRead = 0L
@@ -58,7 +62,7 @@ class VibeVoiceClient(
         val request = Request.Builder()
             .url("wss://vibevoice.net/stream")
             .build()
-        webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
+        webSocket = sharedHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 VibeVoiceDebugLogger.log("WS Open")
                 // Send API key as first message
@@ -149,7 +153,14 @@ class VibeVoiceClient(
         val sampleRate = 16000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 4
+        val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+        if (minBuf == AudioRecord.ERROR || minBuf == AudioRecord.ERROR_BAD_VALUE) {
+            VibeVoiceDebugLogger.log("AudioRecord.getMinBufferSize failed: $minBuf")
+            listener.onError("AudioRecord init failed")
+            isStreaming = false
+            return
+        }
+        val bufferSize = minBuf * 4
 
         audioRecord = AudioRecord(
             MediaRecorder.AudioSource.VOICE_RECOGNITION,
@@ -160,7 +171,18 @@ class VibeVoiceClient(
         )
 
         Log.d("VibeVoiceClient", "AudioRecord state: ${audioRecord?.state}, bufferSize: $bufferSize")
-        audioRecord?.startRecording()
+        try {
+            audioRecord?.startRecording()
+            if (audioRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                throw IllegalStateException("recordingState=${audioRecord?.recordingState}")
+            }
+        } catch (e: Exception) {
+            VibeVoiceDebugLogger.log("AudioRecord.startRecording failed: ${e.message}")
+            cleanupAudioCapture()
+            listener.onError("Microphone unavailable: ${e.message}")
+            isStreaming = false
+            return
+        }
         Log.d("VibeVoiceClient", "AudioRecord recordingState: ${audioRecord?.recordingState}")
         totalRead = 0L // Reset for new session
         lastFullText = ""
@@ -187,7 +209,9 @@ class VibeVoiceClient(
                          VibeVoiceDebugLogger.log("Audio KB read: ${totalRead / 1024}")
                     }
                 } else if (read < 0) {
-                     Log.e("VibeVoiceClient", "AudioRecord read error: $read")
+                    Log.e("VibeVoiceClient", "AudioRecord read error: $read")
+                    VibeVoiceDebugLogger.log("AudioRecord read error: $read — stopping")
+                    break
                 }
             }
             Log.d("VibeVoiceClient", "Exit recording loop. Final total bytes: $totalRead")
@@ -224,9 +248,33 @@ class VibeVoiceClient(
     companion object {
         private val JSON = "application/json".toMediaType()
         private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
+        private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
+        private const val TAG = "VibeVoiceClient"
+
+        @JvmField val sharedHttpClient = OkHttpClient()
+
+        @JvmStatic
+        fun vibeVoicePrefs(context: Context): SharedPreferences = try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                "vibevoice_secure_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to regular preferences")
+            context.prefs()
+        }
+
+        @JvmStatic
+        fun getApiKey(context: Context): String? =
+            vibeVoicePrefs(context).getString(VIBEVOICE_API_KEY_PREF, null)
 
         suspend fun requestDeviceCode(deviceName: String, clientVersion: String): JSONObject? = withContext(Dispatchers.IO) {
-            val client = OkHttpClient()
             val body = JSONObject()
                 .put("device_name", deviceName)
                 .put("client_version", clientVersion)
@@ -236,7 +284,7 @@ class VibeVoiceClient(
                 .post(body)
                 .build()
             try {
-                val response = client.newCall(request).execute()
+                val response = sharedHttpClient.newCall(request).execute()
                 if (response.isSuccessful) {
                     response.body?.string()?.let { JSONObject(it) }
                 } else null
@@ -246,7 +294,6 @@ class VibeVoiceClient(
         }
 
         suspend fun pollForToken(deviceCode: String): JSONObject? = withContext(Dispatchers.IO) {
-            val client = OkHttpClient()
             val body = JSONObject()
                 .put("device_code", deviceCode)
                 .toString().toRequestBody(JSON)
@@ -255,7 +302,7 @@ class VibeVoiceClient(
                 .post(body)
                 .build()
             try {
-                val response = client.newCall(request).execute()
+                val response = sharedHttpClient.newCall(request).execute()
                 if (response.isSuccessful) {
                     response.body?.string()?.let { JSONObject(it) }
                 } else null

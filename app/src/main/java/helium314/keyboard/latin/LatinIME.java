@@ -1545,8 +1545,7 @@ public class LatinIME extends InputMethodService implements
                 return;
             }
 
-            android.content.SharedPreferences prefs = helium314.keyboard.latin.utils.KtxKt.prefs(this);
-            String apiKey = prefs.getString("vibevoice_api_key", null);
+            String apiKey = helium314.keyboard.latin.vibevoice.VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
                 android.widget.Toast
                         .makeText(this, "Please link VibeVoice in Settings", android.widget.Toast.LENGTH_LONG).show();
@@ -1633,8 +1632,12 @@ public class LatinIME extends InputMethodService implements
             VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession: skipping empty commit");
             mInputLogic.mConnection.commitText("", 1); // clear any composing text, insert nothing
         } else {
-            VibeVoiceDebugLogger.log("finishVoiceSession: length=" + text.length() + ", newline=" + addNewline);
-            mInputLogic.mConnection.commitText(text + (addNewline ? "\n" : " "), 1);
+            EditorInfo editorInfo = getCurrentInputEditorInfo();
+            boolean isMultiline = editorInfo != null &&
+                    (editorInfo.inputType & android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+            String suffix = (addNewline && isMultiline) ? "\n" : " ";
+            VibeVoiceDebugLogger.log("finishVoiceSession: length=" + text.length() + ", suffix='" + suffix.trim() + "' multiline=" + isMultiline);
+            mInputLogic.mConnection.commitText(text + suffix, 1);
         }
         mVoiceComposingText = "";
         mVibeVoiceClient.stopStreaming();

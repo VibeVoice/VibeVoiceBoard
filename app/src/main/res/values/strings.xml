@@ -66,6 +66,7 @@
     <string name="vibevoice_linking_failed">Linking failed: %s</string>
     <!-- Error message shown when requesting a device code fails -->
     <string name="vibevoice_failed_request_device_code">Failed to request device code</string>
+    <string name="vibevoice_no_browser">No browser app found to open the link</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
     <!-- Settings screen title for keyboard theme settings -->
