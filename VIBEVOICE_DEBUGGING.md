@@ -40,7 +40,7 @@ Search the log for the marker `[EMPTY_RESULT]`.
 
 ### 2. Audio Input Check
 Every session ends with a summary of audio processed.
-- **Marker**: `Closing WS in 3s. Total bytes read: <N>`
+- **Marker**: `Closing WS in 1.5s timer started. Total bytes read: <N>`
 - **Interpretation**:
     - **Low bytes (e.g. < 5000)**: Recording might have failed or stopped immediately (check Mic permissions/state).
     - **High bytes but no transcript**: Audio was captured and sent, but not transcribed. This points to a server-side issue or poor audio quality.

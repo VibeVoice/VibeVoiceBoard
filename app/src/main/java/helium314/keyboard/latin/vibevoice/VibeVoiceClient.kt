@@ -292,8 +292,8 @@ class VibeVoiceClient(
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        } catch (_: Exception) {
-            Log.e(TAG, "EncryptedSharedPreferences unavailable — API key will be stored in cleartext")
+        } catch (e: Exception) {
+            Log.e(TAG, "EncryptedSharedPreferences unavailable — API key will be stored in cleartext", e)
             context.getSharedPreferences("vibevoice_prefs", MODE_PRIVATE)
         }
 
