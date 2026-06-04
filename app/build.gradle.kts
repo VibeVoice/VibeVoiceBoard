@@ -55,7 +55,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
         }
-
+        base.archivesBaseName = "VibeVoiceBoard_" + defaultConfig.versionName
         androidComponents.onVariants { variant: ApplicationVariant ->
             if (variant.buildType == "debug") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
@@ -67,7 +67,7 @@ android {
             }
             variant.outputs.forEach { output ->
                 if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
-                    output.outputFileName = "HeliBoard_${defaultConfig.versionName}-${variant.buildType}.apk"
+                    output.outputFileName = "VibeVoiceBoard_${defaultConfig.versionName}-${variant.buildType}.apk"
                 }
             }
         }
@@ -112,7 +112,7 @@ android {
         }
     }
 
-    // see https://github.com/HeliBorg/HeliBoard/issues/477
+    // see https://github.com/Helium314/HeliBoard/issues/477
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -146,6 +146,11 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("sh.calvin.reorderable:reorderable:3.1.0") // for easier re-ordering
     implementation("com.github.skydoves:colorpicker-compose:1.1.3") // for user-defined colors
+
+    // vibevoice
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // test
     testImplementation(kotlin("test"))

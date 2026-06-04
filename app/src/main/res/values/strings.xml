@@ -9,11 +9,11 @@
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2"
     tools:ignore="MissingTranslation">
     <!-- Name of Android spell checker service. The app name should not be translated. -->
-    <string name="spell_checker_service_name">HeliBoard Spell Checker</string>
+    <string name="spell_checker_service_name">VibeVoiceBoard Spell Checker</string>
     <!-- Title for IME settings screen. The app name should not be translated. -->
-    <string name="ime_settings">HeliBoard Settings</string>
+    <string name="ime_settings">VibeVoiceBoard Settings</string>
     <!-- Title for the spell checking service settings screen. The app name should not be translated. -->
-    <string name="android_spell_checker_settings">HeliBoard Spell Checker Settings</string>
+    <string name="android_spell_checker_settings">VibeVoiceBoard Spell Checker Settings</string>
     <!-- Option to provide vibrate/haptic feedback on keypress -->
     <string name="vibrate_on_keypress">Vibrate on keypress</string>
     <!-- Option to provide vibrate/haptic feedback on keypress even in do not disturb mode -->
@@ -46,6 +46,32 @@
     <string name="settings_screen_correction">Text correction</string>
     <!-- Settings screen title for advanced settings -->
     <string name="settings_screen_advanced">Advanced</string>
+    <!-- Settings screen title for VibeVoice integration -->
+    <string name="vibevoice_integration_title">VibeVoice Integration</string>
+    <!-- Description text on the VibeVoice account linking screen -->
+    <string name="vibevoice_account_linking_description">VibeVoice account linking allows utilizing cloud transcription directly inside the keyboard.</string>
+    <!-- Status text shown when VibeVoice is linked -->
+    <string name="vibevoice_status_linked">Status: Linked!</string>
+    <!-- Button text for unlinking the current VibeVoice account -->
+    <string name="vibevoice_unlink_device">Unlink Device</string>
+    <!-- Status text while waiting for browser approval -->
+    <string name="vibevoice_waiting_for_approval">Waiting for approval…</string>
+    <!-- Prompt instructing user to enter their code in browser -->
+    <string name="vibevoice_enter_code_in_browser">Please enter the code in your browser:</string>
+    <!-- Status text shown while polling for the device token -->
+    <string name="vibevoice_polling_for_token">Polling for token…</string>
+    <!-- Button text to start VibeVoice account linking -->
+    <string name="vibevoice_link_account">Link VibeVoice Account</string>
+    <!-- Error message shown when linking fails for a returned API error -->
+    <string name="vibevoice_linking_failed">Linking failed: %s</string>
+    <!-- Error message shown when requesting a device code fails -->
+    <string name="vibevoice_failed_request_device_code">Failed to request device code</string>
+    <string name="vibevoice_no_browser">No browser app found to open the link</string>
+    <string name="vibevoice_not_linked">Please link VibeVoice in Settings</string>
+    <string name="vibevoice_listening">Listening…</string>
+    <string name="vibevoice_error">Voice error: %s</string>
+    <!-- Spacebar text shown while VibeVoice transcription is active -->
+    <string name="vibevoice_transcribing">Transcribing…</string>
     <!-- Settings screen title for keyboard theme settings -->
     <string name="settings_screen_theme">Theme</string>
     <!-- Settings category title for Preference/Input settings -->
@@ -988,7 +1014,7 @@ New dictionary:
         Submitted data will be downloaded and deleted from the ProtonMail mailbox where it is stored at our earliest convenience.
         After the gesture data gathering phase has ended, the accumulated data set from all users will be published under the Creative Commons BY-SA 4.0 license.\n\n
 
-        As part of trying to protect your privacy, you won\'t be listed explicitly as an author. Your credit will be as \"The HeliBoard Gesture Data Project Contributors.\" It should not be possible to connect the data you generate in this screen to your identity. However, it might be possible to determine which gestures were made by the same person.
+        As part of trying to protect your privacy, you won\'t be listed explicitly as an author. Your credit will be as \"The VibeVoiceBoard Gesture Data Project Contributors.\" It should not be possible to connect the data you generate in this screen to your identity. However, it might be possible to determine which gestures were made by the same person.
         This can be done e.g. from a custom keyboard layout, keyboard dimensions, language, or individual gesturing style.\n\n
     </string>
     <!-- Button text for showing gesture_data_description_privacy
@@ -1095,7 +1121,7 @@ New dictionary:
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="gesture_data_promotion_message">
         Hey there!\n
-        Since you installed the gesture typing library, you might be interested in HeliBoard\'s project for creating a fully open gesture typing library.
+        Since you installed the gesture typing library, you might be interested in VibeVoiceBoard\'s project for creating a fully open gesture typing library.
         You can help by contributing gesture data. For more information visit the gesture data gathering screen.
     </string>
     <!-- Message asking the user to contribute to gesture data gathering again (dialog in main settings)

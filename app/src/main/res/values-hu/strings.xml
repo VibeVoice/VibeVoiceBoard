@@ -99,8 +99,8 @@
     <string name="settings_no_limit">Korlátlan</string>
     <string name="enable_clipboard_history">Vágólap előzményeinek engedélyezése</string>
     <string name="key_borders">Betűhatárok</string>
-    <string name="ime_settings">HeliBoard beállítások</string>
-    <string name="android_spell_checker_settings">HeliBoard helyesírás-ellenőrző beállításai</string>
+    <string name="ime_settings">VibeVoiceBoard beállítások</string>
+    <string name="android_spell_checker_settings">VibeVoiceBoard helyesírás-ellenőrző beállításai</string>
     <string name="settings_category_additional_keys">További billentyűk</string>
     <string name="delete_swipe_summary">A törlés billentyűről való csúsztatással nagyobb szövegrészleteket jelölhet ki és távolíthat el</string>
     <string name="enable_clipboard_history_summary">Ha le van tiltva, a vágólapbillentyű beilleszti a vágólap tartalmát, ha van</string>
@@ -112,7 +112,7 @@
     <string name="prefs_long_press_keyboard_to_change_lang_summary">A szóközbillentyű nyomva tartásával a beviteli mód kiválasztási menüje jelenik meg</string>
     <string name="prefs_long_press_keyboard_to_change_lang">Beviteli mód megváltoztatása a szóközzel</string>
     <string name="day_night_mode">Automatikus nappali/éjszakai mód</string>
-    <string name="spell_checker_service_name">HeliBoard helyesírás-ellenőrző</string>
+    <string name="spell_checker_service_name">VibeVoiceBoard helyesírás-ellenőrző</string>
     <string name="delete_swipe">Törlés csúsztatással</string>
     <string name="show_emoji_key">Emodzsibillentyű</string>
     <string name="incognito">Inkognitómód kényszerítése</string>
@@ -448,7 +448,7 @@
     <string name="gesture_data_description">Üdvözöljük az ujjmozdulat-adatgyűjtési képernyőn!&lt;br/&gt;&lt;br/&gt; Ez egy &lt;a href=https://nlnet.nl/project/GestureTyping&gt;NLnet által finanszírozott projekt&lt;/a&gt; része, amelynek célja egy teljesen nyílt forráskódú ujjmozdulat-gépelési könyvtár létrehozása, amely képes kiváltani a Google zárt forráskódú megoldását.&lt;br/&gt; Az eredmény a tervek szerint az AOSP-alapú billentyűzetek egyszerű helyettesítője lesz, de más billentyűzetekkel (pl. FlorisBoard) is használható lesz.&lt;br/&gt;&lt;br/&gt; A könyvtár fejlesztéséhez rendkívül hasznos, ha különböző nyelvű és különböző felhasználóktól származó részletes ujjmozdulat-adatok állnak rendelkezésre.&lt;br/&gt; Az adatok gyűjtésével és beküldésével Ön is hozzájárulhat egy nyílt adatkészlethez, amelyet a könyvtár fejlesztéséhez használunk fel. Az adatkészletet a gyűjtési fázis %s időpontban történő lezárása után CC BY-SA 4.0 licenc alatt tesszük közzé. A gyűjtött adatokat a képernyő alján található megosztás ikonnal küldheti be.</string>
     <string name="gesture_data_info">Mi ez?</string>
     <string name="gesture_data_description_modes">Jelenleg csak az aktív gyűjtési mód érhető el, ahol egy adott szót kell beírnia ujjmozdulat-gépeléssel.\n Később egy passzív gyűjtési mód is hozzáadásra kerül, ahol más alkalmazásokban végzett normál gépeléséből származó mintákat adhat meg. Ennek a módszernek az érzékenysége miatt ez választható és konfigurálható lesz, valamint egy ellenőrző képernyő is tartozik majd hozzá a beküldendő adatokhoz.</string>
-    <string name="gesture_data_description_privacy">Adatvédelem\n\n Az Ön által beküldött adatok a következőkből állnak: célszó, billentyűzetkiosztás és méretek, ujjmozdulat (időpontok és koordináták), a jelenlegi könyvtár javaslatai, a használt szótárak kivonata, alkalmazásverzió, adatgyűjtési mód, az ujjmozdulat-gépelési könyvtár típusa (alapértelmezett Google-e), valamint minden mozdulathoz egy azonosító.\n A beküldött adatokat a lehető leghamarabb letöltjük és töröljük a ProtonMail fiókból, ahol tároljuk őket. Az adatgyűjtési szakasz lezárulta után az összesített adatkészletet Creative Commons BY-SA 4.0 licenc alatt tesszük közzé.\n\n Az Ön magánéletének védelme érdekében nem szerepel majd név szerint szerzőként. Közreműködését „The HeliBoard Gesture Data Project Contributors” néven tüntetjük fel. Az ezen a képernyőn előállított adatok alapján nem lehet majd beazonosítani az Ön személyazonosságát. Azonban előfordulhat, hogy megállapítható, mely mozdulatok származnak ugyanattól a személytől (például egyedi billentyűzetkiosztás, méretek, nyelv vagy egyéni gépelési stílus alapján).</string>
+    <string name="gesture_data_description_privacy">Adatvédelem\n\n Az Ön által beküldött adatok a következőkből állnak: célszó, billentyűzetkiosztás és méretek, ujjmozdulat (időpontok és koordináták), a jelenlegi könyvtár javaslatai, a használt szótárak kivonata, alkalmazásverzió, adatgyűjtési mód, az ujjmozdulat-gépelési könyvtár típusa (alapértelmezett Google-e), valamint minden mozdulathoz egy azonosító.\n A beküldött adatokat a lehető leghamarabb letöltjük és töröljük a ProtonMail fiókból, ahol tároljuk őket. Az adatgyűjtési szakasz lezárulta után az összesített adatkészletet Creative Commons BY-SA 4.0 licenc alatt tesszük közzé.\n\n Az Ön magánéletének védelme érdekében nem szerepel majd név szerint szerzőként. Közreműködését „The VibeVoiceBoard Gesture Data Project Contributors” néven tüntetjük fel. Az ezen a képernyőn előállított adatok alapján nem lehet majd beazonosítani az Ön személyazonosságát. Azonban előfordulhat, hogy megállapítható, mely mozdulatok származnak ugyanattól a személytől (például egyedi billentyűzetkiosztás, méretek, nyelv vagy egyéni gépelési stílus alapján).</string>
     <string name="gesture_data_privacy">Adatvédelem</string>
     <string name="gesture_data_get_data">Újjmozdulat-adatfájl megosztása</string>
     <string name="gesture_data_delete_data">Újjmozdulat-adatok törlése</string>

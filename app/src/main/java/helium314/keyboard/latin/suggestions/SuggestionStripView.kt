@@ -5,6 +5,8 @@
  */
 package helium314.keyboard.latin.suggestions
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
@@ -12,6 +14,7 @@ import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import java.util.WeakHashMap
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -24,6 +27,7 @@ import android.view.View.OnLongClickListener
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityEvent
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
@@ -86,6 +90,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val wordViews = ArrayList<TextView>()
     private val debugInfoViews = ArrayList<TextView>()
     private val dividerViews = ArrayList<View>()
+    private val voiceAnimators = WeakHashMap<View, ObjectAnimator>()
 
     init {
         val inflater = LayoutInflater.from(context)
@@ -303,6 +308,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         dismissMoreSuggestionsPanel()
+        voiceAnimators.values.forEach { it.cancel() }
+        voiceAnimators.clear()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -379,7 +386,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 addKeyToPinnedKeys(tag)
                 toolbar.findViewWithTag<View>(tag).background = enabledToolKeyBackground
                 addPinnedKey(context.prefs(), tag)
-            } else {
+            } else if (tag != ToolbarKey.VOICE) {
                 removePinnedKey(context.prefs(), tag)
                 toolbar.findViewWithTag<View>(tag).background = defaultToolbarBackground.constantState?.newDrawable(resources)
                 pinnedKeys.removeView(pinnedKeyView)
@@ -504,10 +511,45 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
-    fun updateVoiceKey() {
-        val show = Settings.getValues().mShowsVoiceInputKey
-        toolbar.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
-        pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
+    @JvmOverloads
+    fun updateVoiceKey(isActivated: Boolean = false) {
+        // VibeVoice key is always visible — it is not gated on system voice IME availability
+        updateVoiceKeyButton(toolbar.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+        updateVoiceKeyButton(pinnedKeys.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+    }
+
+    private fun updateVoiceKeyButton(view: View?, show: Boolean, isActivated: Boolean) {
+        val button = view as? ImageButton ?: return
+        button.isVisible = show
+        button.isActivated = isActivated
+        if (isActivated) {
+            button.setImageResource(R.drawable.ic_vibevoice_active)
+            button.background = null
+            button.clearColorFilter()
+            button.scaleType = ImageView.ScaleType.FIT_CENTER
+            startTiltingAnimation(button)
+        } else {
+            button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
+            button.background = defaultToolbarBackground.constantState?.newDrawable(resources)
+            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
+            button.scaleType = ImageView.ScaleType.CENTER
+            stopTiltingAnimation(button)
+        }
+    }
+
+    private fun startTiltingAnimation(view: View) {
+        if (voiceAnimators.containsKey(view)) return
+        val animator = ObjectAnimator.ofFloat(view, "rotation", -8f, 8f)
+        animator.duration = 400
+        animator.repeatMode = ValueAnimator.REVERSE
+        animator.repeatCount = ValueAnimator.INFINITE
+        animator.start()
+        voiceAnimators[view] = animator
+    }
+
+    private fun stopTiltingAnimation(view: View) {
+        voiceAnimators.remove(view)?.cancel()
+        view.rotation = 0f
     }
 
     private fun updateKeys() {
