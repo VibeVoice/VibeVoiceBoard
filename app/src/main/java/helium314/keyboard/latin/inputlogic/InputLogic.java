@@ -678,9 +678,12 @@ public final class InputLogic {
      * @param event The event to handle.
      * @param inputTransaction The transaction in progress.
      */
-    private void handleFunctionalEvent(final Event event, final InputTransaction inputTransaction,
-            final String currentKeyboardScript, final LatinIME.UIHandler handler) {
-        final int keyCode = event.getKeyCode();
+    private void handleFunctionalEvent(Event event, InputTransaction inputTransaction, String currentKeyboardScript, LatinIME.UIHandler handler) {
+        int keyCode = event.getKeyCode();
+        SettingsValues sv = inputTransaction.getSettingsValues();
+        if (sv.mIsLocked && KeyCode.isIsBlockedWhenLocked(keyCode)) {
+            Log.w(TAG, "Blocked keycode while device was locked, this should not happen");
+        }
         switch (keyCode) {
             case KeyCode.DELETE:
                 handleBackspaceEvent(event, inputTransaction, currentKeyboardScript);
@@ -690,10 +693,10 @@ public final class InputLogic {
             case KeyCode.SHIFT:
                 if (KeyboardSwitcher.getInstance().getKeyboard() != null && !KeyboardSwitcher.getInstance().getKeyboard().mId.isAlphabetKeyboard())
                     break; // recapitalization and follow-up code should only trigger for alphabet shift, see #1256
-                performRecapitalization(inputTransaction.getSettingsValues());
+                performRecapitalization(sv);
                 inputTransaction.requireShiftUpdate(InputTransaction.SHIFT_UPDATE_NOW);
                 inputTransaction.setRequiresUpdateSuggestions();
-                if (mSpaceState == SpaceState.PHANTOM && inputTransaction.getSettingsValues().mShiftRemovesAutospace)
+                if (mSpaceState == SpaceState.PHANTOM && sv.mShiftRemovesAutospace)
                     mSpaceState = SpaceState.NONE;
                 break;
             case KeyCode.CAPS_LOCK:
@@ -716,7 +719,7 @@ public final class InputLogic {
                 // Note: If clipboard history is enabled, switching to clipboard keyboard
                 // is being handled in {@link KeyboardState#onEvent(Event,int)}.
                 // If disabled, current clipboard content is committed.
-                if (!inputTransaction.getSettingsValues().mClipboardHistoryEnabled) {
+                if (!sv.mClipboardHistoryEnabled) {
                     handleClipboardPaste();
                 }
                 break;
@@ -742,7 +745,7 @@ public final class InputLogic {
                 mConnection.selectAll();
                 break;
             case KeyCode.CLIPBOARD_SELECT_WORD:
-                mConnection.selectWord(inputTransaction.getSettingsValues().mSpacingAndPunctuations, currentKeyboardScript);
+                mConnection.selectWord(sv.mSpacingAndPunctuations, currentKeyboardScript);
                 break;
             case KeyCode.CLIPBOARD_COPY:
                 mConnection.copyText(true);
@@ -813,7 +816,7 @@ public final class InputLogic {
                 mLatinIME.onTextInput(TimestampKt.getTimestamp(mLatinIME));
                 break;
             case KeyCode.EMOJI_SEARCH:
-                commitTyped(Settings.getValues(), LastComposedWord.NOT_A_SEPARATOR);
+                commitTyped(sv, LastComposedWord.NOT_A_SEPARATOR);
                 mLatinIME.launchEmojiSearch();
                 break;
             case KeyCode.SEND_INTENT_ONE, KeyCode.SEND_INTENT_TWO, KeyCode.SEND_INTENT_THREE:
