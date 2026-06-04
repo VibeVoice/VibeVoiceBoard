@@ -1057,6 +1057,9 @@ public class LatinIME extends InputMethodService implements
             setNavigationBarColor();
             workaroundForHuaweiStatusBarIssue();
         }
+        if (hasSuggestionStripView() && mIsRecordingVoice) {
+            mSuggestionStripView.updateVoiceKey(true);
+        }
     }
 
     @Override
