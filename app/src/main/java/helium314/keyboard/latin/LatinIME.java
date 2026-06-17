@@ -1567,6 +1567,18 @@ public class LatinIME extends InputMethodService implements
 
             mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
                 @Override
+                public void onCommitComposing() {
+                    mUiHandler.post(() -> {
+                        if (mVibeVoiceClient == null)
+                            return;
+                        if (!mVoiceComposingText.isEmpty()) {
+                            mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
+                            mVoiceComposingText = "";
+                        }
+                    });
+                }
+
+                @Override
                 public void onPartial(@NonNull String text, boolean isNewSegment) {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null)

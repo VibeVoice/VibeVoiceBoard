@@ -33,6 +33,7 @@ interface VibeVoiceListener {
     fun onFinal(text: String, isNewSegment: Boolean)
     fun onError(error: String)
     fun onClosed()
+    fun onCommitComposing()
 }
 
 class VibeVoiceClient(
@@ -49,30 +50,94 @@ class VibeVoiceClient(
     private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
     @Volatile private var closureJob: Job? = null
 
-    @SuppressLint("MissingPermission")
-    fun startStreaming() {
-        if (isStreaming) return
-        isStreaming = true
-        closureJob?.cancel()
-        closureJob = null
+    private val rollingBuffer = ByteArray(30 * 32000) // 30 seconds of audio at 16kHz 16-bit mono
+    @Volatile private var audioConfirmedBytes = 0L
+    @Volatile private var isReconnecting = false
+    @Volatile private var retryCount = 0
+    @Volatile private var isWsOpen = false
+    private val preOpenBuffer = ArrayDeque<okio.ByteString>()
+    private var preOpenBufferSizeBytes = 0
+    private val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
 
-        val preOpenBuffer = ArrayDeque<okio.ByteString>()
-        var preOpenBufferSizeBytes = 0
-        val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
-        var isWsOpen = false
+    private fun writeToRollingBuffer(data: ByteArray, offset: Int, length: Int) {
+        val size = rollingBuffer.size
+        for (i in 0 until length) {
+            val idx = ((totalRead + i) % size).toInt()
+            rollingBuffer[idx] = data[offset + i]
+        }
+    }
 
+    private fun readFromRollingBuffer(length: Int): ByteArray {
+        val size = rollingBuffer.size
+        val result = ByteArray(length)
+        val startPos = totalRead - length
+        for (i in 0 until length) {
+            var index = ((startPos + i) % size).toInt()
+            if (index < 0) index += size
+            result[i] = rollingBuffer[index]
+        }
+        return result
+    }
+
+    private fun connectWebSocket() {
         val request = Request.Builder()
             .url("wss://vibevoice.net/stream")
             .build()
-        webSocket = sharedHttpClient.newWebSocket(request, object : WebSocketListener() {
+        webSocket = sharedHttpClient.newWebSocket(request, createWebSocketListener())
+    }
+
+    private fun triggerReconnect() {
+        if (!isStreaming) return
+        isReconnecting = true
+        synchronized(preOpenBuffer) {
+            isWsOpen = false
+        }
+        
+        listener.onCommitComposing()
+        
+        val delayMs = when (retryCount) {
+            0 -> 500L
+            1 -> 1000L
+            else -> 2000L
+        }
+        retryCount++
+        
+        if (retryCount <= MAX_RETRIES) {
+            VibeVoiceDebugLogger.log("Reconnecting in ${delayMs}ms (attempt $retryCount/$MAX_RETRIES)...")
+            scope.launch {
+                delay(delayMs)
+                connectWebSocket()
+            }
+        } else {
+            VibeVoiceDebugLogger.log("Max reconnect retries reached. Stopping stream.")
+            isStreaming = false
+            cleanupAudioCapture()
+            listener.onError("Connection lost")
+        }
+    }
+
+    private fun createWebSocketListener(): WebSocketListener {
+        return object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                VibeVoiceDebugLogger.log("WS Open")
-                // Send API key as first message
+                VibeVoiceDebugLogger.log("WS Open (reconnect=$isReconnecting)")
                 val authJson = JSONObject().put("api_key", apiKey).toString()
                 webSocket.send(authJson)
                 
                 synchronized(preOpenBuffer) {
                     isWsOpen = true
+                    
+                    if (isReconnecting) {
+                        val unconfirmed = (totalRead - audioConfirmedBytes).toInt()
+                        val clampLength = minOf(unconfirmed, totalRead.toInt(), rollingBuffer.size)
+                        if (clampLength > 0) {
+                            VibeVoiceDebugLogger.log("Reconnected: flushing $clampLength bytes of unconfirmed audio")
+                            val flushData = readFromRollingBuffer(clampLength)
+                            webSocket.send(flushData.toByteString(0, clampLength))
+                        }
+                        isReconnecting = false
+                        retryCount = 0
+                    }
+
                     for (bytes in preOpenBuffer) {
                         webSocket.send(bytes)
                     }
@@ -87,6 +152,12 @@ class VibeVoiceClient(
                     if (json.has("text")) {
                         val resultText = json.getString("text")
                         val isFinal = json.optBoolean("is_final", false)
+                        
+                        if (json.has("dur")) {
+                            val dur = json.optDouble("dur", 0.0)
+                            audioConfirmedBytes = (dur * 32000).toLong()
+                        }
+
                         VibeVoiceDebugLogger.log("WS msg text len: ${resultText.length}, final: $isFinal")
                         if (isFinal) {
                             if (resultText.isBlank()) {
@@ -136,25 +207,53 @@ class VibeVoiceClient(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                isStreaming = false
-                cleanupAudioCapture()
-                closureJob?.cancel()
-                closureJob = null
-                this@VibeVoiceClient.webSocket = null
                 VibeVoiceDebugLogger.log("WS Failure: ${t.message}")
-                listener.onError(t.message ?: "WebSocket Error")
+                if (isStreaming && retryCount < MAX_RETRIES) {
+                    triggerReconnect()
+                } else {
+                    isStreaming = false
+                    cleanupAudioCapture()
+                    closureJob?.cancel()
+                    closureJob = null
+                    this@VibeVoiceClient.webSocket = null
+                    listener.onError(t.message ?: "WebSocket Error")
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                isStreaming = false
-                cleanupAudioCapture()
-                closureJob?.cancel()
-                closureJob = null
-                this@VibeVoiceClient.webSocket = null
                 VibeVoiceDebugLogger.log("WS Closed: $code / $reason")
-                listener.onClosed()
+                if (isStreaming && code != 1000) {
+                    VibeVoiceDebugLogger.log("Unexpected WS close mid-session. Reconnecting...")
+                    triggerReconnect()
+                } else {
+                    isStreaming = false
+                    cleanupAudioCapture()
+                    closureJob?.cancel()
+                    closureJob = null
+                    this@VibeVoiceClient.webSocket = null
+                    listener.onClosed()
+                }
             }
-        })
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun startStreaming() {
+        if (isStreaming) return
+        isStreaming = true
+        closureJob?.cancel()
+        closureJob = null
+        isReconnecting = false
+        retryCount = 0
+        audioConfirmedBytes = 0L
+        isWsOpen = false
+
+        synchronized(preOpenBuffer) {
+            preOpenBuffer.clear()
+            preOpenBufferSizeBytes = 0
+        }
+
+        connectWebSocket()
 
         val sampleRate = 16000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
@@ -168,39 +267,121 @@ class VibeVoiceClient(
         }
         val bufferSize = minBuf * 4
 
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            sampleRate,
-            channelConfig,
-            audioFormat,
-            bufferSize
-        )
+        fun initAudioRecord(): Boolean {
+            try {
+                audioRecord?.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing old AudioRecord", e)
+            }
+            try {
+                val record = AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize
+                )
+                audioRecord = record
 
-        Log.d("VibeVoiceClient", "AudioRecord state: ${audioRecord?.state}, bufferSize: $bufferSize")
-        try {
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                throw IllegalStateException("not initialized, state=${audioRecord?.state}")
+                if (record.state != AudioRecord.STATE_INITIALIZED) {
+                    VibeVoiceDebugLogger.log("AudioRecord init failed: state=${record.state}")
+                    return false
+                }
+                record.startRecording()
+                if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                    VibeVoiceDebugLogger.log("AudioRecord start failed: recordingState=${record.recordingState}")
+                    return false
+                }
+                VibeVoiceDebugLogger.log("AudioRecord successfully initialized and started")
+                return true
+            } catch (e: Exception) {
+                VibeVoiceDebugLogger.log("Exception initializing AudioRecord: ${e.message}")
+                return false
             }
-            audioRecord?.startRecording()
-            if (audioRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                throw IllegalStateException("recordingState=${audioRecord?.recordingState}")
-            }
-        } catch (e: Exception) {
-            VibeVoiceDebugLogger.log("AudioRecord.startRecording failed: ${e.message}")
+        }
+
+        if (!initAudioRecord()) {
             cleanupAudioCapture()
-            listener.onError("Microphone unavailable: ${e.message}")
+            listener.onError("Microphone unavailable")
             isStreaming = false
             return
         }
-        Log.d("VibeVoiceClient", "AudioRecord recordingState: ${audioRecord?.recordingState}")
+
         totalRead = 0L // Reset for new session
         lastFullText = ""
         audioJob = scope.launch {
             val buffer = ByteArray(bufferSize)
+            var consecutiveZeroBytes = 0L
+            val zeroLimitBytes = 16000 * 2 * 2 // 2 seconds of silence
+            var recoveryAttempts = 0
+            val maxRecoveryAttempts = 3
+            var lastLogTime = 0L
+
             while (isActive && isStreaming) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                val currentRecord = audioRecord
+                if (currentRecord == null) {
+                    delay(50)
+                    continue
+                }
+
+                val startTime = System.nanoTime()
+                val read = try {
+                    currentRecord.read(buffer, 0, buffer.size)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception reading from AudioRecord", e)
+                    -1
+                }
+                val durationMs = (System.nanoTime() - startTime) / 1_000_000
+
                 if (read > 0) {
+                    var isAllZeros = true
+                    for (i in 0 until read) {
+                        if (buffer[i] != 0.toByte()) {
+                            isAllZeros = false
+                            break
+                        }
+                    }
+
+                    if (isAllZeros) {
+                        consecutiveZeroBytes += read
+                    } else {
+                        consecutiveZeroBytes = 0L
+                        recoveryAttempts = 0 // Reset attempts on successful read
+                    }
+
+                    val expectedMs = read / 32
+                    val isRapidRead = isAllZeros && expectedMs > 20 && durationMs < expectedMs / 10
+                    val isSilencedTooLong = consecutiveZeroBytes >= zeroLimitBytes
+
+                    if (isRapidRead || isSilencedTooLong) {
+                        val reason = if (isRapidRead) "rapid zero-flood (${durationMs}ms)" else "2s of consecutive zeros"
+                        VibeVoiceDebugLogger.log("Dead microphone detected ($reason). Attempting recovery...")
+
+                        if (recoveryAttempts < maxRecoveryAttempts) {
+                            recoveryAttempts++
+                            VibeVoiceDebugLogger.log("Re-initializing AudioRecord (attempt $recoveryAttempts/$maxRecoveryAttempts)")
+                            
+                            try {
+                                currentRecord.stop()
+                            } catch (_: Exception) {}
+                            
+                            delay(300)
+                            
+                            if (initAudioRecord()) {
+                                consecutiveZeroBytes = 0L
+                                continue
+                            }
+                        } else {
+                            VibeVoiceDebugLogger.log("Max recovery attempts reached. Stopping session.")
+                            listener.onError("Microphone unavailable")
+                            stopStreaming()
+                            break
+                        }
+                    }
+
+                    writeToRollingBuffer(buffer, 0, read)
                     totalRead += read
+                    
                     val bytesToSend = buffer.toByteString(0, read)
                     synchronized(preOpenBuffer) {
                         if (isWsOpen) {
@@ -213,21 +394,37 @@ class VibeVoiceClient(
                             }
                         }
                     }
-                    if (totalRead % (bufferSize * 10) == 0L) { // Periodic log
-                         Log.d("VibeVoiceClient", "Total bytes read: $totalRead")
+                    val now = System.currentTimeMillis()
+                    if (now - lastLogTime >= 5000) {
+                         Log.d(TAG, "Total bytes read: $totalRead")
                          VibeVoiceDebugLogger.log("Audio KB read: ${totalRead / 1024}")
+                         lastLogTime = now
                     }
                 } else if (read == 0) {
                     delay(10)
                 } else {
-                    Log.e("VibeVoiceClient", "AudioRecord read error: $read")
-                    VibeVoiceDebugLogger.log("AudioRecord read error: $read — stopping session")
-                    listener.onError("Microphone read error: $read")
-                    stopStreaming()
-                    break
+                    Log.e(TAG, "AudioRecord read error: $read")
+                    
+                    if (recoveryAttempts < maxRecoveryAttempts) {
+                        recoveryAttempts++
+                        VibeVoiceDebugLogger.log("Re-initializing AudioRecord on read error $read (attempt $recoveryAttempts/$maxRecoveryAttempts)")
+                        try {
+                            currentRecord.stop()
+                        } catch (_: Exception) {}
+                        delay(300)
+                        if (initAudioRecord()) {
+                            consecutiveZeroBytes = 0L
+                            continue
+                        }
+                    } else {
+                        VibeVoiceDebugLogger.log("AudioRecord read error: $read — stopping session")
+                        listener.onError("Microphone read error: $read")
+                        stopStreaming()
+                        break
+                    }
                 }
             }
-            Log.d("VibeVoiceClient", "Exit recording loop. Final total bytes: $totalRead")
+            Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead")
         }
     }
 
@@ -237,7 +434,6 @@ class VibeVoiceClient(
         cleanupAudioCapture()
 
         webSocket?.send("END_STREAM")
-        // Close later after receiving finals or just close now
         closureJob = scope.launch {
             VibeVoiceDebugLogger.log("Closing WS in 1.5s timer started. Total bytes read: $totalRead")
             delay(1500)
@@ -257,9 +453,12 @@ class VibeVoiceClient(
         audioJob = null
         try {
             audioRecord?.stop()
-        } catch (_: IllegalStateException) {
+        } catch (_: Exception) {
         }
-        audioRecord?.release()
+        try {
+            audioRecord?.release()
+        } catch (_: Exception) {
+        }
         audioRecord = null
     }
 
@@ -268,6 +467,7 @@ class VibeVoiceClient(
         private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
         private const val TAG = "VibeVoiceClient"
+        private const val MAX_RETRIES = 3
 
         @JvmField val sharedHttpClient = OkHttpClient.Builder()
             .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
