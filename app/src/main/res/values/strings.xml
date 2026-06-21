@@ -850,11 +850,6 @@ New dictionary:
 \n► For users doing manual backups with root access: &lt;br&gt;
 \n\t• Starting at Android 7, the shared preferences file is not in the default location, because the app is using %s. This is necessary so the settings can be read before the device is unlocked, e.g. at boot; &lt;br&gt;
 \n\t• The file is located in /data/user_de/0/package_id/shared_prefs/ though this may depend on the device and Android version. &lt;br&gt; &lt;br&gt;
-\n&lt;i&gt;&lt;b&gt;Debug mode / debug APK&lt;/b&gt;&lt;/i&gt; &lt;br&gt; &lt;br&gt;
-\n► Long-press a suggestion to show the source dictionary. &lt;br&gt; &lt;br&gt;
-\n► When using debug APK, you can find Debug Settings within the Advanced Preferences,though the usefulness is limited except for dumping dictionaries into the log. &lt;br&gt;
-\n\t• For a release APK, you need to tap the version in &lt;i&gt;About&lt;/i&gt; several times, then you can find debug settings in &lt;i&gt;Advanced Preferences&lt;/i&gt;. &lt;br&gt;
-\n\t• When enabling &lt;i&gt;Show suggestion infos&lt;/i&gt;, suggestions will have some tiny numbers on top showing some internal score and source dictionary. &lt;br&gt; &lt;br&gt;
 \n► In the event of an application crash, you will be prompted whether you want the crash logs when you open the Settings. &lt;br&gt; &lt;br&gt;
 \n► When using multilingual typing, space bar will show an confidence value used for determining the currently used language. &lt;br&gt; &lt;br&gt;
 \n► Suggestions will have some tiny numbers on top showing some internal score and source dictionary (can be disabled).</string>

@@ -20,7 +20,7 @@ APK_FILENAME=$(basename "$APK_PATH")
 echo "Found compiled APK: $APK_PATH"
 
 # 4. Deploy to Local Nextcloud Sync Folder
-DEST_DIR="/home/schneider/nextcloud/Documents/Agbridge-APK"
+DEST_DIR="/home/schneider/nextcloud/Documents/VibeVoiceBoard"
 echo "Deploying APK to Nextcloud: $DEST_DIR"
 mkdir -p "$DEST_DIR"
 cp "$APK_PATH" "$DEST_DIR/$APK_FILENAME"

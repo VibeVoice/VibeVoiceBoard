@@ -83,7 +83,8 @@ fun createAboutSettings(context: Context) = listOf(
             name = it.title,
             description = stringResource(R.string.version_text, BuildConfig.VERSION_NAME),
             onClick = {
-                if (prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS) || BuildConfig.DEBUG)
+                if (!BuildConfig.DEBUG) return@Preference
+                if (prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS))
                     return@Preference
                 count++
                 if (count < 5) return@Preference
