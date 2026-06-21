@@ -171,11 +171,12 @@ class VibeVoiceClient(
                             lastFullText = resultText
                             
                             listener.onFinal(resultText, isNewSegment)
-                            if (!isStreaming) {
-                                VibeVoiceDebugLogger.log("Closing WS immediately after final result")
-                                closureJob?.cancel()
-                                webSocket.close(1000, "Done after Final")
-                            }
+                            
+                            VibeVoiceDebugLogger.log("Closing WS immediately after final result marker")
+                            closureJob?.cancel()
+                            closureJob = null
+                            webSocket.close(1000, "Done after Final")
+                            this@VibeVoiceClient.webSocket = null
                         } else {
                             val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
                             if (isNewSegment) {
@@ -184,14 +185,6 @@ class VibeVoiceClient(
                             lastFullText = resultText
                             
                             listener.onPartial(resultText, isNewSegment)
-                            if (!isStreaming) {
-                                VibeVoiceDebugLogger.log("Shortening timeout after partial result")
-                                closureJob?.cancel()
-                                closureJob = scope.launch {
-                                    delay(500)
-                                    webSocket.close(1000, "Done after Flush")
-                                }
-                            }
                         }
                     } else if (json.has("error")) {
                         val errorMsg = json.optString("error", "Unknown server error")
@@ -218,6 +211,11 @@ class VibeVoiceClient(
                     this@VibeVoiceClient.webSocket = null
                     listener.onError(t.message ?: "WebSocket Error")
                 }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                VibeVoiceDebugLogger.log("WS Closing: $code / $reason")
+                webSocket.close(1000, "Acknowledge Close")
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -454,8 +452,9 @@ class VibeVoiceClient(
 
         webSocket?.send("END_STREAM")
         closureJob = scope.launch {
-            VibeVoiceDebugLogger.log("Closing WS in 1.5s timer started. Total bytes read: $totalRead")
-            delay(1500)
+            VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
+            delay(3000)
+            VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
             webSocket?.close(1000, "Done (timeout)")
             webSocket = null
             closureJob = null
