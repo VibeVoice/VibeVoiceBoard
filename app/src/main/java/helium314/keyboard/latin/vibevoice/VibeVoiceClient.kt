@@ -317,6 +317,8 @@ class VibeVoiceClient(
             val maxRecoveryAttempts = 3
             var lastLogTime = 0L
             var totalReadsInSession = 0
+            var sumOfSquares = 0.0
+            var totalSamples = 0L
 
             while (isActive && isStreaming) {
                 val currentRecord = audioRecord
@@ -336,6 +338,16 @@ class VibeVoiceClient(
 
                 if (read > 0) {
                     totalReadsInSession++
+                    
+                    val numSamples = read / 2
+                    for (i in 0 until numSamples) {
+                        val b1 = buffer[2 * i].toInt() and 0xFF
+                        val b2 = buffer[2 * i + 1].toInt()
+                        val sample = ((b2 shl 8) or b1).toShort()
+                        val valNormal = sample.toDouble() / 32768.0
+                        sumOfSquares += valNormal * valNormal
+                    }
+                    totalSamples += numSamples
                     
                     var isAllZeros = true
                     for (i in 0 until read) {
@@ -429,7 +441,9 @@ class VibeVoiceClient(
                     }
                 }
             }
-            Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead")
+            val overallRms = if (totalSamples > 0) Math.sqrt(sumOfSquares / totalSamples) else 0.0
+            VibeVoiceDebugLogger.log("Session complete. Final total bytes: $totalRead, Overall RMS: ${String.format(java.util.Locale.US, "%.6f", overallRms)}")
+            Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead, Overall RMS: $overallRms")
         }
     }
 
