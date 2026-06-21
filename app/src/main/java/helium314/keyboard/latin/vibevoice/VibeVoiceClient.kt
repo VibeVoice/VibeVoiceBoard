@@ -172,11 +172,13 @@ class VibeVoiceClient(
                             
                             listener.onFinal(resultText, isNewSegment)
                             
-                            VibeVoiceDebugLogger.log("Closing WS immediately after final result marker")
-                            closureJob?.cancel()
-                            closureJob = null
-                            webSocket.close(1000, "Done after Final")
-                            this@VibeVoiceClient.webSocket = null
+                            if (!isStreaming) {
+                                VibeVoiceDebugLogger.log("Closing WS immediately after final result marker")
+                                closureJob?.cancel()
+                                closureJob = null
+                                webSocket.close(1000, "Done after Final")
+                                this@VibeVoiceClient.webSocket = null
+                            }
                         } else {
                             val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
                             if (isNewSegment) {
@@ -342,8 +344,8 @@ class VibeVoiceClient(
                         val b1 = buffer[2 * i].toInt() and 0xFF
                         val b2 = buffer[2 * i + 1].toInt()
                         val sample = ((b2 shl 8) or b1).toShort()
-                        val valNormal = sample.toDouble() / 32768.0
-                        sumOfSquares += valNormal * valNormal
+                        val sampleVal = sample.toLong()
+                        sumOfSquares += (sampleVal * sampleVal).toDouble()
                     }
                     totalSamples += numSamples
                     
@@ -439,7 +441,7 @@ class VibeVoiceClient(
                     }
                 }
             }
-            val overallRms = if (totalSamples > 0) Math.sqrt(sumOfSquares / totalSamples) else 0.0
+            val overallRms = if (totalSamples > 0) Math.sqrt(sumOfSquares / totalSamples) / 32768.0 else 0.0
             VibeVoiceDebugLogger.log("Session complete. Final total bytes: $totalRead, Overall RMS: ${String.format(java.util.Locale.US, "%.6f", overallRms)}")
             Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead, Overall RMS: $overallRms")
         }
