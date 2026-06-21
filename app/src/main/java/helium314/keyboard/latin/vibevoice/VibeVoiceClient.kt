@@ -177,7 +177,9 @@ class VibeVoiceClient(
                                 closureJob?.cancel()
                                 closureJob = null
                                 webSocket.close(1000, "Done after Final")
-                                this@VibeVoiceClient.webSocket = null
+                                if (this@VibeVoiceClient.webSocket == webSocket) {
+                                    this@VibeVoiceClient.webSocket = null
+                                }
                             }
                         } else {
                             val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
@@ -210,7 +212,9 @@ class VibeVoiceClient(
                     cleanupAudioCapture()
                     closureJob?.cancel()
                     closureJob = null
-                    this@VibeVoiceClient.webSocket = null
+                    if (this@VibeVoiceClient.webSocket == webSocket) {
+                        this@VibeVoiceClient.webSocket = null
+                    }
                     listener.onError(t.message ?: "WebSocket Error")
                 }
             }
@@ -230,7 +234,9 @@ class VibeVoiceClient(
                     cleanupAudioCapture()
                     closureJob?.cancel()
                     closureJob = null
-                    this@VibeVoiceClient.webSocket = null
+                    if (this@VibeVoiceClient.webSocket == webSocket) {
+                        this@VibeVoiceClient.webSocket = null
+                    }
                     listener.onClosed()
                 }
             }
@@ -342,7 +348,7 @@ class VibeVoiceClient(
                     val numSamples = read / 2
                     for (i in 0 until numSamples) {
                         val b1 = buffer[2 * i].toInt() and 0xFF
-                        val b2 = buffer[2 * i + 1].toInt()
+                        val b2 = buffer[2 * i + 1].toInt() and 0xFF
                         val sample = ((b2 shl 8) or b1).toShort()
                         val sampleVal = sample.toLong()
                         sumOfSquares += (sampleVal * sampleVal).toDouble()
