@@ -316,6 +316,7 @@ class VibeVoiceClient(
             var recoveryAttempts = 0
             val maxRecoveryAttempts = 3
             var lastLogTime = 0L
+            var totalReadsInSession = 0
 
             while (isActive && isStreaming) {
                 val currentRecord = audioRecord
@@ -334,6 +335,8 @@ class VibeVoiceClient(
                 val durationMs = (System.nanoTime() - startTime) / 1_000_000
 
                 if (read > 0) {
+                    totalReadsInSession++
+                    
                     var isAllZeros = true
                     for (i in 0 until read) {
                         if (buffer[i] != 0.toByte()) {
@@ -353,7 +356,7 @@ class VibeVoiceClient(
                     val isRapidRead = isAllZeros && expectedMs > 20 && durationMs < expectedMs / 10
                     val isSilencedTooLong = consecutiveZeroBytes >= zeroLimitBytes
 
-                    if (isRapidRead || isSilencedTooLong) {
+                    if (totalReadsInSession > 5 && (isRapidRead || isSilencedTooLong)) {
                         val reason = if (isRapidRead) "rapid zero-flood (${durationMs}ms)" else "2s of consecutive zeros"
                         VibeVoiceDebugLogger.log("Dead microphone detected ($reason). Attempting recovery...")
 
@@ -369,6 +372,7 @@ class VibeVoiceClient(
                             
                             if (initAudioRecord()) {
                                 consecutiveZeroBytes = 0L
+                                totalReadsInSession = 0
                                 continue
                             }
                         } else {
@@ -414,6 +418,7 @@ class VibeVoiceClient(
                         delay(300)
                         if (initAudioRecord()) {
                             consecutiveZeroBytes = 0L
+                            totalReadsInSession = 0
                             continue
                         }
                     } else {
