@@ -323,7 +323,7 @@ class VibeVoiceClient(
             val maxRecoveryAttempts = 3
             var lastLogTime = 0L
             var totalReadsInSession = 0
-            var sumOfSquares = 0.0
+            var sumOfSquares = 0L
             var totalSamples = 0L
 
             while (isActive && isStreaming) {
@@ -351,7 +351,7 @@ class VibeVoiceClient(
                         val b2 = buffer[2 * i + 1].toInt() and 0xFF
                         val sample = ((b2 shl 8) or b1).toShort()
                         val sampleVal = sample.toLong()
-                        sumOfSquares += (sampleVal * sampleVal).toDouble()
+                        sumOfSquares += sampleVal * sampleVal
                     }
                     totalSamples += numSamples
                     
@@ -447,7 +447,7 @@ class VibeVoiceClient(
                     }
                 }
             }
-            val overallRms = if (totalSamples > 0) Math.sqrt(sumOfSquares / totalSamples) / 32768.0 else 0.0
+            val overallRms = if (totalSamples > 0) Math.sqrt(sumOfSquares.toDouble() / totalSamples) / 32768.0 else 0.0
             VibeVoiceDebugLogger.log("Session complete. Final total bytes: $totalRead, Overall RMS: ${String.format(java.util.Locale.US, "%.6f", overallRms)}")
             Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead, Overall RMS: $overallRms")
         }
@@ -458,13 +458,16 @@ class VibeVoiceClient(
         isStreaming = false
         cleanupAudioCapture()
 
-        webSocket?.send("END_STREAM")
+        val ws = webSocket
+        ws?.send("END_STREAM")
         closureJob = scope.launch {
             VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
             delay(3000)
             VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
-            webSocket?.close(1000, "Done (timeout)")
-            webSocket = null
+            ws?.close(1000, "Done (timeout)")
+            if (this@VibeVoiceClient.webSocket == ws) {
+                this@VibeVoiceClient.webSocket = null
+            }
             closureJob = null
         }
     }
