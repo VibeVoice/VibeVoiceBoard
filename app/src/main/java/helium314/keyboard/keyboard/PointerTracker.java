@@ -1229,7 +1229,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
                 || code == KeyCode.ALPHA) {
             // Long pressing these keys invokes IME switcher dialog.
-            if (sListener.onCustomRequest(Constants.CUSTOM_CODE_SHOW_INPUT_METHOD_PICKER)) {
+            if (sListener.onCustomRequest(KeyboardActionListener.CustomAction.SHOW_INPUT_METHOD_PICKER)) {
                 cancelKeyTracking();
                 return;
             }
