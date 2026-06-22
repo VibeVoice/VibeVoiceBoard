@@ -14,6 +14,7 @@ emoji,as,cldr
 main,as,
 emoji,ast,cldr
 emoji,az,cldr
+main,az,
 main,bn_BD,exp
 emoji,bn,cldr
 main,bn,
@@ -119,6 +120,7 @@ emoji,id,cldr
 main,id,exp
 emoji,ia,cldr
 emoji,ga,cldr
+main,ga,
 emoji,it,cldr
 main,it,
 main,it,exp
@@ -165,6 +167,7 @@ emoji,mni,cldr
 emoji,mr,cldr
 main,mr,
 main,mwl,
+main,mwl,exp
 emoji,mn,cldr
 emoji,mi,cldr
 emoji,ne,cldr
@@ -219,6 +222,7 @@ emoji,sd,cldr
 main,sd,
 emoji,si,cldr
 emoji,sk,cldr
+main,sk,
 main,sk,exp
 emoji,sl,cldr
 main,sl,
@@ -241,6 +245,7 @@ main,ta,
 emoji,te,cldr
 main,te,
 emoji,th,cldr
+main,th,
 emoji,ti,cldr
 main,tok,
 emoji,to,cldr
@@ -248,6 +253,7 @@ emoji,tn,cldr
 main,tcy,
 emoji,tr,cldr
 main,tr,
+main,tr2,
 main,tr,exp
 emoji,tk,cldr
 emoji,uk,

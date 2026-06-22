@@ -4,24 +4,25 @@ package helium314.keyboard.latin.utils
 import android.content.ContentValues
 import android.content.Context
 import helium314.keyboard.latin.database.Database
+import helium314.keyboard.latin.utils.GestureData.Companion.toJsonWithChecksum
 import kotlinx.serialization.json.Json
 
 // functionality for gesture data gathering as part of the NLNet Project https://nlnet.nl/project/GestureTyping/
 // will be removed once the project is finished
 
 class GestureDataDao(val db: Database) {
-    fun add(data: GestureData, timestamp: Long) = synchronized(this) {
+    fun add(data: GestureData, word: String?, timestamp: Long) {
         require(data.uuid == null)
-        val jsonString = Json.encodeToString(data)
-        // if uuid in the resulting string is replaced with null, we should be able to reproduce it
-        val dataWithId = data.copy(uuid = ChecksumCalculator.checksum(jsonString.byteInputStream()))
+        val jsonString = data.toJsonWithChecksum()
         val cv = ContentValues(3)
         cv.put(COLUMN_TIMESTAMP, timestamp)
-        cv.put(COLUMN_WORD, data.targetWord)
+        cv.put(COLUMN_WORD, word)
         if (data.activeMode)
             cv.put(COLUMN_SOURCE_ACTIVE, 1)
-        cv.put(COLUMN_DATA, Json.encodeToString(dataWithId))
-        db.writableDatabase.insert(TABLE, null, cv)
+        cv.put(COLUMN_DATA, jsonString)
+        synchronized(this) {
+            db.writableDatabase.insert(TABLE, null, cv)
+        }
     }
 
     fun filterInfos(
@@ -62,7 +63,7 @@ class GestureDataDao(val db: Database) {
         return result
     }
 
-    fun getJsonData(ids: List<Long>): Sequence<String> = synchronized(this) { sequence {
+    fun getJsonData(ids: List<Long>, context: Context): Sequence<String> = synchronized(this) { sequence {
         db.readableDatabase.query(
             TABLE,
             arrayOf(COLUMN_DATA),
@@ -70,15 +71,16 @@ class GestureDataDao(val db: Database) {
             null,
             null,
             null,
-            null
+            "RANDOM()"
         ).use {
+            val exclusions = GestureDataGatheringSettings.getWordExclusions(context)
             while (it.moveToNext()) {
-                yield(it.getString(0))
+                yield(it.getString(0).filterExcludedSuggestions(exclusions))
             }
         }
     }}
 
-    fun getAllJsonData(): Sequence<String> = synchronized(this) { sequence {
+    fun getAllJsonData(context: Context): Sequence<String> = synchronized(this) { sequence {
         db.readableDatabase.query(
             TABLE,
             arrayOf(COLUMN_DATA),
@@ -86,16 +88,17 @@ class GestureDataDao(val db: Database) {
             null,
             null,
             null,
-            null
+            "RANDOM()"
         ).use {
+            val exclusions = GestureDataGatheringSettings.getWordExclusions(context)
             while (it.moveToNext()) {
-                yield(it.getString(0))
+                yield(it.getString(0).filterExcludedSuggestions(exclusions))
             }
         }
     }}
 
     fun markAsExported(ids: List<Long>, context: Context) = synchronized(this) {
-        if (ids.isEmpty()) return
+        if (ids.isEmpty()) return@synchronized
         val cv = ContentValues(1)
         cv.put(COLUMN_EXPORTED, 1)
         db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${ids.joinToString(",")})", null)
@@ -106,18 +109,22 @@ class GestureDataDao(val db: Database) {
         if (ids.isEmpty()) return 0
         val where = "$COLUMN_ID IN (${ids.joinToString(",")})"
         val whereExported = " AND $COLUMN_EXPORTED <> 0"
-        val count: Int
-        if (onlyExported) {
-            count = db.writableDatabase.delete(TABLE, where + whereExported, null)
-            GestureDataGatheringSettings.addExportedActiveDeletionCount(context, count) // actually we could also have a counter in the db
-        } else {
-            val exportedCount = db.readableDatabase.rawQuery("SELECT COUNT(1) FROM $TABLE WHERE $where$whereExported", null).use {
-                it.moveToFirst()
-                it.getInt(0)
-            }
-            count = db.writableDatabase.delete(TABLE, where, null)
-            GestureDataGatheringSettings.addExportedActiveDeletionCount(context, exportedCount)
+        val active = " AND $COLUMN_SOURCE_ACTIVE <> 0"
+        val background = " AND $COLUMN_SOURCE_ACTIVE = 0"
+        val exportedActiveCount = db.readableDatabase.rawQuery("SELECT COUNT(1) FROM $TABLE WHERE $where$whereExported$active", null).use {
+            it.moveToFirst()
+            it.getInt(0)
         }
+        val exportedBackgroundCount = db.readableDatabase.rawQuery("SELECT COUNT(1) FROM $TABLE WHERE $where$whereExported$background", null).use {
+            it.moveToFirst()
+            it.getInt(0)
+        }
+        val count = if (onlyExported) // this is just to be sure we don't delete anything that somehow accidentally came here
+            db.writableDatabase.delete(TABLE, where + whereExported, null)
+        else
+            db.writableDatabase.delete(TABLE, where, null)
+        GestureDataGatheringSettings.addExportedActiveDeletionCount(context, exportedActiveCount)
+        GestureDataGatheringSettings.addExportedBackgroundDeletionCount(context, exportedBackgroundCount)
         return count
     }
 
@@ -125,16 +132,17 @@ class GestureDataDao(val db: Database) {
         db.writableDatabase.delete(TABLE, null, null)
     }
 
-    fun deletePassiveWords(words: Collection<String>) = synchronized(this) {
-        val wordsString = words.joinToString("','") { it.lowercase() }
+    fun deleteBackgroundWords(words: Collection<String>) = synchronized(this) {
+        if (words.isEmpty()) return@synchronized
+        val questions = "?,".repeat(words.size)
         db.writableDatabase.delete(
             TABLE,
-            "$COLUMN_SOURCE_ACTIVE <> 0 AND LOWER($COLUMN_WORD) in (?)",
-            arrayOf(wordsString)
+            "$COLUMN_SOURCE_ACTIVE = 0 AND LOWER($COLUMN_WORD) IN (${questions.take(questions.length - 1)})",
+            words.map { it.lowercase() }.toTypedArray()
         )
     }
 
-    fun count(exported: Boolean? = null, activeMode: Boolean? = null): Int {
+    fun count(exported: Boolean? = null, activeMode: Boolean? = null): Int = synchronized(this) {
         val where = mutableListOf<String>()
         if (exported != null)
             where.add("$COLUMN_EXPORTED ${if (exported) "<>" else "="} 0")
@@ -147,7 +155,7 @@ class GestureDataDao(val db: Database) {
         }
     }
 
-    fun isEmpty(): Boolean {
+    fun isEmpty(): Boolean = synchronized(this) {
         db.readableDatabase.rawQuery("SELECT EXISTS (SELECT 1 FROM $TABLE)", null).use {
             it.moveToFirst()
             return it.getInt(0) == 0
@@ -182,11 +190,33 @@ class GestureDataDao(val db: Database) {
         fun getInstance(context: Context): GestureDataDao? {
             if (instance == null)
                 try {
-                    instance = GestureDataDao(Database.getInstance(context))
+                    val dao = GestureDataDao(Database.getInstance(context))
+                    dao.db.writableDatabase // try access so we get null if db can't be created
+                    instance = dao
                 } catch (e: Throwable) {
-                    Log.e(TAG, "can't create ClipboardDao", e)
+                    Log.e(TAG, "can't create GestureDataDao", e)
                 }
             return instance
         }
+
+        // when excluding a word, it's only removed from db by first suggestion / target word
+        // so we should clean the other suggestions here
+        // actually this should not be necessary anymore as we redact suggestions, but keep in case we want to change redacting suggestions
+        private fun String.filterExcludedSuggestions(exclusions: Collection<String>): String {
+            if (exclusions.isEmpty()) return this
+            var result = this
+            exclusions.forEach { excludedWord ->
+                if (!result.contains(excludedWord, true)) return@forEach
+                runCatching {
+                    val data = json.decodeFromString<GestureData>(result)
+                    val newData = data.copy(suggestions = data.suggestions.filterNot { excludedWord.equals(it.word, true) })
+                    result = newData.toJsonWithChecksum()
+                }
+            }
+            return result
+        }
+
+        // deserialize with ignoreUnknownKeys because we removed dictIndex
+        private val json = Json { ignoreUnknownKeys = true }
     }
 }
