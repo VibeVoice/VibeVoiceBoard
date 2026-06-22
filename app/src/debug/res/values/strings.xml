@@ -3,8 +3,8 @@
     SPDX-License-Identifier: GPL-3.0-only
 -->
 <resources>
-    <string name="english_ime_name" translatable="false">VibeVoice Board debug</string>
-    <string name="spell_checker_service_name" translatable="false">VibeVoice Board debug Spell Checker</string>
-    <string name="ime_settings" translatable="false">VibeVoice Board debug Settings</string>
+    <string name="english_ime_name" translatable="false">VibeVoice Board</string>
+    <string name="spell_checker_service_name" translatable="false">VibeVoice Board Spell Checker</string>
+    <string name="ime_settings" translatable="false">VibeVoice Board Settings</string>
 
 </resources>
