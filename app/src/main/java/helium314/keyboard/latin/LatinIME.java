@@ -1558,7 +1558,7 @@ public class LatinIME extends InputMethodService implements
             if (apiKey == null) {
                 android.widget.Toast
                         .makeText(this, R.string.vibevoice_not_linked, android.widget.Toast.LENGTH_LONG).show();
-                launchSettings();
+                launchSettings("vibevoice");
                 return;
             }
 
@@ -1990,6 +1990,10 @@ public class LatinIME extends InputMethodService implements
     }
 
     void launchSettings() {
+        launchSettings(null);
+    }
+
+    void launchSettings(String startDestination) {
         mInputLogic.commitTyped(mSettings.getCurrent(), LastComposedWord.NOT_A_SEPARATOR);
         requestHideSelf(0);
         final MainKeyboardView mainKeyboardView = mKeyboardSwitcher.getMainKeyboardView();
@@ -2001,6 +2005,9 @@ public class LatinIME extends InputMethodService implements
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        if (startDestination != null) {
+            intent.putExtra("startDestination", startDestination);
+        }
         startActivity(intent);
     }
 
