@@ -38,7 +38,7 @@ class ClipboardHistoryEntry(
     }
 
     fun getContentInfo(context: Context): InputContentInfoCompat =
-        InputContentInfoCompat(getContentUri(context)!!, ClipDescription(text, mimeTypes?.toTypedArray()), null)
+        InputContentInfoCompat(getContentUri(context)!!, ClipDescription(text, mimeTypes?.toTypedArray() ?: arrayOf("*/*")), null)
 
     fun getContentUri(context: Context) = filename?.let { FileProvider.getUriForFile(
         context,
@@ -48,13 +48,13 @@ class ClipboardHistoryEntry(
 
     // todo: if slow we could decode images it in a coroutine, or use cached preview images
     @SuppressLint("SetTextI18n")
-    fun setImageAndDescription(imageView: ImageView, textView: TextView) {
-        if (mimeTypes == null || filename == null) return // should never happen
+    fun setImageAndDescription(imageView: ImageView, textView: TextView): kotlinx.coroutines.Job {
+        if (mimeTypes == null || filename == null) return imageLoadScope.launch {} // return empty job
         val currentTag = filename
         imageView.tag = currentTag
         imageView.setImageDrawable(null) // clear previous image to avoid showing recycled images
 
-        imageLoadScope.launch {
+        return imageLoadScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 try {
                     val path = File(ClipboardDao.clipFilesDir, filename).absolutePath

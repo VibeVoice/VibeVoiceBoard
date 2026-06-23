@@ -215,16 +215,15 @@ class GestureDataDao(val db: Database) {
         // actually this should not be necessary anymore as we redact suggestions, but keep in case we want to change redacting suggestions
         private fun String.filterExcludedSuggestions(exclusions: Collection<String>): String {
             if (exclusions.isEmpty()) return this
-            var result = this
-            exclusions.forEach { excludedWord ->
-                if (!result.contains(excludedWord, true)) return@forEach
-                runCatching {
-                    val data = json.decodeFromString<GestureData>(result)
-                    val newData = data.copy(suggestions = data.suggestions.filterNot { excludedWord.equals(it.word, true) })
-                    result = newData.toJsonWithChecksum()
+            if (exclusions.none { contains(it, true) }) return this
+            return runCatching {
+                val data = json.decodeFromString<GestureData>(this)
+                val filteredSuggestions = data.suggestions.filterNot { suggestion ->
+                    exclusions.any { excludedWord -> excludedWord.equals(suggestion.word, true) }
                 }
-            }
-            return result
+                if (filteredSuggestions.size == data.suggestions.size) this
+                else data.copy(suggestions = filteredSuggestions).toJsonWithChecksum()
+            }.getOrDefault(this)
         }
 
         // deserialize with ignoreUnknownKeys because we removed dictIndex

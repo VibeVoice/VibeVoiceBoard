@@ -85,9 +85,18 @@ class ClipboardHistoryManager(
         if (description.hasMimeType("text/*")) {
             val content = clipItem.coerceToText(latinIME)
             if (TextUtils.isEmpty(content)) return
-            clipboardDao?.addClip(timeStamp, false, content.toString())
-        } else if (maySaveFromUri(clipItem.uri, latinIME)) {
-            clipboardDao?.addClipUri(timeStamp, false, clipItem.uri, description, latinIME)
+            scope.launch(Dispatchers.IO) {
+                clipboardDao?.addClip(timeStamp, false, content.toString())
+            }
+        } else {
+            val uri = clipItem.uri
+            if (uri != null) {
+                scope.launch(Dispatchers.IO) {
+                    if (maySaveFromUri(uri, latinIME)) {
+                        clipboardDao?.addClipUri(timeStamp, false, uri, description, latinIME)
+                    }
+                }
+            }
         }
     }
 
@@ -128,6 +137,9 @@ class ClipboardHistoryManager(
                         ClipDescription("", arrayOf("text/*")),
                         ClipData.Item(clip.text)
                     ))
+                else {
+                    clipboardManager.setPrimaryClip(ClipData.newPlainText("", ""))
+                }
             }
         }
     }
