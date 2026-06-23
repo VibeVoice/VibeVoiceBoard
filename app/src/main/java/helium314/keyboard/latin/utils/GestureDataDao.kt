@@ -63,39 +63,50 @@ class GestureDataDao(val db: Database) {
         return result
     }
 
-    fun getJsonData(ids: List<Long>, context: Context): Sequence<String> = synchronized(this) { sequence {
-        db.readableDatabase.query(
-            TABLE,
-            arrayOf(COLUMN_DATA),
-            "$COLUMN_ID IN (${ids.joinToString(",")})",
-            null,
-            null,
-            null,
-            "RANDOM()"
-        ).use {
-            val exclusions = GestureDataGatheringSettings.getWordExclusions(context)
-            while (it.moveToNext()) {
-                yield(it.getString(0).filterExcludedSuggestions(exclusions))
+    fun getJsonData(ids: List<Long>, context: Context): Sequence<String> {
+        if (ids.isEmpty()) return emptySequence()
+        val data = synchronized(this) {
+            val list = mutableListOf<String>()
+            db.readableDatabase.query(
+                TABLE,
+                arrayOf(COLUMN_DATA),
+                "$COLUMN_ID IN (${ids.joinToString(",")})",
+                null,
+                null,
+                null,
+                "RANDOM()"
+            ).use {
+                while (it.moveToNext()) {
+                    list.add(it.getString(0))
+                }
             }
+            list
         }
-    }}
+        val exclusions = GestureDataGatheringSettings.getWordExclusions(context)
+        return data.asSequence().map { it.filterExcludedSuggestions(exclusions) }
+    }
 
-    fun getAllJsonData(context: Context): Sequence<String> = synchronized(this) { sequence {
-        db.readableDatabase.query(
-            TABLE,
-            arrayOf(COLUMN_DATA),
-            null,
-            null,
-            null,
-            null,
-            "RANDOM()"
-        ).use {
-            val exclusions = GestureDataGatheringSettings.getWordExclusions(context)
-            while (it.moveToNext()) {
-                yield(it.getString(0).filterExcludedSuggestions(exclusions))
+    fun getAllJsonData(context: Context): Sequence<String> {
+        val data = synchronized(this) {
+            val list = mutableListOf<String>()
+            db.readableDatabase.query(
+                TABLE,
+                arrayOf(COLUMN_DATA),
+                null,
+                null,
+                null,
+                null,
+                "RANDOM()"
+            ).use {
+                while (it.moveToNext()) {
+                    list.add(it.getString(0))
+                }
             }
+            list
         }
-    }}
+        val exclusions = GestureDataGatheringSettings.getWordExclusions(context)
+        return data.asSequence().map { it.filterExcludedSuggestions(exclusions) }
+    }
 
     fun markAsExported(ids: List<Long>, context: Context) = synchronized(this) {
         if (ids.isEmpty()) return@synchronized

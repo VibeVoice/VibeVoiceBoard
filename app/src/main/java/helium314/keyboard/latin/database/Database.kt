@@ -58,7 +58,19 @@ class Database private constructor(context: Context, name: String = NAME) : SQLi
                     if (clipDao == null) {
                         Log.e(TAG, "can't transfer clipboard data because ClipboardDao is null")
                     } else {
-                        otherDb.readableDatabase.rawQuery("SELECT TIMESTAMP, PINNED, TEXT, FILE, MIME_TYPE FROM CLIPBOARD", null)
+                        val columnsExist = otherDb.readableDatabase.rawQuery("PRAGMA table_info(CLIPBOARD)", null).use { cursor ->
+                            var hasFile = false
+                            while (cursor.moveToNext()) {
+                                if (cursor.getString(1) == "FILE") {
+                                    hasFile = true
+                                    break
+                                }
+                            }
+                            hasFile
+                        }
+                        val query = if (columnsExist) "SELECT TIMESTAMP, PINNED, TEXT, FILE, MIME_TYPE FROM CLIPBOARD"
+                                    else "SELECT TIMESTAMP, PINNED, TEXT, NULL, NULL FROM CLIPBOARD"
+                        otherDb.readableDatabase.rawQuery(query, null)
                             .use {
                                 clipDao.clear()
                                 while (it.moveToNext()) {

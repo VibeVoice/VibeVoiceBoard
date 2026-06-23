@@ -634,7 +634,7 @@ public final class KeyboardSwitcher implements KeyboardState.SwitchActions {
     }
 
     public void setBackgroundGatheringIndicator(boolean enabled, boolean hasData, boolean saving) {
-        if (mCurrentInputView == null) return;
+        if (mCurrentInputView == null || mBackgroundGatheringIndicator == null) return;
         mBackgroundGatheringIndicator.setVisibility(enabled ? View.VISIBLE : View.GONE);
         if (!enabled) return;
         mBackgroundGatheringIndicator.setImageResource(hasData ? R.drawable.btn_keyboard_key_action_normal_lxx_base : R.drawable.ring);

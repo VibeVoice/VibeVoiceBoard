@@ -54,12 +54,7 @@ object GestureDataGatheringSettings {
     fun isBackgroundGatheringEnabled(prefs: SharedPreferences): Boolean {
         if (!prefs.getBoolean(PREF_BACKGROUND_GATHERING_ENABLED, false)) return false
         val disabledBefore = prefs.getLong(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS, 0L)
-        if (disabledBefore > SystemClock.elapsedRealtime() + 5 * 60 * 1000L) {
-            // elapsedRealtime decreased -> phone was rebooted -> reset
-            prefs.edit { remove(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS) }
-            return true
-        }
-        return SystemClock.elapsedRealtime() > disabledBefore
+        return System.currentTimeMillis() > disabledBefore
     }
 
     fun setBackgroundGatheringEnabled(prefs: SharedPreferences, enabled: Boolean) = prefs.edit {
@@ -69,7 +64,7 @@ object GestureDataGatheringSettings {
 
     fun tempDisableBackgroundGathering(prefs: SharedPreferences) {
         // disable for 5 min
-        prefs.edit { putLong(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS, SystemClock.elapsedRealtime() + 5 * 60 * 1000L) }
+        prefs.edit { putLong(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS, System.currentTimeMillis() + 5 * 60 * 1000L) }
     }
 
     fun String.filterBackgroundGatheringToolbarKeys(prefs: SharedPreferences) = split(Separators.ENTRY).filter {
