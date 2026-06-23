@@ -12,7 +12,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "helium314.keyboard"
+        applicationId = "org.vibevoice.board"
         minSdk = 21
         targetSdk = 36
         versionCode = 4002
