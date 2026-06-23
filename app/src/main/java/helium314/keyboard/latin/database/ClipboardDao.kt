@@ -90,7 +90,10 @@ class ClipboardDao private constructor(private val db: Database) {
             tempFile.delete()
             return@synchronized
         }
-        tempFile.renameTo(file)
+        if (!tempFile.renameTo(file)) {
+            tempFile.delete()
+            return@synchronized
+        }
         // we could try getting a thumbnail using context.contentResolver.loadThumbnail(uri, Size(a, b), null)
         // but currently we don't cache them anyway, so no use for that
         insertNewEntry(timestamp, pinned, description.label?.toString(), file.name, description.getMimeTypes(), context)

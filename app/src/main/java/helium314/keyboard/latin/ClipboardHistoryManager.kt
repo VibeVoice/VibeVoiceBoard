@@ -33,7 +33,10 @@ import helium314.keyboard.latin.utils.InputTypeUtils
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.prefs
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -41,6 +44,7 @@ class ClipboardHistoryManager(
         private val latinIME: LatinIME
 ) : ClipboardManager.OnPrimaryClipChangedListener {
 
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var clipboardManager: ClipboardManager
     private var clipboardSuggestionView: View? = null
     private var clipboardDao: ClipboardDao? = null
@@ -56,6 +60,7 @@ class ClipboardHistoryManager(
 
     fun onDestroy() {
         clipboardManager.removePrimaryClipChangedListener(this)
+        scope.cancel()
     }
 
     override fun onPrimaryClipChanged() {
@@ -104,7 +109,7 @@ class ClipboardHistoryManager(
         // a. it can happen that we switch back before the pasting has started, in that case we only past the primary clip
         // b. if we switch while the clip is pasted, it might crash the app (tested with joplin and logseq)
         // todo: replacing the current primary clip is far from ideal, try finding a different way
-        GlobalScope.launch {
+        scope.launch {
             delay(500)
             try {
                 clipboardManager.setPrimaryClip(primaryClip)

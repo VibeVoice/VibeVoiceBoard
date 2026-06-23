@@ -112,6 +112,8 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
         // TODO: Use {@link InputAttributes} instead of these variables.
         lateinit var editorInfo: EditorInfo
         lateinit var subtype: RichInputMethodSubtype
+        val isSubtypeInitialized: Boolean
+            get() = ::subtype.isInitialized
         var voiceInputKeyEnabled = false
         // When the device is still locked, features like showing the IME setting app need to be locked down.
         var deviceLocked = Settings.getValues().mIsLocked
@@ -206,6 +208,9 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
         }
 
         fun build(): KeyboardLayoutSet {
+            if (!params.isSubtypeInitialized) {
+                throw IllegalStateException("KeyboardLayoutSet subtype is not specified")
+            }
             params.script = params.subtype.locale.script()
             return KeyboardLayoutSet(mContext, params)
         }
