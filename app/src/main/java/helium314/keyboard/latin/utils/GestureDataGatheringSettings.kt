@@ -83,7 +83,7 @@ object GestureDataGatheringSettings {
         excludedWords = null
         val json = Json.encodeToString(list)
         context.prefs().edit { putString(PREF_WORD_EXCLUSIONS, json) }
-        GlobalScope.launch { GestureDataDao.getInstance(context)?.deleteBackgroundWords(list) }
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch { GestureDataDao.getInstance(context)?.deleteBackgroundWords(list) }
     }
 
     fun getWordExclusions(context: Context): Set<String> {

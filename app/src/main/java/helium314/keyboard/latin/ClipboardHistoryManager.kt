@@ -112,8 +112,21 @@ class ClipboardHistoryManager(
         latinIME.onEvent(Event.createSoftwareKeypressEvent(KeyCode.CLIPBOARD_PASTE, 0,
             Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false))
         tempPrimaryClip = false
-        if (primaryClip == null)
+        if (primaryClip == null) {
+            scope.launch {
+                delay(500)
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        clipboardManager.clearPrimaryClip()
+                    } else {
+                        clipboardManager.setPrimaryClip(ClipData.newPlainText("", ""))
+                    }
+                } catch (e: Exception) {
+                    Log.i(TAG, "could not clear temporary clip", e)
+                }
+            }
             return
+        }
         // we need to wait a little before switching back to the original primary clip
         // a. it can happen that we switch back before the pasting has started, in that case we only past the primary clip
         // b. if we switch while the clip is pasted, it might crash the app (tested with joplin and logseq)

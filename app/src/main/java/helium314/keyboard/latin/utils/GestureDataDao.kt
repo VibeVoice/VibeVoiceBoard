@@ -67,17 +67,19 @@ class GestureDataDao(val db: Database) {
         if (ids.isEmpty()) return emptySequence()
         val data = synchronized(this) {
             val list = mutableListOf<String>()
-            db.readableDatabase.query(
-                TABLE,
-                arrayOf(COLUMN_DATA),
-                "$COLUMN_ID IN (${ids.joinToString(",")})",
-                null,
-                null,
-                null,
-                "RANDOM()"
-            ).use {
-                while (it.moveToNext()) {
-                    list.add(it.getString(0))
+            ids.chunked(999).forEach { chunk ->
+                db.readableDatabase.query(
+                    TABLE,
+                    arrayOf(COLUMN_DATA),
+                    "$COLUMN_ID IN (${chunk.joinToString(",")})",
+                    null,
+                    null,
+                    null,
+                    "RANDOM()"
+                ).use {
+                    while (it.moveToNext()) {
+                        list.add(it.getString(0))
+                    }
                 }
             }
             list
@@ -112,28 +114,35 @@ class GestureDataDao(val db: Database) {
         if (ids.isEmpty()) return@synchronized
         val cv = ContentValues(1)
         cv.put(COLUMN_EXPORTED, 1)
-        db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${ids.joinToString(",")})", null)
+        ids.chunked(999).forEach { chunk ->
+            db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${chunk.joinToString(",")})", null)
+        }
         GestureDataGatheringSettings.onExported(context)
     }
 
     fun delete(ids: List<Long>, onlyExported: Boolean, context: Context): Int = synchronized(this) {
         if (ids.isEmpty()) return 0
-        val where = "$COLUMN_ID IN (${ids.joinToString(",")})"
-        val whereExported = " AND $COLUMN_EXPORTED <> 0"
-        val active = " AND $COLUMN_SOURCE_ACTIVE <> 0"
-        val background = " AND $COLUMN_SOURCE_ACTIVE = 0"
-        val exportedActiveCount = db.readableDatabase.rawQuery("SELECT COUNT(1) FROM $TABLE WHERE $where$whereExported$active", null).use {
-            it.moveToFirst()
-            it.getInt(0)
+        var count = 0
+        var exportedActiveCount = 0
+        var exportedBackgroundCount = 0
+        ids.chunked(999).forEach { chunk ->
+            val where = "$COLUMN_ID IN (${chunk.joinToString(",")})"
+            val whereExported = " AND $COLUMN_EXPORTED <> 0"
+            val active = " AND $COLUMN_SOURCE_ACTIVE <> 0"
+            val background = " AND $COLUMN_SOURCE_ACTIVE = 0"
+            exportedActiveCount += db.readableDatabase.rawQuery("SELECT COUNT(1) FROM $TABLE WHERE $where$whereExported$active", null).use {
+                it.moveToFirst()
+                it.getInt(0)
+            }
+            exportedBackgroundCount += db.readableDatabase.rawQuery("SELECT COUNT(1) FROM $TABLE WHERE $where$whereExported$background", null).use {
+                it.moveToFirst()
+                it.getInt(0)
+            }
+            count += if (onlyExported)
+                db.writableDatabase.delete(TABLE, where + whereExported, null)
+            else
+                db.writableDatabase.delete(TABLE, where, null)
         }
-        val exportedBackgroundCount = db.readableDatabase.rawQuery("SELECT COUNT(1) FROM $TABLE WHERE $where$whereExported$background", null).use {
-            it.moveToFirst()
-            it.getInt(0)
-        }
-        val count = if (onlyExported) // this is just to be sure we don't delete anything that somehow accidentally came here
-            db.writableDatabase.delete(TABLE, where + whereExported, null)
-        else
-            db.writableDatabase.delete(TABLE, where, null)
         GestureDataGatheringSettings.addExportedActiveDeletionCount(context, exportedActiveCount)
         GestureDataGatheringSettings.addExportedBackgroundDeletionCount(context, exportedBackgroundCount)
         return count
