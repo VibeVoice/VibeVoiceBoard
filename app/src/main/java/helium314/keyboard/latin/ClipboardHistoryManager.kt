@@ -298,7 +298,9 @@ class ClipboardHistoryManager(
             try {
                 context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null).use {
                     if (it?.moveToFirst() != true) return false
-                    val size = it.getLong(0)
+                    val columnIndex = it.getColumnIndex(OpenableColumns.SIZE)
+                    if (columnIndex == -1) return false
+                    val size = it.getLong(columnIndex)
                     return size <= maxSize * 1000000 // maxSize is megabytes
                 }
             } catch (e: Exception) {

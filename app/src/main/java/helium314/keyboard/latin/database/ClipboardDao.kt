@@ -80,7 +80,10 @@ class ClipboardDao private constructor(private val db: Database) {
             else ".${MimeTypeMap.getSingleton().getExtensionFromMimeType(description.getMimeType(0))}"
         val tempFile = runCatching { File.createTempFile("temp_clip", extension, context.cacheDir) }.getOrNull() ?: return@synchronized
         tempFile.delete()
-        runCatching { FileUtils.copyContentUriToNewFile(uri, context, tempFile) }.onFailure { return@synchronized }
+        runCatching { FileUtils.copyContentUriToNewFile(uri, context, tempFile) }.onFailure {
+            tempFile.delete()
+            return@synchronized
+        }
 
         // we set the file name to the sha256 of the content to have virtually unique names and an easy way to find duplicates
         val sha256 = ChecksumCalculator.checksum(tempFile)
@@ -226,10 +229,10 @@ class ClipboardDao private constructor(private val db: Database) {
         db.writableDatabase.delete(TABLE, null, null)
     }
 
-    fun cleanupFiles(prefs: SharedPreferences) {
+    fun cleanupFiles(prefs: SharedPreferences) = synchronized(this) {
         if (!prefs.getBoolean(Settings.PREF_CLIPBOARD_USE_FILES, Defaults.PREF_CLIPBOARD_USE_FILES)) {
             delete(cache.filter { it.filename != null && !it.isPinned })
-            return
+            return@synchronized
         }
 
         val files = clipFilesDir.listFiles()?.toMutableList() ?: return

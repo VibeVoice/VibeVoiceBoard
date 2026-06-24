@@ -34,6 +34,8 @@ import kotlin.random.Random
 // will be removed once the project is finished
 
 object GestureDataGatheringSettings {
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
     private const val PREF_WORD_EXCLUSIONS = "gesture_data_word_exclusions"
     private const val PREF_APP_EXCLUSIONS = "gesture_data_app_exclusions"
     private const val PREF_APP_EXCLUSIONS_INCLUDE_BY_DEFAULT = "gesture_data_app_exclusions_ignore_by_default"
@@ -83,7 +85,7 @@ object GestureDataGatheringSettings {
         excludedWords = null
         val json = Json.encodeToString(list)
         context.prefs().edit { putString(PREF_WORD_EXCLUSIONS, json) }
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch { GestureDataDao.getInstance(context)?.deleteBackgroundWords(list) }
+        scope.launch { GestureDataDao.getInstance(context)?.deleteBackgroundWords(list) }
     }
 
     fun getWordExclusions(context: Context): Set<String> {
