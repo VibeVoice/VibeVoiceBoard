@@ -2,13 +2,30 @@
 # Automated Build, Nextcloud Sync, and ADB Install script for VibeVoiceBoard (Linux)
 set -e
 
-# 1. Environment Setup
-export JAVA_HOME="/usr/lib/jvm/default-java" # Default Linux path, gradle will also check system default
-export PATH="$PATH:$HOME/Android/Sdk/platform-tools"
+# 1. Environment Setup & Paths
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "macOS detected."
+  if [ -d "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home" ]; then
+    export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+  fi
+  export PATH="$PATH:/Users/schneider/repos/VibeVoiceBoard/android-sdk/platform-tools"
+  
+  MAC_NC=$(find /Users/schneider/Library/CloudStorage -maxdepth 1 -name "Nextcloud*" 2>/dev/null | head -n 1)
+  if [ -n "$MAC_NC" ]; then
+    DEST_DIR="$MAC_NC/Documents/VibeVoiceBoard"
+  else
+    DEST_DIR="/Users/schneider/Library/CloudStorage/Nextcloud-florian@cloud․infraviored․com/Documents/VibeVoiceBoard"
+  fi
+else
+  echo "Linux detected."
+  export JAVA_HOME="/usr/lib/jvm/default-java"
+  export PATH="$PATH:$HOME/Android/Sdk/platform-tools"
+  DEST_DIR="/home/schneider/nextcloud/Documents/VibeVoiceBoard"
+fi
 
 # 2. Compile Android APK
-echo "Compiling Android debug APK..."
-./gradlew assembleDebug -q
+echo "Compiling Android debug APK using JAVA_HOME=$JAVA_HOME..."
+./gradlew assembleDebug -q --no-configuration-cache
 
 # 3. Locate Compiled APK
 APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
@@ -19,8 +36,7 @@ fi
 APK_FILENAME=$(basename "$APK_PATH")
 echo "Found compiled APK: $APK_PATH"
 
-# 4. Deploy to Local Nextcloud Sync Folder
-DEST_DIR="/home/schneider/nextcloud/Documents/VibeVoiceBoard"
+# 4. Deploy to Nextcloud Sync Folder
 echo "Deploying APK to Nextcloud: $DEST_DIR"
 mkdir -p "$DEST_DIR"
 cp "$APK_PATH" "$DEST_DIR/$APK_FILENAME"

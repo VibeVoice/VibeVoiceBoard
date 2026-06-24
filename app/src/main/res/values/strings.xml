@@ -72,6 +72,12 @@
     <string name="vibevoice_error">Voice error: %s</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
+    <!-- Quota related strings -->
+    <string name="vibevoice_plan_label">Your Plan: %1$s</string>
+    <string name="vibevoice_quota_used">%1$.1f / %2$.0f min used</string>
+    <string name="vibevoice_quota_unlimited">%1$.1f min used</string>
+    <string name="vibevoice_fetching_quota">Fetching subscription details…</string>
+    <string name="vibevoice_quota_error">Failed to fetch quota details</string>
     <!-- Settings screen title for keyboard theme settings -->
     <string name="settings_screen_theme">Theme</string>
     <!-- Settings category title for Preference/Input settings -->

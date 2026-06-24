@@ -1606,7 +1606,7 @@ public class LatinIME extends InputMethodService implements
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null)
                             return;
-                        if (isNewSegment) {
+                        if (isNewSegment && !text.trim().isEmpty()) {
                              if (!mVoiceComposingText.isEmpty()) {
                                 mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
                             }
@@ -1652,7 +1652,12 @@ public class LatinIME extends InputMethodService implements
     private void finishVoiceSession(String text, boolean addNewline) {
         if (mVibeVoiceClient == null)
             return;
-        if (text.trim().isEmpty()) {
+        String commitText = text;
+        if (commitText.trim().isEmpty() && !mVoiceComposingText.isEmpty()) {
+            VibeVoiceDebugLogger.log("[EMPTY_RESULT] final text is empty; falling back to composing text: " + mVoiceComposingText);
+            commitText = mVoiceComposingText;
+        }
+        if (commitText.trim().isEmpty()) {
             VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession: skipping empty commit");
             mInputLogic.mConnection.commitText("", 1); // clear any composing text, insert nothing
         } else {
@@ -1660,8 +1665,9 @@ public class LatinIME extends InputMethodService implements
             boolean isMultiline = editorInfo != null &&
                     (editorInfo.inputType & android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
             String suffix = (addNewline && isMultiline) ? "\n" : " ";
-            VibeVoiceDebugLogger.log("finishVoiceSession: length=" + text.length() + ", suffix='" + suffix.trim() + "' multiline=" + isMultiline);
-            mInputLogic.mConnection.commitText(text + suffix, 1);
+            VibeVoiceDebugLogger.log("finishVoiceSession: length=" + commitText.length() + ", suffix='" + suffix.trim() + "' multiline=" + isMultiline);
+            mInputLogic.mConnection.commitText(commitText + suffix, 1);
+            mClipboardHistoryManager.addTextToHistory(commitText);
         }
         mVoiceComposingText = "";
         mVibeVoiceClient.stopStreaming();

@@ -179,6 +179,13 @@ class ClipboardHistoryManager(
         clipboardDao?.listener = listener
     }
 
+    fun addTextToHistory(text: String) {
+        if (text.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            clipboardDao?.addClip(System.currentTimeMillis(), false, text)
+        }
+    }
+
     private fun isClipSensitive(inputType: Int): Boolean {
         ClipboardManagerCompat.getClipSensitivity(clipboardManager.primaryClip?.description)?.let { return it }
         return InputTypeUtils.isPasswordInputType(inputType)
