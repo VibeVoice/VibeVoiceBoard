@@ -78,6 +78,7 @@ import helium314.keyboard.latin.utils.previewDark
 import helium314.keyboard.settings.dialogs.ConfirmationDialog
 import helium314.keyboard.settings.dialogs.InfoDialog
 import helium314.keyboard.settings.dialogs.ThreeButtonAlertDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -115,16 +116,21 @@ fun ReviewScreen(
             else infos.sortedBy { it.timestamp }
         }
     }
+    val scope = rememberCoroutineScope()
     fun reloadGestureDataInfos() {
-        val infos = if (!includeActive && !includeBackground) emptyList() else dao?.filterInfos(
-            filter.text.takeIf { it.isNotEmpty() },
-            startDate,
-            endDate,
-            if (includeExported) null else false,
-            if (includeActive && includeBackground) null else includeActive
-        ).orEmpty()
-        selected = emptyList() // unselect on filter changes
-        setAndSortWords(infos)
+        scope.launch(Dispatchers.IO) {
+            val infos = if (!includeActive && !includeBackground) emptyList() else dao?.filterInfos(
+                filter.text.takeIf { it.isNotEmpty() },
+                startDate,
+                endDate,
+                if (includeExported) null else false,
+                if (includeActive && includeBackground) null else includeActive
+            ).orEmpty()
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                selected = emptyList() // unselect on filter changes
+                setAndSortWords(infos)
+            }
+        }
     }
     LifecycleResumeEffect(Unit) {
         reloadGestureDataInfos()

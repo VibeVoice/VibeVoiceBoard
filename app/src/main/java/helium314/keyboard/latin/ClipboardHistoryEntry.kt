@@ -99,6 +99,6 @@ class ClipboardHistoryEntry(
     }
 
     companion object {
-        private val imageLoadScope = CoroutineScope(Dispatchers.Main)
+        private val imageLoadScope = CoroutineScope(Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
     }
 }

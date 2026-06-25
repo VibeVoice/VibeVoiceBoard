@@ -133,7 +133,10 @@ class ClipboardDao private constructor(private val db: Database) {
         // § should be a safe separator, not allowed in mime types: https://datatracker.ietf.org/doc/html/rfc6838#section-4.2
         cv.put(COLUMN_MIME_TYPE, mimeTypes?.joinToString("§"))
         val rowId = db.writableDatabase.insert(TABLE, null, cv)
-
+        if (rowId == -1L) {
+            Log.e(TAG, "Failed to insert clipboard entry")
+            return
+        }
         val entry = ClipboardHistoryEntry(rowId, timestamp, pinned, text, filename, mimeTypes)
         if (filename != null && context != null)
             deleteIfSizeExceeded(context.prefs())
@@ -189,10 +192,10 @@ class ClipboardDao private constructor(private val db: Database) {
 
     private fun delete(entries: List<ClipboardHistoryEntry>) = synchronized(this) {
         if (entries.isEmpty()) return@synchronized
-        cache.removeAll(entries)
         entries.chunked(999).forEach { chunk ->
             db.writableDatabase.delete(TABLE, "$COLUMN_ID IN (${chunk.joinToString(",") { it.id.toString() }})", null)
         }
+        cache.removeAll(entries)
         entries.forEach { if (it.filename != null) File(clipFilesDir, it.filename).delete() }
     }
 

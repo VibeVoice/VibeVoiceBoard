@@ -84,8 +84,9 @@ object GestureDataGatheringSettings {
     fun setWordExclusions(context: Context, list: Collection<String>) {
         excludedWords = null
         val json = Json.encodeToString(list)
+        val appCtx = context.applicationContext
         context.prefs().edit { putString(PREF_WORD_EXCLUSIONS, json) }
-        scope.launch { GestureDataDao.getInstance(context)?.deleteBackgroundWords(list) }
+        scope.launch { GestureDataDao.getInstance(appCtx)?.deleteBackgroundWords(list) }
     }
 
     fun getWordExclusions(context: Context): Set<String> {

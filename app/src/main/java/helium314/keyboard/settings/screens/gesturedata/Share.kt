@@ -66,15 +66,13 @@ fun ShareGestureData(ids: List<Long>, onShared: () -> Unit,  onDeleted: () -> Un
         if (exportStarted) {
             // wait until exported data is marked, then offer to delete
             gestureIdsBeingExported = ids
-            scope.launch {
-                while (gestureIdsBeingExported != null) {
-                    exportedPercent = (100 * progress) / (gestureIdsBeingExported?.size ?: 100)
-                    delay(50)
-                }
-                exportDone = true
-                exportStarted = false
-                onShared()
+            while (gestureIdsBeingExported != null) {
+                exportedPercent = (100 * progress) / (gestureIdsBeingExported?.size ?: 100)
+                delay(50)
             }
+            exportDone = true
+            exportStarted = false
+            onShared()
         }
     }
 
@@ -185,13 +183,14 @@ private fun getZipFileUri(context: Context) : Uri =
 private fun getData(ids: List<Long>): ManagedActivityResultLauncher<Intent, ActivityResult> {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope { Dispatchers.IO }
+    val appCtx = ctx.applicationContext
     return filePicker { uri ->
-        val dao = GestureDataDao.getInstance(ctx) ?: return@filePicker
+        val dao = GestureDataDao.getInstance(appCtx) ?: return@filePicker
         scope.launch {
             ctx.getActivity()?.contentResolver?.openOutputStream(uri)?.use { os ->
-                writeOutputToZipStream(dao.getJsonData(ids, ctx), getGestureDataFileName(ctx), os)
+                writeOutputToZipStream(dao.getJsonData(ids, appCtx), getGestureDataFileName(appCtx), os)
             }
-            dao.markAsExported(ids, ctx)
+            dao.markAsExported(ids, appCtx)
             gestureIdsBeingExported = null
             progress = 0
         }

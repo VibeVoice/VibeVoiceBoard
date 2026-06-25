@@ -111,7 +111,6 @@ class ClipboardHistoryManager(
         clipboardManager.setPrimaryClip(tempClip)
         latinIME.onEvent(Event.createSoftwareKeypressEvent(KeyCode.CLIPBOARD_PASTE, 0,
             Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false))
-        tempPrimaryClip = false
         if (primaryClip == null) {
             scope.launch {
                 delay(500)
@@ -123,6 +122,8 @@ class ClipboardHistoryManager(
                     }
                 } catch (e: Exception) {
                     Log.i(TAG, "could not clear temporary clip", e)
+                } finally {
+                    tempPrimaryClip = false
                 }
             }
             return
@@ -153,6 +154,8 @@ class ClipboardHistoryManager(
                 else {
                     clipboardManager.setPrimaryClip(ClipData.newPlainText("", ""))
                 }
+            } finally {
+                tempPrimaryClip = false
             }
         }
     }
