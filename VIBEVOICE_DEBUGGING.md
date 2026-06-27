@@ -4,7 +4,7 @@ This document outlines the persistent logging mechanism implemented to diagnose 
 
 ## Log File Location
 The debug log is stored persistently on the Android device at:
-`/data/data/helium314.keyboard.debug/files/vibevoice_debug.log`
+`/data/data/org.vibevoice.board.debug/files/vibevoice_debug.log`
 
 ## How to Obtain Logs
 
@@ -21,12 +21,12 @@ This script pulls the log to your local machine and displays the last 20 lines.
 ### Option 2: Pull manually via ADB
 ```bash
 adb devices
-adb -s <device-serial> pull /data/data/helium314.keyboard.debug/files/vibevoice_debug.log .
+adb -s <device-serial> pull /data/data/org.vibevoice.board.debug/files/vibevoice_debug.log .
 ```
 
 ### Option 3: View directly via ADB
 ```bash
-adb -s <device-serial> shell "cat /data/data/helium314.keyboard.debug/files/vibevoice_debug.log"
+adb -s <device-serial> shell "cat /data/data/org.vibevoice.board.debug/files/vibevoice_debug.log"
 ```
 
 ---
