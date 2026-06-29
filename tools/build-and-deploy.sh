@@ -12,15 +12,15 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   
   MAC_NC=$(find /Users/schneider/Library/CloudStorage -maxdepth 1 -name "Nextcloud*" 2>/dev/null | head -n 1)
   if [ -n "$MAC_NC" ]; then
-    DEST_DIR="$MAC_NC/Documents/VibeVoiceBoard"
+    DEST_DIR="$MAC_NC/Documents/Shared Documents/VibeVoiceBoard"
   else
-    DEST_DIR="/Users/schneider/Library/CloudStorage/Nextcloud-florian@cloud․infraviored․com/Documents/VibeVoiceBoard"
+    DEST_DIR="/Users/schneider/Library/CloudStorage/Nextcloud-florian@cloud․infraviored․com/Documents/Shared Documents/VibeVoiceBoard"
   fi
 else
   echo "Linux detected."
   export JAVA_HOME="/usr/lib/jvm/default-java"
   export PATH="$PATH:$HOME/Android/Sdk/platform-tools"
-  DEST_DIR="/home/schneider/nextcloud/Documents/VibeVoiceBoard"
+  DEST_DIR="/home/schneider/nextcloud/Documents/Shared Documents/VibeVoiceBoard"
 fi
 
 # 2. Compile Android APK
