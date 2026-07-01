@@ -15,5 +15,6 @@ tools/*.txt
 *.patch
 *.diff
 *.sh
+!tools/build-and-deploy.sh
 tools/make-emoji-keys/bin/
 tools/make-emoji-keys/build/

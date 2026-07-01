@@ -171,10 +171,15 @@ class VibeVoiceClient(
                             lastFullText = resultText
                             
                             listener.onFinal(resultText, isNewSegment)
+                            
                             if (!isStreaming) {
-                                VibeVoiceDebugLogger.log("Closing WS immediately after final result")
+                                VibeVoiceDebugLogger.log("Closing WS immediately after final result marker")
                                 closureJob?.cancel()
+                                closureJob = null
                                 webSocket.close(1000, "Done after Final")
+                                if (this@VibeVoiceClient.webSocket == webSocket) {
+                                    this@VibeVoiceClient.webSocket = null
+                                }
                             }
                         } else {
                             val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
@@ -184,14 +189,6 @@ class VibeVoiceClient(
                             lastFullText = resultText
                             
                             listener.onPartial(resultText, isNewSegment)
-                            if (!isStreaming) {
-                                VibeVoiceDebugLogger.log("Shortening timeout after partial result")
-                                closureJob?.cancel()
-                                closureJob = scope.launch {
-                                    delay(500)
-                                    webSocket.close(1000, "Done after Flush")
-                                }
-                            }
                         }
                     } else if (json.has("error")) {
                         val errorMsg = json.optString("error", "Unknown server error")
@@ -215,9 +212,16 @@ class VibeVoiceClient(
                     cleanupAudioCapture()
                     closureJob?.cancel()
                     closureJob = null
-                    this@VibeVoiceClient.webSocket = null
+                    if (this@VibeVoiceClient.webSocket == webSocket) {
+                        this@VibeVoiceClient.webSocket = null
+                    }
                     listener.onError(t.message ?: "WebSocket Error")
                 }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                VibeVoiceDebugLogger.log("WS Closing: $code / $reason")
+                webSocket.close(1000, "Acknowledge Close")
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -230,7 +234,9 @@ class VibeVoiceClient(
                     cleanupAudioCapture()
                     closureJob?.cancel()
                     closureJob = null
-                    this@VibeVoiceClient.webSocket = null
+                    if (this@VibeVoiceClient.webSocket == webSocket) {
+                        this@VibeVoiceClient.webSocket = null
+                    }
                     listener.onClosed()
                 }
             }
@@ -317,6 +323,8 @@ class VibeVoiceClient(
             val maxRecoveryAttempts = 3
             var lastLogTime = 0L
             var totalReadsInSession = 0
+            var sumOfSquares = 0L
+            var totalSamples = 0L
 
             while (isActive && isStreaming) {
                 val currentRecord = audioRecord
@@ -337,6 +345,16 @@ class VibeVoiceClient(
                 if (read > 0) {
                     totalReadsInSession++
                     
+                    val numSamples = read / 2
+                    for (i in 0 until numSamples) {
+                        val b1 = buffer[2 * i].toInt() and 0xFF
+                        val b2 = buffer[2 * i + 1].toInt() and 0xFF
+                        val sample = ((b2 shl 8) or b1).toShort()
+                        val sampleVal = sample.toLong()
+                        sumOfSquares += sampleVal * sampleVal
+                    }
+                    totalSamples += numSamples
+                    
                     var isAllZeros = true
                     for (i in 0 until read) {
                         if (buffer[i] != 0.toByte()) {
@@ -356,8 +374,12 @@ class VibeVoiceClient(
                     val isRapidRead = isAllZeros && expectedMs > 20 && durationMs < expectedMs / 10
                     val isSilencedTooLong = consecutiveZeroBytes >= zeroLimitBytes
 
-                    if (totalReadsInSession > 5 && (isRapidRead || isSilencedTooLong)) {
-                        val reason = if (isRapidRead) "rapid zero-flood (${durationMs}ms)" else "2s of consecutive zeros"
+                    if (isRapidRead) {
+                        delay((expectedMs - durationMs).coerceAtLeast(10L))
+                    }
+
+                    if (totalReadsInSession > 5 && isSilencedTooLong) {
+                        val reason = "2s of consecutive zeros"
                         VibeVoiceDebugLogger.log("Dead microphone detected ($reason). Attempting recovery...")
 
                         if (recoveryAttempts < maxRecoveryAttempts) {
@@ -429,7 +451,9 @@ class VibeVoiceClient(
                     }
                 }
             }
-            Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead")
+            val overallRms = if (totalSamples > 0) Math.sqrt(sumOfSquares.toDouble() / totalSamples) / 32768.0 else 0.0
+            VibeVoiceDebugLogger.log("Session complete. Final total bytes: $totalRead, Overall RMS: ${String.format(java.util.Locale.US, "%.6f", overallRms)}")
+            Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead, Overall RMS: $overallRms")
         }
     }
 
@@ -438,12 +462,16 @@ class VibeVoiceClient(
         isStreaming = false
         cleanupAudioCapture()
 
-        webSocket?.send("END_STREAM")
+        val ws = webSocket
+        ws?.send("END_STREAM")
         closureJob = scope.launch {
-            VibeVoiceDebugLogger.log("Closing WS in 1.5s timer started. Total bytes read: $totalRead")
-            delay(1500)
-            webSocket?.close(1000, "Done (timeout)")
-            webSocket = null
+            VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
+            delay(3000)
+            VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
+            ws?.close(1000, "Done (timeout)")
+            if (this@VibeVoiceClient.webSocket == ws) {
+                this@VibeVoiceClient.webSocket = null
+            }
             closureJob = null
         }
     }
@@ -540,6 +568,26 @@ class VibeVoiceClient(
                     response.body?.string()?.let { JSONObject(it) }
                 }
             } catch (e: Exception) {
+                null
+            }
+        }
+
+        suspend fun fetchQuota(apiKey: String): JSONObject? = withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/me/usage")
+                .header("X-API-Key", apiKey)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { JSONObject(it) }
+                    } else {
+                        Log.e(TAG, "Quota fetch failed: HTTP ${response.code}")
+                        null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Quota fetch failed with exception", e)
                 null
             }
         }

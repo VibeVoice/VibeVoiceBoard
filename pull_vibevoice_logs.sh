@@ -1,6 +1,6 @@
 #!/bin/bash
 DEVICE="${1:-${ADB_DEVICE_SERIAL:-}}"
-PACKAGE="helium314.keyboard.debug"
+PACKAGE="org.vibevoice.board.debug"
 FILENAME="vibevoice_debug.log"
 LOCAL_PATH="./vibevoice_debug.log"
 ADB_CMD=(adb)

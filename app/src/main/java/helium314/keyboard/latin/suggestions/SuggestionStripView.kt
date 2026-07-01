@@ -67,9 +67,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.min
 import androidx.core.view.isGone
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @SuppressLint("InflateParams")
 class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int) :
@@ -176,6 +178,15 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
                 if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
                     pinnedKeyInToolbar.background = enabledToolKeyBackground
+            }
+        }
+        toolbarContainer.doOnNextLayout {
+            // set min width of the toolbar so the weight of the toolbar keys actually does something
+            // todo: results in requestLayout() improperly called by android.widget.LinearLayout during layout: running second layout pass
+            toolbarContainer.post {
+                if (toolbar.minimumWidth != toolbarContainer.width) {
+                    toolbar.minimumWidth = toolbarContainer.width
+                }
             }
         }
 
@@ -295,7 +306,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         setToolbarButtonsActivatedStateOnPrefChange(pinnedKeys, key)
         setToolbarButtonsActivatedStateOnPrefChange(toolbar, key)
         if (key == Settings.PREF_ALWAYS_INCOGNITO_MODE)
-            GlobalScope.launch { delay(10); updateKeys() }
+            GlobalScope.launch { delay(10); withContext(Dispatchers.Main) { updateKeys() } }
     }
 
     override fun onVisibilityChanged(view: View, visibility: Int) {
@@ -589,6 +600,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun setupKey(view: ImageButton, colors: Colors) {
         view.setOnClickListener(this)
         view.setOnLongClickListener(this)
+        (view.layoutParams as LinearLayout.LayoutParams).weight = 1f
         colors.setColor(view, ColorType.TOOL_BAR_KEY)
         colors.setBackground(view, ColorType.STRIP_BACKGROUND)
     }

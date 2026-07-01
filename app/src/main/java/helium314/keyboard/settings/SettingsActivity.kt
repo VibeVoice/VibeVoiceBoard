@@ -86,6 +86,7 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
         settingsContainer = SettingsContainer(this)
 
         val spellchecker = intent?.getBooleanExtra("spellchecker", false) ?: false
+        val startDestination = intent?.getStringExtra("startDestination")
 
         val cv = ComposeView(context = this)
         setContentView(cv)
@@ -116,7 +117,7 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                             }
                         }
                     else {
-                        SettingsNavHost(onClickBack = { this.finish() })
+                        SettingsNavHost(onClickBack = { this.finish() }, startDestination = startDestination)
                         if (showWelcomeWizard) {
                             WelcomeWizard(close = { showWelcomeWizard = false }, finish = this::finish)
                         } else if (crashReports.isNotEmpty()) {

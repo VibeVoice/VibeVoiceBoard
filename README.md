@@ -12,7 +12,7 @@ Does not use internet permission, and thus is 100% offline.
 - [Contributing](#contributing-)
    * [Reporting Issues](#reporting-issues)
    * [Translations](#translations)
-   * [To Community Creation](#to-community)
+   * [To Community](#to-community)
    * [Code Contribution](CONTRIBUTING.md)
 - [Links](#links)
 - [License](#license)
@@ -77,11 +77,13 @@ Some notes on translations
 There is the [discussions on GitHub](https://github.com/HeliBorg/HeliBoard/discussions), or if you prefer a more open network there is [Lemmy](https://lemmy.world/c/Heliboard).
 You can share your themes, layouts and dictionaries with other people:
 * Themes can be saved and loaded using the menu on top-right in the _adjust colors_ screen
-  * You can share custom colors in a separate [discussion section](https://github.com/HeliBorg/HeliBoard/discussions/categories/custom-colors)
+  * you can share custom colors in a separate [discussion section](https://github.com/HeliBorg/HeliBoard/discussions/categories/custom-colors)
+  * there are theme collections available at [Star-Trowa/heliboard-themes](https://github.com/Star-Trowa/heliboard-themes) and [PickleHik3/droid-tings](https://github.com/PickleHik3/droid-tings)
 * Custom keyboard layouts are text files whose content you can edit, copy and share
   * this applies to main keyboard layouts and to special layouts adjustable in advanced settings
   * see [layouts.md](layouts.md) for details
-  * You can share custom layouts in a separate [discussion section](https://github.com/HeliBorg/HeliBoard/discussions/categories/custom-layout)
+  * you can share custom layouts in a separate [discussion section](https://github.com/HeliBorg/HeliBoard/discussions/categories/custom-layout)
+  * [Roccobot's Layout Maker](https://roccobot.github.io/HeliBoard-RLM/) is a browser-based editor for json layout files
 * Creating dictionaries is a little more work
   * first you will need a wordlist, as described [here](https://codeberg.org/Helium314/aosp-dictionaries/src/branch/main/wordlists/sample.combined) and in the repository readme
   * the you need to compile the dictionary using [external tools](https://github.com/remi0s/aosp-dictionary-tools)
