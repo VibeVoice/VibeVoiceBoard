@@ -54,6 +54,7 @@ fun AboutScreen(
         SettingsWithoutKey.APP,
         SettingsWithoutKey.VERSION,
         SettingsWithoutKey.LICENSE,
+        SettingsWithoutKey.PRIVACY_POLICY,
         SettingsWithoutKey.HIDDEN_FEATURES,
         SettingsWithoutKey.GITHUB_WIKI,
         SettingsWithoutKey.COMMUNITY_LINKS,
@@ -102,6 +103,20 @@ fun createAboutSettings(context: Context) = listOf(
             onClick = {
                 val intent = Intent()
                 intent.data = Links.LICENSE.toUri()
+                intent.action = Intent.ACTION_VIEW
+                ctx.startActivity(intent)
+            },
+            icon = R.drawable.ic_settings_about_license
+        )
+    },
+    Setting(context, SettingsWithoutKey.PRIVACY_POLICY, R.string.privacy_policy) {
+        val ctx = LocalContext.current
+        Preference(
+            name = it.title,
+            description = null,
+            onClick = {
+                val intent = Intent()
+                intent.data = Links.PRIVACY_POLICY.toUri()
                 intent.action = Intent.ACTION_VIEW
                 ctx.startActivity(intent)
             },

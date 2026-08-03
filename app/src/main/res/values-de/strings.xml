@@ -70,6 +70,7 @@
     <string name="setup_steps_title">%s einrichten</string>
     <string name="vibevoice_transcribing">Transkribiere…</string>
     <string name="vibevoice_hold_to_transcribe">Gedrückt halten zum Transkribieren</string>
+    <string name="privacy_policy">Datenschutzerklärung</string>
     <string name="setup_step1_title">%s aktivieren</string>
     <string name="setup_step1_instruction">Bitte aktiviere %s\" unter der Systemeinstellung „Sprachen und Eingabe“.</string>
     <string name="setup_step1_action">"In den Einstellungen aktivieren"</string>
