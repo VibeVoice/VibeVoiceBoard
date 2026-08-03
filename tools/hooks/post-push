@@ -1,0 +1,13 @@
+#!/bin/bash
+# post-push: automatically build APK and upload to Nextcloud after every push
+# Skips if SKIP_APK_BUILD=1 is set in the environment
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if [[ "${SKIP_APK_BUILD}" == "1" ]]; then
+  echo "[post-push] APK build skipped (SKIP_APK_BUILD=1)"
+  exit 0
+fi
+
+echo "[post-push] Building and uploading APK to Nextcloud..."
+bash "$REPO_ROOT/tools/build-and-deploy.sh"
