@@ -44,6 +44,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import helium314.keyboard.latin.vibevoice.VibeVoiceBugReporter
+
 @Composable
 fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     val context = LocalContext.current
@@ -55,6 +60,12 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     var verificationUri by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    var showBugReportDialog by remember { mutableStateOf(false) }
+    var bugDescription by remember { mutableStateOf("") }
+    var isSubmittingBugReport by remember { mutableStateOf(false) }
+    var bugReportStatus by remember { mutableStateOf<String?>(null) }
+    var isBugReportSuccess by remember { mutableStateOf(false) }
 
     var quotaInfo by remember { mutableStateOf<org.json.JSONObject?>(null) }
     var isQuotaLoading by remember { mutableStateOf(false) }
@@ -123,6 +134,24 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
         prefs.edit().remove(VIBEVOICE_API_KEY_PREF).apply()
         apiKey = null
         userCode = null
+    }
+
+    fun submitBugReport() {
+        if (bugDescription.isBlank()) return
+        isSubmittingBugReport = true
+        bugReportStatus = null
+        isBugReportSuccess = false
+        scope.launch {
+            val result = VibeVoiceBugReporter.sendBugReport(context, bugDescription)
+            isSubmittingBugReport = false
+            result.onSuccess { reportId ->
+                isBugReportSuccess = true
+                bugReportStatus = context.getString(R.string.vibevoice_report_bug_success, reportId)
+            }.onFailure { err ->
+                isBugReportSuccess = false
+                bugReportStatus = err.message ?: "Failed to submit bug report"
+            }
+        }
     }
 
     SearchSettingsScreen(
@@ -255,6 +284,94 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
                 }
             }
+
+            Spacer(modifier = Modifier.size(24.dp))
+
+            // Bug Reporting Section
+            Text(
+                stringResource(R.string.vibevoice_report_bug_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.size(4.dp))
+            Text(
+                stringResource(R.string.vibevoice_report_bug_desc),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.size(12.dp))
+            Button(
+                onClick = {
+                    bugDescription = ""
+                    bugReportStatus = null
+                    showBugReportDialog = true
+                },
+                enabled = apiKey != null,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.vibevoice_report_bug_title))
+            }
+            if (apiKey == null) {
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    stringResource(R.string.vibevoice_not_linked),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+
+        if (showBugReportDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isSubmittingBugReport) showBugReportDialog = false
+                },
+                title = { Text(stringResource(R.string.vibevoice_report_bug_dialog_title)) },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = bugDescription,
+                            onValueChange = { bugDescription = it },
+                            placeholder = { Text(stringResource(R.string.vibevoice_report_bug_placeholder)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 4,
+                            maxLines = 6,
+                            enabled = !isSubmittingBugReport
+                        )
+                        if (isSubmittingBugReport) {
+                            Spacer(modifier = Modifier.size(16.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.size(8.dp))
+                                Text(stringResource(R.string.vibevoice_report_bug_submitting))
+                            }
+                        }
+                        val status = bugReportStatus
+                        if (status != null) {
+                            Spacer(modifier = Modifier.size(12.dp))
+                            Text(
+                                status,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isBugReportSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { submitBugReport() },
+                        enabled = bugDescription.isNotBlank() && !isSubmittingBugReport
+                    ) {
+                        Text(stringResource(R.string.vibevoice_report_bug_submit))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showBugReportDialog = false },
+                        enabled = !isSubmittingBugReport
+                    ) {
+                        Text(stringResource(R.string.dialog_close))
+                    }
+                }
+            )
         }
     }
 }

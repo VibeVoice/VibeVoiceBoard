@@ -1,0 +1,28 @@
+#!/bin/bash
+# post-commit: bump patch version after every commit
+# Skips if the commit itself was a version bump (avoid infinite loop)
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+VERSION_FILE="$REPO_ROOT/VERSION"
+
+# Guard: don't re-bump if last commit message is a version bump
+LAST_MSG=$(git log -1 --pretty=%s)
+if [[ "$LAST_MSG" == chore\(version\):* ]]; then
+  exit 0
+fi
+
+# Read current version
+VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "[post-commit] ERROR: VERSION file does not contain a valid semver (e.g., 4.0.10). Got: '$VERSION'"
+  exit 1
+fi
+IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+# Bump patch
+PATCH=$((PATCH + 1))
+NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+
+echo "$NEW_VERSION" > "$VERSION_FILE"
+git add "$VERSION_FILE"
+git commit --no-verify -m "chore(version): bump to $NEW_VERSION"

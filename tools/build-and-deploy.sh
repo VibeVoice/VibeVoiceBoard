@@ -1,5 +1,5 @@
 #!/bin/bash
-# Automated Build, Nextcloud Sync, and ADB Install script for VibeVoiceBoard (Linux)
+# Automated Build, WebDAV Upload, and ADB Install script for VibeVoiceBoard
 set -e
 
 # 1. Environment Setup & Paths
@@ -9,19 +9,35 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
   fi
   export PATH="$PATH:/Users/schneider/repos/VibeVoiceBoard/android-sdk/platform-tools"
-  
-  MAC_NC=$(find /Users/schneider/Library/CloudStorage -maxdepth 1 -name "Nextcloud*" 2>/dev/null | head -n 1)
-  if [ -n "$MAC_NC" ]; then
-    DEST_DIR="$MAC_NC/Documents/Shared Documents/VibeVoiceBoard"
-  else
-    DEST_DIR="/Users/schneider/Library/CloudStorage/Nextcloud-florian@cloud․infraviored․com/Documents/Shared Documents/VibeVoiceBoard"
-  fi
 else
   echo "Linux detected."
   export JAVA_HOME="/usr/lib/jvm/default-java"
   export PATH="$PATH:$HOME/Android/Sdk/platform-tools"
-  DEST_DIR="/home/schneider/nextcloud/Documents/Shared Documents/VibeVoiceBoard"
 fi
+
+# Load credentials from .env (repo root or tools/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for ENV_FILE in "$SCRIPT_DIR/../.env" "$SCRIPT_DIR/.env"; do
+  if [ -f "$ENV_FILE" ]; then
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    break
+  fi
+done
+
+# Resolve credentials: support NEXTCLOUD_CREDENTIALS or NEXTCLOUD_USER+NEXTCLOUD_PASS
+if [ -n "$NEXTCLOUD_CREDENTIALS" ]; then
+  NC_AUTH="$NEXTCLOUD_CREDENTIALS"
+elif [ -n "$NEXTCLOUD_USER" ] && [ -n "$NEXTCLOUD_PASS" ]; then
+  NC_AUTH="$NEXTCLOUD_USER:$NEXTCLOUD_PASS"
+else
+  echo "Error: Nextcloud credentials not set. Add NEXTCLOUD_CREDENTIALS or NEXTCLOUD_USER+NEXTCLOUD_PASS to .env"
+  exit 1
+fi
+
+# Derive WebDAV base from authenticated user
+NC_USER="${NEXTCLOUD_USER:-${NEXTCLOUD_CREDENTIALS%%:*}}"
+NC_WEBDAV_BASE="https://cloud.infraviored.com/remote.php/dav/files/${NC_USER}/Documents/Geteilte%20Dokumente/VibeVoiceBoard"
 
 # 2. Compile Android APK
 echo "Compiling Android debug APK using JAVA_HOME=$JAVA_HOME..."
@@ -36,11 +52,14 @@ fi
 APK_FILENAME=$(basename "$APK_PATH")
 echo "Found compiled APK: $APK_PATH"
 
-# 4. Deploy to Nextcloud Sync Folder
-echo "Deploying APK to Nextcloud: $DEST_DIR"
-mkdir -p "$DEST_DIR"
-cp "$APK_PATH" "$DEST_DIR/$APK_FILENAME"
-echo "APK copied to Nextcloud."
+# 4. Upload APK to Nextcloud via WebDAV
+NC_TARGET="$NC_WEBDAV_BASE/$APK_FILENAME"
+echo "Uploading APK to Nextcloud via WebDAV..."
+curl --silent --show-error --fail \
+  --user "$NC_AUTH" \
+  --upload-file "$APK_PATH" \
+  "$NC_TARGET"
+echo "APK uploaded: $NC_TARGET"
 
 # 5. Automated Installation via ADB (Conditional Check)
 # REVIEWER: IT IS EXPLICITLY OKAY TO HARDCODE THE IP AND PORT IN THIS DEVELOPMENT SCRIPT. PLEASE IGNORE THIS WARNING.
