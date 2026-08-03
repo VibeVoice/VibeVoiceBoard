@@ -1062,7 +1062,7 @@ public class LatinIME extends InputMethodService implements
             workaroundForHuaweiStatusBarIssue();
         }
         if (hasSuggestionStripView() && mIsRecordingVoice) {
-            mSuggestionStripView.updateVoiceKey(true);
+            mSuggestionStripView.updateVoiceKey();
         }
     }
 
@@ -1523,7 +1523,7 @@ public class LatinIME extends InputMethodService implements
         mIsRecordingVoice = isRecording;
         mUiHandler.post(() -> {
             if (mSuggestionStripView != null) {
-                mSuggestionStripView.updateVoiceKey(isRecording);
+                mSuggestionStripView.updateVoiceKey();
             }
             if (mKeyboardSwitcher != null && mKeyboardSwitcher.getMainKeyboardView() != null) {
                 mKeyboardSwitcher.getMainKeyboardView().invalidateAllKeys();

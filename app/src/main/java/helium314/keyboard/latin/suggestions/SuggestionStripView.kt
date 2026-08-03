@@ -511,8 +511,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
-    @JvmOverloads
-    fun updateVoiceKey(isActivated: Boolean = false) {
+    fun updateVoiceKey() {
+        val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
         // VibeVoice key is always visible — it is not gated on system voice IME availability
         updateVoiceKeyButton(toolbar.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
         updateVoiceKeyButton(pinnedKeys.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
