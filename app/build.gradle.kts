@@ -8,6 +8,12 @@ plugins {
     kotlin("plugin.compose") version "2.3.20"
 }
 
+// Read version from centralized VERSION file
+val versionFilePath = rootProject.file("VERSION")
+val versionString = versionFilePath.readText().trim()
+val (vMajor, vMinor, vPatch) = versionString.split(".").map { it.toInt() }
+val computedVersionCode = vMajor * 100000 + vMinor * 1000 + vPatch
+
 android {
     compileSdk = 36
 
@@ -15,8 +21,8 @@ android {
         applicationId = "org.vibevoice.board"
         minSdk = 21
         targetSdk = 36
-        versionCode = 4002
-        versionName = "4.0-alpha2"
+        versionCode = computedVersionCode
+        versionName = versionString
         ndk {
             abiFilters.clear()
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
