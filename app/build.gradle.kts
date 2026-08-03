@@ -10,8 +10,11 @@ plugins {
 
 // Read version from centralized VERSION file
 val versionFilePath = rootProject.file("VERSION")
-val versionString = versionFilePath.readText().trim()
-val (vMajor, vMinor, vPatch) = versionString.split(".").map { it.toInt() }
+val versionString = if (versionFilePath.exists()) versionFilePath.readText().trim() else "4.1.1"
+val versionParts = versionString.split(".").mapNotNull { it.toIntOrNull() }
+val vMajor = versionParts.getOrElse(0) { 4 }
+val vMinor = versionParts.getOrElse(1) { 1 }
+val vPatch = versionParts.getOrElse(2) { 1 }
 val computedVersionCode = vMajor * 100000 + vMinor * 1000 + vPatch
 
 android {

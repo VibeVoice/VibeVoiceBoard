@@ -1508,7 +1508,6 @@ public class LatinIME extends InputMethodService implements
         mKeyboardSwitcher.onEvent(event, getCurrentAutoCapsState(), getCurrentRecapitalizeState());
     }
 
-<<<<<<< HEAD
     private VibeVoiceClient mVibeVoiceClient;
     private android.os.Handler mUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private String mVoiceComposingText = "";

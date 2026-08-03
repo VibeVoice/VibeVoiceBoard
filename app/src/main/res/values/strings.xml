@@ -72,6 +72,7 @@
     <string name="vibevoice_error">Voice error: %s</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
+    <string name="vibevoice_hold_to_transcribe">Hold to Transcribe</string>
     <!-- Bug reporting strings -->
     <string name="vibevoice_report_bug_title">Report a Bug</string>
     <string name="vibevoice_report_bug_desc">Submit diagnostic logs and issue description directly to the server</string>

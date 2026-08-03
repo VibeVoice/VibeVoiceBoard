@@ -177,7 +177,6 @@ object Defaults {
     const val PREF_ABC_AFTER_SYMBOL_SPACE = true
     const val PREF_ABC_AFTER_NUMPAD_SPACE = false
     const val PREF_REMOVE_REDUNDANT_POPUPS = false
-    const val PREF_SPACE_BAR_TEXT = ""
     const val PREF_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss"
     const val PREF_RECENT_EMOJIS = ""
     const val PREF_LAST_SHOWN_EMOJI_CATEGORY_PAGE_ID = 0

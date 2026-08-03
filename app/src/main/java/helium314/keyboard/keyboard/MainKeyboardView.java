@@ -857,18 +857,13 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final int height = key.getHeight();
         paint.setTextAlign(Align.CENTER);
         paint.setTextSize(mLanguageOnSpacebarTextSize);
-        final String customText = Settings.getValues().mSpaceBarText;
         final String spaceText;
         final LatinIME latinIME = KeyboardSwitcher.getInstance().getLatinIME();
         if (latinIME != null && latinIME.isRecordingVoice()) {
             spaceText = getContext().getString(R.string.vibevoice_transcribing);
-        } else if (!customText.isEmpty()) {
-            spaceText = customText;
-        } else if (DebugFlags.DEBUG_ENABLED) {
-            final String l = KeyboardSwitcher.getInstance().getLocaleAndConfidenceInfo();
-            spaceText = l != null ? l : layoutLanguageOnSpacebar(paint, keyboard.mId.getSubtype(), width);
-        } else
-            spaceText = layoutLanguageOnSpacebar(paint, keyboard.mId.getSubtype(), width);
+        } else {
+            spaceText = getContext().getString(R.string.vibevoice_hold_to_transcribe);
+        }
         paint.setTypeface(KeyboardTypeface.resolve(spaceText, Typeface.DEFAULT));
         // Draw language text with shadow
         final float descent = paint.descent();
