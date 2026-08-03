@@ -243,18 +243,24 @@ class ClipboardHistoryView @JvmOverloads constructor(
     }
 
     override fun onClipInserted(position: Int) {
-        clipboardAdapter.notifyItemInserted(position)
-        clipboardRecyclerView.smoothScrollToPosition(position)
+        post {
+            clipboardAdapter.notifyItemInserted(position)
+            clipboardRecyclerView.smoothScrollToPosition(position)
+        }
     }
 
     override fun onClipsRemoved(position: Int, count: Int) {
-        clipboardAdapter.notifyItemRangeRemoved(position, count)
+        post {
+            clipboardAdapter.notifyItemRangeRemoved(position, count)
+        }
     }
 
     override fun onClipMoved(oldPosition: Int, newPosition: Int) {
-        clipboardAdapter.notifyItemMoved(oldPosition, newPosition)
-        clipboardAdapter.notifyItemChanged(newPosition)
-        if (newPosition < oldPosition) clipboardRecyclerView.smoothScrollToPosition(newPosition)
+        post {
+            clipboardAdapter.notifyItemMoved(oldPosition, newPosition)
+            clipboardAdapter.notifyItemChanged(newPosition)
+            if (newPosition < oldPosition) clipboardRecyclerView.smoothScrollToPosition(newPosition)
+        }
     }
 
     override fun onSharedPreferenceChanged(prefs: SharedPreferences?, key: String?) {
