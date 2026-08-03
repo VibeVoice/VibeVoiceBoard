@@ -571,5 +571,25 @@ class VibeVoiceClient(
                 null
             }
         }
+
+        suspend fun fetchQuota(apiKey: String): JSONObject? = withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/me/usage")
+                .header("X-API-Key", apiKey)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { JSONObject(it) }
+                    } else {
+                        Log.e(TAG, "Quota fetch failed: HTTP ${response.code}")
+                        null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Quota fetch failed with exception", e)
+                null
+            }
+        }
     }
 }

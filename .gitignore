@@ -18,3 +18,7 @@ tools/*.txt
 !tools/build-and-deploy.sh
 tools/make-emoji-keys/bin/
 tools/make-emoji-keys/build/
+
+# Local secrets
+.env
+.env.*

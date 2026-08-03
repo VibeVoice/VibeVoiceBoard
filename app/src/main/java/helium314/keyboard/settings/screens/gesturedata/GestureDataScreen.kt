@@ -89,10 +89,12 @@ import helium314.keyboard.latin.utils.ChecksumCalculator
 import helium314.keyboard.latin.utils.DictionaryInfoUtils
 import helium314.keyboard.latin.utils.GestureDataDao
 import helium314.keyboard.latin.utils.GestureDataGatheringSettings
+import helium314.keyboard.latin.utils.NextScreenIcon
 import helium314.keyboard.latin.utils.ScriptUtils
 import helium314.keyboard.latin.utils.SubtypeLocaleUtils
 import helium314.keyboard.latin.utils.SubtypeSettings
 import helium314.keyboard.latin.utils.SuggestionResults
+import helium314.keyboard.latin.utils.Theme
 import helium314.keyboard.latin.utils.UncachedInputMethodManagerUtils
 import helium314.keyboard.latin.utils.WordData
 import helium314.keyboard.latin.utils.dictTestImeOption
@@ -100,15 +102,17 @@ import helium314.keyboard.latin.utils.gestureDataActiveFacilitator
 import helium314.keyboard.latin.utils.getSecondaryLocales
 import helium314.keyboard.latin.utils.locale
 import helium314.keyboard.settings.DropDownField
-import helium314.keyboard.latin.utils.NextScreenIcon
-import helium314.keyboard.latin.utils.Theme
 import helium314.keyboard.latin.utils.appendLink
+import helium314.keyboard.latin.utils.getKnownDictHashes
+import helium314.keyboard.latin.utils.htmlToAnnotated
+import helium314.keyboard.settings.SettingsDestination
 import helium314.keyboard.settings.dialogs.ConfirmationDialog
 import helium314.keyboard.settings.dialogs.InfoDialog
 import helium314.keyboard.settings.dialogs.ThreeButtonAlertDialog
 import helium314.keyboard.settings.initPreview
 import helium314.keyboard.settings.isWideScreen
 import helium314.keyboard.latin.utils.previewDark
+import helium314.keyboard.settings.WithSmallTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -130,10 +134,10 @@ import kotlin.random.Random
  *  random word. After swiping this word it gets stored along with necessary
  *  information to recreate the input and some additional data.
  *
- *  Will allow enabling "passive data gathering" later, which stores most of
- *  the words entered using gesture typing. Here the user needs the ability
+ *  Now also allows enabling "background data gathering" later, which stores most of
+ *  the words entered using gesture typing. Here the user has the ability to
  *  review and redact the data before sending, and additionally exclude some
- *  words and apps from passive gathering.
+ *  words and apps from background gathering.
  */
 typealias WeightedWord = Pair<String, Double>
 
@@ -144,7 +148,7 @@ fun GestureDataScreen(
 ) {
     val ctx = LocalContext.current
     val useWideLayout = isWideScreen()
-    val dao = GestureDataDao.getInstance(ctx)!!
+    val dao = GestureDataDao.getInstance(ctx)
 
     // ideally we'd move all the active gathering stuff into a separate (non-local) function,
     // but either it has issues with the floating button positioning (if they are in the function)
@@ -152,7 +156,7 @@ fun GestureDataScreen(
     var wordFromDict by remember { mutableStateOf<String?>(null) } // some word from the dictionary
     var lastData by remember { mutableStateOf<WordData?>(null) }
     var sessionWordCount by remember { mutableIntStateOf(0) }
-    var dbActiveWordCount by remember { mutableIntStateOf(dao.count(activeMode = true)) }
+    var dbActiveWordCount by remember { mutableIntStateOf(dao?.count(activeMode = true) ?: 0) }
     var showMuchDataDialog by rememberSaveable { mutableStateOf(true) }
     var showEndDialog by rememberSaveable { mutableStateOf(true) }
     val focusRequester = remember { FocusRequester() }
@@ -182,14 +186,14 @@ fun GestureDataScreen(
         val endDate = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(END_DATE_EPOCH_MILLIS))
         if (System.currentTimeMillis() > END_DATE_EPOCH_MILLIS) {
             val message = stringResource(R.string.gesture_data_ended, endDate)
-            val infos = dao.filterInfos(limit = 10000) // export no more than 10k words at once due to possibly hitting mail size limits
+            val infos = dao?.filterInfos(limit = 10000).orEmpty() // export no more than 10k words at once due to possibly hitting mail size limits
             ThreeButtonAlertDialog(
                 onDismissRequest = onClickBack,
                 content = {
                     Column {
                         Text(message)
                         if (infos.isNotEmpty())
-                            ShareGestureData(infos.map { it.id })
+                            ShareGestureData(infos.map { it.id }, {}) { dbActiveWordCount = dao?.count(activeMode = true) ?: 0 }
                     }
                 },
                 cancelButtonText = stringResource(android.R.string.ok),
@@ -203,7 +207,7 @@ fun GestureDataScreen(
 
     }
     if (showMuchDataDialog) {
-        if (dao.count(exported = false) < 5000)
+        if ((dao?.count(exported = false) ?: 0) < 5000)
             showMuchDataDialog = false
         InfoDialog(stringResource(R.string.gesture_data_much_data)) { showMuchDataDialog = false }
     }
@@ -346,7 +350,7 @@ fun GestureDataScreen(
                 val exportedAndDeletedCount by remember { mutableIntStateOf(GestureDataGatheringSettings.getExportedActiveDeletionCount(ctx)) }
                 val oldActiveWords by remember {
                     sessionWordCount = 0
-                    dbActiveWordCount = dao.count(activeMode = true)
+                    dbActiveWordCount = dao?.count(activeMode = true) ?: 0
                     mutableIntStateOf(dbActiveWordCount + exportedAndDeletedCount)
                 }
                 Text(stringResource(R.string.gesture_data_active_count, sessionWordCount, sessionWordCount + oldActiveWords, exportedAndDeletedCount))
@@ -373,7 +377,7 @@ fun GestureDataScreen(
     val scrollState = rememberScrollState()
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
-        bottomBar = { BottomBar(sessionWordCount + dbActiveWordCount > 0) { dbActiveWordCount = dao.count(activeMode = true) } }
+        bottomBar = { BottomBar(sessionWordCount + dbActiveWordCount > 0) { dbActiveWordCount = dao?.count(activeMode = true) ?: 0 } }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -388,7 +392,7 @@ fun GestureDataScreen(
                 Spacer(Modifier.height(top))
             } else {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.gesture_data_screen)) },
+                    title = { Text(stringResource(if (activeGathering) R.string.gesture_data_active else R.string.gesture_data_screen)) },
                     navigationIcon = {
                         IconButton(onClick = { if (activeGathering) activeGathering = false else onClickBack() }) {
                             Icon(
@@ -415,17 +419,21 @@ fun GestureDataScreen(
                     }
                     Spacer(Modifier.height(12.dp))
                     HorizontalDivider()
-                    ButtonWithText(
-                        stringResource(R.string.gesture_data_active_start),
-                        Modifier.fillMaxWidth(),
-                        System.currentTimeMillis() < END_DATE_EPOCH_MILLIS - TWO_WEEKS_IN_MILLIS // disabled when close to end
-                    ) {
-                        activeGathering = true
-                        lastData = null
-                        wordFromDict = null
-                    }
-                    ButtonWithText(stringResource(R.string.gesture_data_how_to_use), Modifier.fillMaxWidth()) {
-                        showActiveInfoDialog = true
+                    val activeDeletedCount = GestureDataGatheringSettings.getExportedActiveDeletionCount(ctx)
+                    val wordsText = getWordsText(ctx, dbActiveWordCount + sessionWordCount + activeDeletedCount)
+                    WithSmallTitle(stringResource(R.string.gesture_data_active) + wordsText) {
+                        ButtonWithText(
+                            stringResource(R.string.gesture_data_active_start),
+                            Modifier.fillMaxWidth(),
+                            System.currentTimeMillis() < END_DATE_EPOCH_MILLIS - TWO_WEEKS_IN_MILLIS // disabled when close to end
+                        ) {
+                            activeGathering = true
+                            lastData = null
+                            wordFromDict = null
+                        }
+                        ButtonWithText(stringResource(R.string.gesture_data_how_to_use), Modifier.fillMaxWidth()) {
+                            showActiveInfoDialog = true
+                        }
                     }
                 }
             }
@@ -433,23 +441,27 @@ fun GestureDataScreen(
                 InfoDialog(AnnotatedString.fromHtml(
                     stringResource(R.string.gesture_data_description,
                         DateFormat.getDateInstance(DateFormat.LONG).format(Date(END_DATE_EPOCH_MILLIS)))
-                ) + AnnotatedString("\n\n" + stringResource(R.string.gesture_data_description_modes))) { showInfoDialog = false }
+                ) + AnnotatedString("\n\n") +
+                    AnnotatedString.fromHtml(stringResource(R.string.gesture_data_description_modes))) { showInfoDialog = false }
             if (showPrivacyDialog)
                 InfoDialog(stringResource(R.string.gesture_data_description_privacy)) { showPrivacyDialog = false }
             if (showActiveInfoDialog)
                 InfoDialog(AnnotatedString.fromHtml(stringResource(R.string.gesture_data_active_description, Links.DICTIONARY_URL))) { showActiveInfoDialog = false }
             Spacer(Modifier.height(12.dp))
-            // PassiveGathering & Review are not finished and will be completed + enabled later
-/*
-            HorizontalDivider()
-            PassiveGathering()
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
-            // maybe move the review screen content in here if we have enough space (but landscape mode will be bad)
-            TextButton(onClick = { SettingsDestination.navigateTo(SettingsDestination.DataReview) }) {
-                Text(stringResource(R.string.gesture_data_review_screen_title))
+
+            if (!activeGathering) {
+                HorizontalDivider()
+                val backgroundDeletedCount = GestureDataGatheringSettings.getExportedBackgroundDeletionCount(ctx)
+                val wordsText = getWordsText(ctx, (dao?.count(activeMode = false) ?: 0) + backgroundDeletedCount)
+                WithSmallTitle(stringResource(R.string.background_gathering) + wordsText) {
+                    BackgroundGatheringSettings()
+                }
+                Spacer(Modifier.height(12.dp))
+                // maybe move the review screen content in here if we have enough space (but landscape mode will be bad)
+                ButtonWithText(stringResource(R.string.gesture_data_review_screen_title), Modifier.fillMaxWidth()) {
+                    SettingsDestination.navigateTo(SettingsDestination.DataReview)
+                }
             }
- */
         }
     }
     // showing at top left in preview, but correctly on device
@@ -477,6 +489,10 @@ fun GestureDataScreen(
         )
 }
 
+private fun getWordsText(context: Context, count: Int) =
+    if (count == 0) ""
+    else " (${context.getString(R.string.gesture_data_words_selected, count.toString())})"
+
 @Composable
 private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
     var showExportDialog by remember { mutableStateOf(false) }
@@ -500,7 +516,7 @@ private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
                     )
                 }
                 IconButton(
-                    onClick = { showExportDialog = true},
+                    onClick = { showExportDialog = true },
                     enabled = hasWords
                 ) {
                     Icon(
@@ -509,7 +525,7 @@ private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
                         Modifier.size(30.dp)
                     )
                 }
-                IconButton(onClick = { showLinks = true}) {
+                IconButton(onClick = { showLinks = true }) {
                     Icon(
                         painterResource(R.drawable.ic_link),
                         "links",
@@ -525,6 +541,7 @@ private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
         var shareAll by remember { mutableStateOf<Boolean?>(null) }
         ThreeButtonAlertDialog(
             onDismissRequest = { showExportDialog = false },
+            title = { Text(stringResource(R.string.gesture_data_active)) },
             content = {
                 if (shareAll == null) {
                     Column {
@@ -534,8 +551,6 @@ private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
                         ButtonWithText(stringResource(R.string.gesture_data_share_all, totalCount), enabled = totalCount > 0) {
                             shareAll = true
                         }
-                        if (totalCount > 10000)
-                            Text(stringResource(R.string.gesture_data_share_limit, 10000))
                     }
                 } else {
                     val toShare = dao.filterInfos(
@@ -543,7 +558,7 @@ private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
                         exported = if (shareAll == true) null else false,
                         limit = 10000 // export no more than 10k words at once due to possibly hitting mail size limits
                     )
-                    Column { ShareGestureData(toShare.map { it.id }) }
+                    Column { ShareGestureData(toShare.map { it.id }, {}, { onDeleted(); showExportDialog = false }) }
                 }
             },
             cancelButtonText = stringResource(R.string.dialog_close),
@@ -558,6 +573,7 @@ private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
         var showConfirmDialog by remember { mutableStateOf<String?>(null) }
         ThreeButtonAlertDialog(
             onDismissRequest = { showDeleteDialog = false },
+            title = { Text(stringResource(R.string.gesture_data_active)) },
             content = {
                 Column {
                     Text(stringResource(R.string.gesture_data_delete_dialog, nonExportedCount, exportedCount))
@@ -600,9 +616,20 @@ private fun BottomBar(hasWords: Boolean, onDeleted: () -> Unit) {
             appendLink("HeliBoard wiki", Links.GESTURE_DATA_WIKI)
             appendLine()
             appendLine()
-            append("Tool for visualizing gesture data:")
-            append(" ")
-            appendLink("Swipe-O-Scope", Links.SWIPE_O_SCOPE)
+
+            appendLine(stringResource(R.string.background_gesture_data_links))
+            append("• ")
+            appendLink("PeerTube", Links.BACKGROUND_GESTURE_DATA_VIDEO_PEERTUBE)
+            appendLine()
+            append("• ")
+            appendLink("YouTube", Links.BACKGROUND_GESTURE_DATA_VIDEO_YOUTUBE)
+            appendLine()
+            append("• ")
+            appendLink("HeliBoard wiki", Links.BACKGROUND_GESTURE_DATA_WIKI)
+            appendLine()
+            appendLine()
+
+            append(LocalContext.current.getString(R.string.gesture_data_swipe_o_scope, Links.SWIPE_O_SCOPE).htmlToAnnotated())
         }
         InfoDialog(text) { showLinks = false }
     }
@@ -618,8 +645,7 @@ fun ButtonWithText(text: String, modifier: Modifier = Modifier, enabled: Boolean
 
 // we only check dictionaries for enabled locales (main + secondary)
 private fun getAvailableDictionaries(context: Context): List<DictWithInfo> {
-    val allowedHashes = context.assets.open("known_dict_hashes.txt")
-        .use { it.reader().readLines() }.filterNot { it.isBlank() || it.startsWith("#") }
+    val allowedHashes = getKnownDictHashes(context)
     val locales = SubtypeSettings.getEnabledSubtypes(true).flatMap {
         getSecondaryLocales(it.extraValue) + it.locale()
     }
@@ -695,7 +721,7 @@ private fun calculateWordWeight(frequency: Int, length: Int): Double {
     // val min_length = 2.0
     // val lenBias = min_length * (1.0 - length_percent) + (4.0 * length_percent)
     val freq = frequency.toDouble()
-    val weight = 2.0.pow(freq/9.7)
+    val weight = 2.0.pow(freq/8.9)
 
     return weight // lenBias
 }

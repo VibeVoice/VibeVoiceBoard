@@ -21,7 +21,7 @@ class KeyboardIconsSet private constructor() {
 
     fun loadIcons(context: Context) {
         val prefs = context.prefs()
-        val iconStyle = prefs.getString(Settings.PREF_ICON_STYLE, Defaults.PREF_ICON_STYLE)
+        val iconStyle = prefs.getString(Settings.PREF_ICON_STYLE, Defaults.PREF_ICON_STYLE(prefs))
         val defaultIds = when (iconStyle) {
             KeyboardTheme.STYLE_HOLO -> keyboardIconsHolo
             KeyboardTheme.STYLE_ROUNDED -> keyboardIconsRounded
@@ -78,7 +78,6 @@ class KeyboardIconsSet private constructor() {
         const val NAME_STOP_ONEHANDED_KEY = "stop_onehanded_mode_key"
         const val NAME_SWITCH_ONEHANDED_KEY = "switch_onehanded_key"
         const val NAME_RESIZE_ONEHANDED_KEY = "resize_onehanded_key"
-        const val NAME_TOGGLE_FLOATING = "toggle_floating"
         const val NAME_TOOLBAR_KEY = "toolbar_key"
         const val NAME_BIN = "bin"
 
@@ -122,7 +121,6 @@ class KeyboardIconsSet private constructor() {
             NAME_RESIZE_ONEHANDED_KEY to        R.drawable.ic_arrow_horizontal,
             NAME_TOOLBAR_KEY to                 R.drawable.ic_arrow_right,
             NAME_BIN to                         R.drawable.ic_bin,
-            NAME_TOGGLE_FLOATING to             R.drawable.ic_drag_indicator
         ).apply {
             ToolbarKey.entries.forEach {
                 put(it.name.lowercase(Locale.US), when (it) {
@@ -157,6 +155,7 @@ class KeyboardIconsSet private constructor() {
                     ToolbarKey.PAGE_START -> R.drawable.ic_page_start
                     ToolbarKey.PAGE_END -> R.drawable.ic_page_end
                     ToolbarKey.SPLIT -> R.drawable.ic_ime_switcher
+                    ToolbarKey.BACKGROUND_GATHERING -> R.drawable.ic_settings_gesture
                 })
             }
         } }
@@ -185,7 +184,6 @@ class KeyboardIconsSet private constructor() {
             NAME_RESIZE_ONEHANDED_KEY to        R.drawable.ic_arrow_horizontal,
             NAME_TOOLBAR_KEY to                 R.drawable.ic_arrow_right,
             NAME_BIN to                         R.drawable.ic_bin,
-            NAME_TOGGLE_FLOATING to             R.drawable.ic_drag_indicator
         ).apply {
             ToolbarKey.entries.forEach {
                 put(it.name.lowercase(Locale.US), when (it) {
@@ -220,6 +218,7 @@ class KeyboardIconsSet private constructor() {
                     ToolbarKey.PAGE_START -> R.drawable.ic_page_start
                     ToolbarKey.PAGE_END -> R.drawable.ic_page_end
                     ToolbarKey.SPLIT -> R.drawable.ic_ime_switcher
+                    ToolbarKey.BACKGROUND_GATHERING -> R.drawable.ic_settings_gesture
                 })
             }
         } }
@@ -248,7 +247,6 @@ class KeyboardIconsSet private constructor() {
             NAME_RESIZE_ONEHANDED_KEY to        R.drawable.ic_arrow_horizontal_rounded,
             NAME_TOOLBAR_KEY to                 R.drawable.ic_arrow_right_rounded,
             NAME_BIN to                         R.drawable.ic_bin_rounded,
-            NAME_TOGGLE_FLOATING to             R.drawable.ic_drag_indicator
         ).apply {
             ToolbarKey.entries.forEach {
                 put(it.name.lowercase(Locale.US), when (it) {
@@ -283,13 +281,14 @@ class KeyboardIconsSet private constructor() {
                     ToolbarKey.PAGE_START -> R.drawable.ic_page_start_rounded
                     ToolbarKey.PAGE_END -> R.drawable.ic_page_end_rounded
                     ToolbarKey.SPLIT -> R.drawable.ic_ime_switcher
+                    ToolbarKey.BACKGROUND_GATHERING -> R.drawable.ic_settings_gesture
                 })
             }
         } }
 
         fun getAllIcons(context: Context): Map<String, List<Int>> {
             // currently active style first
-            val iconStyle = context.prefs().getString(Settings.PREF_ICON_STYLE, Defaults.PREF_ICON_STYLE)
+            val iconStyle = context.prefs().getString(Settings.PREF_ICON_STYLE, Defaults.PREF_ICON_STYLE(context.prefs()))
             return keyboardIconsMaterial.entries.associate { (name, id) ->
                 name to when (iconStyle) {
                     KeyboardTheme.STYLE_HOLO -> listOfNotNull(keyboardIconsHolo[name], keyboardIconsRounded[name], id)
