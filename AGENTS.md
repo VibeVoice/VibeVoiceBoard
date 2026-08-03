@@ -43,3 +43,29 @@ The correct package name for the local debug keyboard app is `org.vibevoice.boar
 ```
 For more information, see [VIBEVOICE_DEBUGGING.md](file:///Users/schneider/repos/VibeVoiceBoard/VIBEVOICE_DEBUGGING.md).
 
+
+## Versioning
+
+Version is managed automatically via the [`VERSION`](./VERSION) file at the repo root. This is the **single source of truth** — `build.gradle.kts` reads it at build time.
+
+### Rules
+- **Patch** (`x.y.Z`) — bumped automatically after every commit via git hook
+- **Minor** (`x.Y.0`) — bumped automatically (patch reset to 0) on any merge landing on `main`, `master`, or `feature/vibevoice-integration`
+- **Major** — bumped manually by editing `VERSION` directly
+
+### After cloning — install hooks once
+Git hooks are not committed to `.git/` automatically. After cloning, run:
+```bash
+bash tools/hooks/install-hooks.sh
+```
+
+This installs:
+- `post-commit` — auto-bumps patch after every non-version commit
+- `post-merge` — auto-bumps minor (resets patch) on merges to primary branches
+
+### Manual version override
+Edit `VERSION` directly if you need to set a specific version, then commit:
+```bash
+echo "4.1.0" > VERSION
+git add VERSION && git commit -m "chore(version): manual bump to 4.1.0"
+```
