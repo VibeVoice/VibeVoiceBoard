@@ -13,6 +13,10 @@ fi
 
 # Read current version
 VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "[post-commit] ERROR: VERSION file does not contain a valid semver (e.g., 4.0.10). Got: '$VERSION'"
+  exit 1
+fi
 IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
 # Bump patch

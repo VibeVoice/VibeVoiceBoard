@@ -65,6 +65,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     var bugDescription by remember { mutableStateOf("") }
     var isSubmittingBugReport by remember { mutableStateOf(false) }
     var bugReportStatus by remember { mutableStateOf<String?>(null) }
+    var isBugReportSuccess by remember { mutableStateOf(false) }
 
     var quotaInfo by remember { mutableStateOf<org.json.JSONObject?>(null) }
     var isQuotaLoading by remember { mutableStateOf(false) }
@@ -139,12 +140,15 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
         if (bugDescription.isBlank()) return
         isSubmittingBugReport = true
         bugReportStatus = null
+        isBugReportSuccess = false
         scope.launch {
             val result = VibeVoiceBugReporter.sendBugReport(context, bugDescription)
             isSubmittingBugReport = false
             result.onSuccess { reportId ->
+                isBugReportSuccess = true
                 bugReportStatus = context.getString(R.string.vibevoice_report_bug_success, reportId)
             }.onFailure { err ->
+                isBugReportSuccess = false
                 bugReportStatus = err.message ?: "Failed to submit bug report"
             }
         }
@@ -340,12 +344,13 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                                 Text(stringResource(R.string.vibevoice_report_bug_submitting))
                             }
                         }
-                        if (bugReportStatus != null) {
+                        val status = bugReportStatus
+                        if (status != null) {
                             Spacer(modifier = Modifier.size(12.dp))
                             Text(
-                                bugReportStatus!!,
+                                status,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (bugReportStatus!!.contains("ID:")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                color = if (isBugReportSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                             )
                         }
                     }

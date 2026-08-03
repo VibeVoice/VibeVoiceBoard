@@ -8,12 +8,6 @@ plugins {
     kotlin("plugin.compose") version "2.3.20"
 }
 
-// Read version from centralized VERSION file
-val versionFilePath = rootProject.file("VERSION")
-val versionString = versionFilePath.readText().trim()
-val (vMajor, vMinor, vPatch) = versionString.split(".").map { it.toInt() }
-val computedVersionCode = vMajor * 100000 + vMinor * 1000 + vPatch
-
 android {
     compileSdk = 36
 
@@ -21,8 +15,8 @@ android {
         applicationId = "org.vibevoice.board"
         minSdk = 21
         targetSdk = 36
-        versionCode = computedVersionCode
-        versionName = versionString
+        versionCode = 4002
+        versionName = "4.0-alpha2"
         ndk {
             abiFilters.clear()
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
@@ -61,7 +55,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
         }
-        base.archivesBaseName = "VibeVoiceBoard_$versionString"
+        base.archivesBaseName = "VibeVoiceBoard_" + defaultConfig.versionName
         androidComponents.onVariants { variant: ApplicationVariant ->
             if (variant.buildType == "debug") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
@@ -73,7 +67,7 @@ android {
             }
             variant.outputs.forEach { output ->
                 if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
-                    output.outputFileName = "VibeVoiceBoard_$versionString-${variant.buildType}.apk"
+                    output.outputFileName = "VibeVoiceBoard_${defaultConfig.versionName}-${variant.buildType}.apk"
                 }
             }
         }

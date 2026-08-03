@@ -35,8 +35,9 @@ else
   exit 1
 fi
 
-# WebDAV upload target
-NC_WEBDAV_BASE="https://cloud.infraviored.com/remote.php/dav/files/florian/Documents/Geteilte%20Dokumente/VibeVoiceBoard"
+# Derive WebDAV base from authenticated user
+NC_USER="${NEXTCLOUD_USER:-${NEXTCLOUD_CREDENTIALS%%:*}}"
+NC_WEBDAV_BASE="https://cloud.infraviored.com/remote.php/dav/files/${NC_USER}/Documents/Geteilte%20Dokumente/VibeVoiceBoard"
 
 # 2. Compile Android APK
 echo "Compiling Android debug APK using JAVA_HOME=$JAVA_HOME..."

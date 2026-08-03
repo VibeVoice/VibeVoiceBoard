@@ -32,15 +32,19 @@ object VibeVoiceBugReporter {
             val debugLogFile = File(context.filesDir, "vibevoice_debug.log")
             if (debugLogFile.exists()) {
                 logsBuilder.append("=== VIBEVOICE DEBUG LOG ===\n")
-                val text = debugLogFile.readText()
-                if (text.length > MAX_LOG_BYTES) {
-                    logsBuilder.append(text.takeLast(MAX_LOG_BYTES))
+                val fileLength = debugLogFile.length()
+                if (fileLength > MAX_LOG_BYTES) {
+                    debugLogFile.inputStream().use { stream ->
+                        stream.skip(fileLength - MAX_LOG_BYTES)
+                        logsBuilder.append(stream.readBytes().decodeToString())
+                    }
                 } else {
-                    logsBuilder.append(text)
+                    logsBuilder.append(debugLogFile.readText())
                 }
                 logsBuilder.append("\n\n")
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             logsBuilder.append("Failed to read vibevoice_debug.log: ${e.message}\n\n")
         }
 
@@ -103,6 +107,7 @@ object VibeVoiceBugReporter {
                 }
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Result.failure(e)
         }
     }

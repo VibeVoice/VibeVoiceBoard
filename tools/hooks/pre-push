@@ -10,9 +10,20 @@ if [[ "${SKIP_APK_BUILD}" == "1" ]]; then
   exit 0
 fi
 
+BUILD_LOCK="$REPO_ROOT/tools/.build.lock"
+if ! mkdir "$BUILD_LOCK" 2>/dev/null; then
+  echo "[pre-push] Build already in progress (lock held). Skipping."
+  exit 0
+fi
+
+BUILD_LOG="$REPO_ROOT/tools/build-$(date +%Y%m%d-%H%M%S).log"
+
 echo "[pre-push] Launching background APK build + Nextcloud upload..."
-nohup bash "$REPO_ROOT/tools/build-and-deploy.sh" \
-  > "$REPO_ROOT/tools/last-build.log" 2>&1 &
+(
+  bash "$REPO_ROOT/tools/build-and-deploy.sh" > "$BUILD_LOG" 2>&1
+  ln -sf "$BUILD_LOG" "$REPO_ROOT/tools/last-build.log"
+  rmdir "$BUILD_LOCK" 2>/dev/null
+) &
 
 echo "[pre-push] Build running in background (PID $!). Tail: tools/last-build.log"
 exit 0

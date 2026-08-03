@@ -31,3 +31,5 @@ crash_reports/
 *.zip
 *.log
 tools/last-build.log
+tools/build-*.log
+tools/.build.lock
