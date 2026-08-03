@@ -49,14 +49,11 @@ import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
-import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.ToolbarMode
 import helium314.keyboard.latin.utils.addPinnedKey
 import helium314.keyboard.latin.utils.createToolbarKey
 import helium314.keyboard.latin.utils.dpToPx
-import helium314.keyboard.latin.utils.getCodeForToolbarKey
-import helium314.keyboard.latin.utils.getCodeForToolbarKeyLongClick
 import helium314.keyboard.latin.utils.getEnabledToolbarKeys
 import helium314.keyboard.latin.utils.getPinnedToolbarKeys
 import helium314.keyboard.latin.utils.prefs
@@ -67,6 +64,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.min
 import androidx.core.view.isGone
+import helium314.keyboard.latin.utils.onClickToolbarKey
+import helium314.keyboard.latin.utils.onLongClickToolbarKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -160,25 +159,21 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             setToolbarVisibility(true)
         }
 
-        // toolbar keys setup
-        if (mToolbarMode == ToolbarMode.TOOLBAR_KEYS || mToolbarMode == ToolbarMode.EXPANDABLE) {
-            for (key in getEnabledToolbarKeys(context.prefs())) {
-                val button = createToolbarKey(context, key)
-                button.layoutParams = toolbarKeyLayoutParams
-                setupKey(button, colors)
-                toolbar.addView(button)
-            }
+        // toolbar keys setup (no need to hide them any more when locked, because then suggestion strip is gone anyway
+        for (key in getEnabledToolbarKeys(context.prefs())) {
+            val button = createToolbarKey(context, key)
+            button.layoutParams = toolbarKeyLayoutParams
+            setupKey(button, colors)
+            toolbar.addView(button)
         }
-        if (!isGone && !Settings.getValues().mSuggestionStripHiddenPerUserSettings) {
-            for (pinnedKey in getPinnedToolbarKeys(context.prefs())) {
-                val button = createToolbarKey(context, pinnedKey)
-                button.layoutParams = toolbarKeyLayoutParams
-                setupKey(button, colors)
-                pinnedKeys.addView(button)
-                val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
-                if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
-                    pinnedKeyInToolbar.background = enabledToolKeyBackground
-            }
+        for (pinnedKey in getPinnedToolbarKeys(context.prefs())) {
+            val button = createToolbarKey(context, pinnedKey)
+            button.layoutParams = toolbarKeyLayoutParams
+            setupKey(button, colors)
+            pinnedKeys.addView(button)
+            val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
+            if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
+                pinnedKeyInToolbar.background = enabledToolKeyBackground
         }
         toolbarContainer.doOnNextLayout {
             // set min width of the toolbar so the weight of the toolbar keys actually does something
@@ -345,16 +340,12 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     }
 
     override fun onClick(view: View) {
-        AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
         val tag = view.tag
         if (tag is ToolbarKey) {
-            val code = getCodeForToolbarKey(tag)
-            if (code != KeyCode.UNSPECIFIED) {
-                Log.d(TAG, "click toolbar key $tag")
-                listener.onCodeInput(code, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, false)
-                return
-            }
+            onClickToolbarKey(view) { listener.onCodeInput(it, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, false) }
+            return
         }
+        AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
         if (view === toolbarExpandKey) {
             setToolbarVisibility(toolbarContainer.visibility != VISIBLE)
         }
@@ -370,11 +361,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     }
 
     override fun onLongClick(view: View): Boolean {
-        AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
         if (view.tag is ToolbarKey) {
             onLongClickToolbarKey(view)
             return true
         }
+        AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
         return if (view is TextView && wordViews.contains(view)) {
             onLongClickSuggestion(view)
         } else {
@@ -387,11 +378,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun onLongClickToolbarKey(view: View) {
         val tag = view.tag as? ToolbarKey ?: return
         if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys) {
-            val longClickCode = getCodeForToolbarKeyLongClick(tag)
-            if (longClickCode != KeyCode.UNSPECIFIED) {
-                listener.onCodeInput(longClickCode, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, false)
-            }
+            onLongClickToolbarKey(view) { code, isRepeat -> listener.onCodeInput(code, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, isRepeat) }
         } else if (view.parent === toolbar) {
+            AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
             val pinnedKeyView = pinnedKeys.findViewWithTag<View>(tag)
             if (pinnedKeyView == null) {
                 addKeyToPinnedKeys(tag)

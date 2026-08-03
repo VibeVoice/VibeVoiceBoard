@@ -165,11 +165,11 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     private PopupKeysPanel mPopupKeysPanel;
 
     // true if this pointer is in the dragging finger mode.
-    boolean mIsInDraggingFinger;
-    // true if this pointer is sliding from a modifier key and in the sliding key
-    // input mode,
+    private boolean mIsInDraggingFinger = false;
+    // true if this pointer is sliding from a modifier key and in the sliding key input mode,
     // so that further modifier keys should be ignored.
-    boolean mIsInSlidingKeyInput;
+    private boolean mIsInSlidingKeyInput = false;
+    private static boolean sIsShiftLongPressSuppressed = false;
     // if not a NOT_A_CODE, the key of this code is repeating
     private int mCurrentRepeatingKeyCode = Constants.NOT_A_CODE;
 
@@ -242,6 +242,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         sPointerTrackerQueue.cancelAllPointerTrackers();
     }
 
+    public static void suppressShiftLongPress() {
+        sIsShiftLongPressSuppressed = true;
+    }
+
     public static void setKeyboardActionListener(final KeyboardActionListener listener) {
         sListener = listener;
     }
@@ -305,7 +309,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         }
         if (key.isEnabled()) {
             final HapticEvent hapticEvent = repeatCount == 0 ? HapticEvent.KEY_PRESS : HapticEvent.KEY_REPEAT;
-            sListener.onPressKey(key.getCode(), repeatCount, getActivePointerTrackerCount() == 1, hapticEvent);
+            sListener.onPressKey(key.getCode(), repeatCount, getActivePointerTrackerCount(), hapticEvent);
             final boolean keyboardLayoutHasBeenChanged = mKeyboardLayoutHasBeenChanged;
             mKeyboardLayoutHasBeenChanged = false;
             sTimerProxy.startTypingStateTimer(key);
@@ -319,10 +323,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     // primaryCode is different from {@link Key#mKeyCode}.
     private void callListenerOnCodeInput(final Key key, final int primaryCode, final int x,
             final int y, final long eventTime, final boolean isKeyRepeat) {
+        int keyCode = key.getCode();
         final boolean ignoreModifierKey = mIsInDraggingFinger && key.isModifier()
-                && key.getCode() != KeyCode.NUMPAD; // we allow for the numpad to be toggled from sliding input
-        final boolean altersCode = key.altCodeWhileTyping() && sTimerProxy.isTypingState()
-                && !isClearlyInsideKey(key, x, y);
+                && keyCode != KeyCode.NUMPAD && keyCode != KeyCode.DPAD; // we allow these to be activated from sliding input
+        final boolean altersCode = key.altCodeWhileTyping() && sTimerProxy.isTypingState() && !isClearlyInsideKey(key, x, y);
         final int code = altersCode ? key.getAltCode() : primaryCode;
         if (DEBUG_LISTENER) {
             final String output = code == KeyCode.MULTIPLE_CODE_POINTS
@@ -764,14 +768,16 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         }
     }
 
-    private void startKeySelectionByDraggingFinger(final Key key) {
+    private void startKeySelectionByDraggingFinger(Key key) {
         if (!mIsInDraggingFinger) {
             // the meta lock keys stay enabled after sliding input, but should not
-            // (even without sliding input they actually behave the same... this is just
-            // about the graphics)
-            final int code = key.getCode();
-            mIsInSlidingKeyInput = key.isModifier() && code != KeyCode.CTRL_LOCK && code != KeyCode.ALT_LOCK
-                    && code != KeyCode.FN_LOCK && code != KeyCode.META_LOCK;
+            int code = key.getCode();
+            if (key.isModifier() && code != KeyCode.CTRL_LOCK && code != KeyCode.ALT_LOCK && code != KeyCode.FN_LOCK && code != KeyCode.META_LOCK) {
+                KeyboardElement element = mKeyboard.mId.getElement();
+                mIsInSlidingKeyInput = !(code == KeyCode.SHIFT && (element == KeyboardElement.ALPHABET_SHIFT_LOCKED || element == KeyboardElement.DPAD));
+            } else {
+                mIsInSlidingKeyInput = false;
+            }
         }
         mIsInDraggingFinger = true;
     }
@@ -961,7 +967,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
 
     private boolean oneShotSwipe(KeyboardActionListener.SwipeAction swipeSetting) {
         return switch (swipeSetting) {
-            case NONE, TOGGLE_NUMPAD, HIDE_KEYBOARD -> true;
+            case NONE, TOGGLE_NUMPAD, TOGGLE_DPAD, HIDE_KEYBOARD -> true;
             default -> false;
         };
     }
@@ -1200,14 +1206,13 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (key.hasNoPanelAutoPopupKey()) {
             cancelKeyTracking();
             final int popupKeyCode = key.getPopupKeys()[0].mCode;
-            sListener.onPressKey(popupKeyCode, 0, true, HapticEvent.NO_HAPTICS);
+            sListener.onPressKey(popupKeyCode, 0, 1, HapticEvent.NO_HAPTICS);
             sListener.onCodeInput(popupKeyCode, Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false);
             sListener.onReleaseKey(popupKeyCode, false);
             return;
         }
         if (code == Constants.CODE_SPACE) {
             cancelKeyTracking();
-            // sListener.onReleaseKey(code, false); // Removed to avoid inserting space on long press
             return;
         }
         if (code == KeyCode.LANGUAGE_SWITCH
@@ -1220,10 +1225,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
                 return;
             }
         }
-        if (code == KeyCode.SYMBOL_ALPHA && Settings.getValues().mLongPressSymbolsForNumpad) {
-            // toggle numpad with sliding input enabled, forcing return to the alpha layout
-            // when done
-            sListener.toggleNumpad(true, true);
+        if (code == KeyCode.SYMBOL_ALPHA) {
+            sListener.onLongPressAlphaSymbolForNumpad();
             return;
         }
         if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
@@ -1311,44 +1314,51 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         return false;
     }
 
-    private void startLongPressTimer(final Key key) {
-        // Note that we need to cancel all active long press shift key timers if any
-        // whenever we
-        // start a new long press timer for both non-shift and shift keys.
+    private void startLongPressTimer(Key key) {
+        // Note that we need to cancel all active long press shift and symbol key timers if
+        // any whenever we start a new long press timer for both non-shift and shift keys.
         sTimerProxy.cancelLongPressShiftKeyTimer();
-        if (sInGesture)
-            return;
-        if (key == null)
-            return;
-        if (!key.isLongPressEnabled())
-            return;
-        // Caveat: Please note that isLongPressEnabled() can be true even if the current
-        // key
-        // doesn't have its popup keys. (e.g. spacebar, globe key) If we are in the
-        // dragging finger
+        sTimerProxy.cancelLongPressAlphaSymbolKeyTimer();
+        if (sInGesture) return;
+        if (key == null) return;
+        if (!key.isLongPressEnabled()) return;
+        // Caveat: Please note that isLongPressEnabled() can be true even if the current key
+        // doesn't have its popup keys. (e.g. spacebar, globe key) If we are in the dragging finger
         // mode, we will disable long press timer of such key.
-        // We always need to start the long press timer if the key has its popup keys
-        // regardless of
+        // We always need to start the long press timer if the key has its popup keys regardless of
         // whether or not we are in the dragging finger mode.
-        if (mIsInDraggingFinger && key.getPopupKeys() == null)
+        int code = key.getCode();
+        if (mIsInDraggingFinger && (code == KeyCode.SHIFT || key.getPopupKeys() == null)) return;
+        if (code == KeyCode.SHIFT && sIsShiftLongPressSuppressed) {
+            sIsShiftLongPressSuppressed = false;
             return;
+        }
+        if (code == KeyCode.SYMBOL_ALPHA
+            && (!Settings.getValues().mLongPressSymbolsForNumpad
+                || mKeyboard.mId.getElement() != KeyboardElement.SYMBOLS
+            )
+        ) {
+            return;
+        }
 
-        final int delay = getLongPressTimeout(key.getCode());
-        if (delay <= 0)
-            return;
+        int delay = getLongPressTimeout(code);
+        if (delay <= 0) return;
         sTimerProxy.startLongPressTimerOf(this, delay);
     }
 
-    private int getLongPressTimeout(final int code) {
-        final int longpressTimeout = Settings.getValues().mKeyLongpressTimeout;
-        if (code == KeyCode.SHIFT || code == KeyCode.SYMBOL_ALPHA) {
-            // We use slightly longer timeout for shift-lock and the numpad long-press.
-            return longpressTimeout * 3 / 2;
-        } else if (mIsInSlidingKeyInput) {
-            // We use longer timeout for sliding finger input started from a modifier key.
-            return longpressTimeout * 3;
-        }
-        return longpressTimeout;
+    private int getLongPressTimeout(int code) {
+        int longpressTimeout = Settings.getValues().mKeyLongpressTimeout;
+        return switch (code) {
+            case Constants.CODE_SPACE, KeyCode.SHIFT, KeyCode.SYMBOL_ALPHA
+                // We use slightly longer timeout for space, shift-lock, and the numpad long-press.
+                -> longpressTimeout * 3 / 2
+            ;
+            default -> mIsInSlidingKeyInput
+                // We use longer timeout for sliding finger input started from a modifier key.
+                ? longpressTimeout * 3
+                : longpressTimeout
+            ;
+        };
     }
 
     private boolean isClearlyInsideKey(final Key key, final int x, final int y) {

@@ -21,6 +21,7 @@ import helium314.keyboard.keyboard.KeyboardTypeface
 import helium314.keyboard.compat.ClipboardManagerCompat
 import helium314.keyboard.event.Event
 import helium314.keyboard.event.HapticEvent
+import helium314.keyboard.keyboard.internal.KeyboardIconsSet
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.common.Constants
@@ -229,8 +230,9 @@ class ClipboardHistoryManager(
         // create the view
         val binding = ClipboardSuggestionBinding.inflate(LayoutInflater.from(latinIME), parent, false)
         val textView = binding.clipboardSuggestionText
-        val clipIcon = latinIME.mKeyboardSwitcher.keyboard.mIconsSet.getIconDrawable(ToolbarKey.PASTE.name.lowercase())
-        textView.setCompoundDrawablesRelativeWithIntrinsicBounds(clipIcon, null, null, null)
+        val clipIcon = KeyboardIconsSet.instance.getIconDrawable(ToolbarKey.PASTE.name.lowercase())
+        clipIcon?.setBounds(0, 0, textView.lineHeight, textView.lineHeight) // scale the icon to the text
+        textView.setCompoundDrawablesRelative(clipIcon, null, null, null)
         val inputType = editorInfo?.inputType ?: InputType.TYPE_NULL
         if (hasText) {
             if (TextUtils.isEmpty(content)) return null
@@ -262,12 +264,14 @@ class ClipboardHistoryManager(
         }
 
         val closeButton = binding.clipboardSuggestionClose
-        closeButton.setImageDrawable(latinIME.mKeyboardSwitcher.keyboard.mIconsSet.getIconDrawable(ToolbarKey.CLOSE_HISTORY.name.lowercase()))
+        closeButton.setImageDrawable(KeyboardIconsSet.instance.getIconDrawable(ToolbarKey.CLOSE_HISTORY.name.lowercase()))
+        closeButton.layoutParams.width = textView.lineHeight // scale the icon to the text
+        closeButton.layoutParams.height = textView.lineHeight
         closeButton.setOnClickListener { removeClipboardSuggestion() }
 
         val colors = latinIME.mSettings.current.mColors
         textView.setTextColor(colors.get(ColorType.KEY_TEXT))
-        clipIcon?.let { colors.setColor(it, ColorType.KEY_ICON) }
+        clipIcon?.let { colors.setColor(it, ColorType.CLIPBOARD_SUGGESTION_ICON) }
         colors.setColor(closeButton, ColorType.REMOVE_SUGGESTION_ICON)
         colors.setBackground(binding.root, ColorType.CLIPBOARD_SUGGESTION_BACKGROUND)
 
