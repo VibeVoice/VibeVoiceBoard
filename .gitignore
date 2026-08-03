@@ -23,3 +23,11 @@ tools/make-emoji-keys/build/
 # Local secrets
 .env
 .env.*
+tools/last-build.log
+
+# Local build SDK, crash logs, debug logs
+android-sdk/
+crash_reports/
+*.zip
+*.log
+tools/last-build.log

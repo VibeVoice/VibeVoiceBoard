@@ -62,7 +62,7 @@ bash tools/hooks/install-hooks.sh
 This installs:
 - `post-commit` — auto-bumps patch after every non-version commit
 - `post-merge` — auto-bumps minor (resets patch) on merges to primary branches
-- `post-push` — builds APK and uploads to Nextcloud after every push (set `SKIP_APK_BUILD=1` to suppress)
+- `pre-push` — builds APK and uploads to Nextcloud in the background on every push (set `SKIP_APK_BUILD=1` to suppress)
 
 ### Manual version override
 Edit `VERSION` directly if you need to set a specific version, then commit:
