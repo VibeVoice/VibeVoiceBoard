@@ -1,0 +1,38 @@
+#!/bin/bash
+# pre-commit: auto-bump patch version in VERSION file and stage it
+# Skips if VERSION is already staged in this commit or if merge is in progress.
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+VERSION_FILE="$REPO_ROOT/VERSION"
+
+# Guard 1: Skip if merge is in progress (post-merge hook handles minor release bumps)
+if [ -f "$REPO_ROOT/.git/MERGE_HEAD" ]; then
+  exit 0
+fi
+
+# Guard 2: Skip if VERSION file is already manually staged in this commit
+if git diff --cached --name-only | grep -q "^VERSION$"; then
+  exit 0
+fi
+
+# Guard 3: Skip if VERSION file doesn't exist
+if [ ! -f "$VERSION_FILE" ]; then
+  exit 0
+fi
+
+# Read current version
+VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "[pre-commit] ERROR: VERSION file does not contain a valid semver. Got: '$VERSION'"
+  exit 1
+fi
+IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+# Bump patch
+PATCH=$((PATCH + 1))
+NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+
+# Write and stage VERSION in current commit
+echo "$NEW_VERSION" > "$VERSION_FILE"
+git add "$VERSION_FILE"
+echo "[pre-commit] Auto-bumped VERSION to $NEW_VERSION"
