@@ -58,6 +58,11 @@ class VibeVoiceClient(
     @Volatile private var closureJob: Job? = null
 
     private val rollingBuffer = ByteArray(30 * 32000) // 30 seconds of audio at 16kHz 16-bit mono
+    // writeToRollingBuffer runs on the audio coroutine, readUnconfirmedAudio on the OkHttp callback
+    // thread during a reconnect. Without this lock the writer wraps around and overwrites the oldest
+    // bytes while the reader is still copying them, corrupting exactly the unconfirmed audio the
+    // reconnect exists to preserve. @Volatile on totalRead does not protect the array itself.
+    private val rollingBufferLock = Any()
     @Volatile private var audioConfirmedBytes = 0L
     @Volatile private var isReconnecting = false
     @Volatile private var retryCount = 0
@@ -67,16 +72,23 @@ class VibeVoiceClient(
     private var preOpenBufferSizeBytes = 0
     private val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
 
-    private fun writeToRollingBuffer(data: ByteArray, offset: Int, length: Int) {
+    /** Appends [length] bytes and advances [totalRead]; the two must happen atomically, because the
+     *  reader derives its start offset from totalRead. */
+    private fun writeToRollingBuffer(data: ByteArray, offset: Int, length: Int) = synchronized(rollingBufferLock) {
         val size = rollingBuffer.size
         for (i in 0 until length) {
             val idx = ((totalRead + i) % size).toInt()
             rollingBuffer[idx] = data[offset + i]
         }
+        totalRead += length
     }
 
-    private fun readFromRollingBuffer(length: Int): ByteArray {
+    /** Everything captured since [confirmedBytes], clamped to what the buffer still holds, or null if
+     *  there is nothing to resend. Length and contents are read under one lock so they agree. */
+    private fun readUnconfirmedAudio(confirmedBytes: Long): ByteArray? = synchronized(rollingBufferLock) {
         val size = rollingBuffer.size
+        val length = minOf(totalRead - confirmedBytes, totalRead, size.toLong()).toInt()
+        if (length <= 0) return@synchronized null
         val result = ByteArray(length)
         val startPos = totalRead - length
         for (i in 0 until length) {
@@ -84,7 +96,7 @@ class VibeVoiceClient(
             if (index < 0) index += size
             result[i] = rollingBuffer[index]
         }
-        return result
+        result
     }
 
     /**
@@ -160,12 +172,10 @@ class VibeVoiceClient(
                             preOpenBuffer.clear()
                             preOpenBufferSizeBytes = 0
                         }
-                        val unconfirmed = (totalRead - audioConfirmedBytes).toInt()
-                        val clampLength = minOf(unconfirmed, totalRead.toInt(), rollingBuffer.size)
-                        if (clampLength > 0) {
-                            VibeVoiceDebugLogger.log("Reconnected: flushing $clampLength bytes of unconfirmed audio")
-                            val flushData = readFromRollingBuffer(clampLength)
-                            webSocket.send(flushData.toByteString(0, clampLength))
+                        val flushData = readUnconfirmedAudio(audioConfirmedBytes)
+                        if (flushData != null) {
+                            VibeVoiceDebugLogger.log("Reconnected: flushing ${flushData.size} bytes of unconfirmed audio")
+                            webSocket.send(flushData.toByteString(0, flushData.size))
                         }
                         isReconnecting = false
                         retryCount = 0
@@ -481,8 +491,7 @@ class VibeVoiceClient(
                         }
                     }
 
-                    writeToRollingBuffer(buffer, 0, read)
-                    totalRead += read
+                    writeToRollingBuffer(buffer, 0, read) // also advances totalRead
                     
                     val bytesToSend = buffer.toByteString(0, read)
                     synchronized(preOpenBuffer) {

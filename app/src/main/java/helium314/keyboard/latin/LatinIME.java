@@ -1518,6 +1518,10 @@ public class LatinIME extends InputMethodService implements
 
     private boolean mIsRecordingVoice = false;
     private boolean mIsStoppingVoice = false;
+    /** Incremented per voice session. Callbacks from a previous client must not act on the current
+     *  one -- a null check on mVibeVoiceClient does not catch that, because by the time a stale
+     *  callback runs the field may already hold a newly started session. */
+    private int mVoiceSessionId = 0;
 
     private void updateVoiceInputState(boolean isRecording) {
         mIsRecordingVoice = isRecording;
@@ -1564,6 +1568,7 @@ public class LatinIME extends InputMethodService implements
 
             mVoiceComposingText = ""; // Clear state at start
             mIsStoppingVoice = false;
+            final int sessionId = ++mVoiceSessionId;
             VibeVoiceDebugLogger.log("Starting new session");
             android.widget.Toast.makeText(this, R.string.vibevoice_listening, android.widget.Toast.LENGTH_SHORT).show();
             updateVoiceInputState(true);
@@ -1572,7 +1577,7 @@ public class LatinIME extends InputMethodService implements
                 @Override
                 public void onCommitComposing() {
                     mUiHandler.post(() -> {
-                        if (mVibeVoiceClient == null)
+                        if (mVibeVoiceClient == null || sessionId != mVoiceSessionId)
                             return;
                         if (!mVoiceComposingText.isEmpty()) {
                             mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
@@ -1584,7 +1589,7 @@ public class LatinIME extends InputMethodService implements
                 @Override
                 public void onPartial(@NonNull String text, boolean isNewSegment) {
                     mUiHandler.post(() -> {
-                        if (mVibeVoiceClient == null)
+                        if (mVibeVoiceClient == null || sessionId != mVoiceSessionId)
                             return;
                         if (isNewSegment) {
                             if (!mVoiceComposingText.isEmpty()) {
@@ -1604,12 +1609,23 @@ public class LatinIME extends InputMethodService implements
                         VibeVoiceDebugLogger.log("onFinal received, length=" + text.length());
                     }
                     mUiHandler.post(() -> {
-                        if (mVibeVoiceClient == null)
+                        if (mVibeVoiceClient == null || sessionId != mVoiceSessionId)
                             return;
                         if (isNewSegment && !text.trim().isEmpty()) {
                              if (!mVoiceComposingText.isEmpty()) {
                                 mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
                             }
+                        }
+                        if (!mIsStoppingVoice) {
+                            // Per the protocol the server may finalize a segment while the stream is
+                            // still open -- VibeVoiceClient only closes the socket on a final when it
+                            // has stopped streaming. Ending the session here would drop everything the
+                            // user says afterwards, so commit the segment and keep recording.
+                            if (!text.trim().isEmpty()) {
+                                mInputLogic.mConnection.commitText(text + " ", 1);
+                                mVoiceComposingText = "";
+                            }
+                            return;
                         }
                         finishVoiceSession(text, mIsStoppingVoice);
                     });
@@ -1618,7 +1634,7 @@ public class LatinIME extends InputMethodService implements
                 @Override
                 public void onError(@NonNull String error) {
                     mUiHandler.post(() -> {
-                        if (mVibeVoiceClient == null) return;
+                        if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
                         android.widget.Toast
                                 .makeText(LatinIME.this, getString(R.string.vibevoice_error, error), android.widget.Toast.LENGTH_SHORT)
                                 .show();
@@ -1629,7 +1645,7 @@ public class LatinIME extends InputMethodService implements
                 @Override
                 public void onWarning(@NonNull String code) {
                     mUiHandler.post(() -> {
-                        if (mVibeVoiceClient == null) return;
+                        if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
                         final int messageRes = VibeVoiceClient.WARN_MIC_BUSY.equals(code)
                                 ? R.string.vibevoice_mic_busy
                                 : R.string.vibevoice_mic_unavailable;
@@ -1646,7 +1662,7 @@ public class LatinIME extends InputMethodService implements
                 @Override
                 public void onClosed() {
                     mUiHandler.post(() -> {
-                        if (mVibeVoiceClient != null) {
+                        if (mVibeVoiceClient != null && sessionId == mVoiceSessionId) {
                             finishVoiceSession(mVoiceComposingText, mIsStoppingVoice);
                         }
                     });
