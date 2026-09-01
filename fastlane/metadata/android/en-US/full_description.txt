@@ -1,9 +1,13 @@
 VibeVoiceBoard is a customizable Android keyboard with built-in voice typing, based on the open-source HeliBoard / AOSP keyboard.
 
-Speak instead of typing: hold the space bar or tap the microphone key, and your speech is transcribed into any text field, in any app. Transcription runs on the VibeVoice service and requires a VibeVoice account, which you link once from the app's settings.
+Speak instead of typing: hold the space bar or tap the microphone key, and your speech is transcribed into any text field, in any app.
+
+<b>Voice typing requires a VibeVoice account.</b> Transcription runs on the VibeVoice service, not on your device. The free tier includes 30 minutes of transcription per month; paid tiers offer more. You create the account in your browser and link it once from the app's settings. Everything else in the keyboard works without an account.
 
 <b>What is sent off the device</b>
-Voice typing needs the microphone and internet permissions. Audio is streamed to vibevoice.net only while a transcription session is active, that is, while you hold the space bar or after you tap the microphone key, and the keyboard shows that it is recording. Nothing is transmitted at any other time, and everything else the keyboard does works without a network connection. See the privacy policy for what is processed and retained.
+Voice typing needs the microphone and internet permissions. Audio is streamed to vibevoice.net only while a transcription session is active, that is, while you hold the space bar or after you tap the microphone key, and the keyboard shows that it is recording. Nothing is transmitted at any other time, and everything else the keyboard does works without a network connection.
+
+If you submit a bug report from the settings, the diagnostic log is uploaded with it. That log can contain text you previously dictated. See the privacy policy for what is processed and retained.
 
 Features:
 <ul>
