@@ -530,7 +530,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             startTiltingAnimation(button)
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
-            button.background = defaultToolbarBackground.constantState?.newDrawable(resources)
+            // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"
+            // highlight. Restoring the plain background unconditionally used to strip that highlight
+            // from VOICE alone, both at startup and again after every recording.
+            val isPinnedInToolbar = button.parent === toolbar
+                    && Settings.getValues().mQuickPinToolbarKeys
+                    && pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE) != null
+            button.background = if (isPinnedInToolbar) enabledToolKeyBackground
+                else defaultToolbarBackground.constantState?.newDrawable(resources)
             Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
             button.scaleType = ImageView.ScaleType.CENTER
             stopTiltingAnimation(button)

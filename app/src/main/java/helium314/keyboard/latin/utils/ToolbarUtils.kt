@@ -155,9 +155,18 @@ fun upgradeToolbarPrefs(prefs: SharedPreferences) {
     upgradeToolbarPref(prefs, Settings.PREF_CLIPBOARD_TOOLBAR_KEYS, defaultClipboardToolbarPref)
     // One-time fix: VOICE was previously added as disabled=false due to a bug in upgradeToolbarPref.
     // Enable it in both toolbar and pinned toolbar if it exists but is currently disabled.
-    enableKeyIfDisabled(prefs, Settings.PREF_TOOLBAR_KEYS, VOICE)
-    enableKeyIfDisabled(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, VOICE)
+    // This must run exactly once. upgradeToolbarPrefs is called on every version bump -- and this fork
+    // bumps VERSION on every commit -- plus on every debug start, so without the marker below a user
+    // who deliberately turns the VOICE key off gets it silently switched back on at the next update.
+    if (!prefs.getBoolean(PREF_VOICE_KEY_ENABLE_FIX_APPLIED, false)) {
+        enableKeyIfDisabled(prefs, Settings.PREF_TOOLBAR_KEYS, VOICE)
+        enableKeyIfDisabled(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, VOICE)
+        prefs.edit { putBoolean(PREF_VOICE_KEY_ENABLE_FIX_APPLIED, true) }
+    }
 }
+
+/** Internal marker, not a user setting: remembers that the one-time VOICE key fix above has run. */
+private const val PREF_VOICE_KEY_ENABLE_FIX_APPLIED = "vibevoice_voice_toolbar_key_fix_applied"
 
 private fun enableKeyIfDisabled(prefs: SharedPreferences, pref: String, key: ToolbarKey) {
     val string = prefs.getString(pref, null) ?: return
