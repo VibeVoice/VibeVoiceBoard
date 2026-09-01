@@ -130,6 +130,9 @@ android {
     namespace = "helium314.keyboard.latin"
     lint {
         abortOnError = true
+        // Locale resources are managed by Weblate upstream and must not be hand-edited here, so an
+        // incomplete translation set is the normal state of this tree rather than a build error.
+        disable += "MissingTranslation"
     }
 }
 
