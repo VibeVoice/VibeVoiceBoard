@@ -1,1 +1,0 @@
-../../VibeVoice/codebase_docs/API/API_SPEC.md
