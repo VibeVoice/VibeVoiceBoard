@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -32,6 +33,12 @@ interface VibeVoiceListener {
     fun onPartial(text: String, isNewSegment: Boolean)
     fun onFinal(text: String, isNewSegment: Boolean)
     fun onError(error: String)
+    /**
+     * The capture side failed but the session is being wound down gracefully, so the audio that
+     * was already sent still gets transcribed. [code] is one of the `WARN_` constants.
+     * Unlike [onError] this must not tear the session down — wait for the final result.
+     */
+    fun onWarning(code: String)
     fun onClosed()
     fun onCommitComposing()
 }
@@ -55,6 +62,7 @@ class VibeVoiceClient(
     @Volatile private var isReconnecting = false
     @Volatile private var retryCount = 0
     @Volatile private var isWsOpen = false
+    @Volatile private var pendingEndStream = false
     private val preOpenBuffer = ArrayDeque<okio.ByteString>()
     private var preOpenBufferSizeBytes = 0
     private val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
@@ -77,6 +85,22 @@ class VibeVoiceClient(
             result[i] = rollingBuffer[index]
         }
         return result
+    }
+
+    /**
+     * True when the system is deliberately feeding us silence because another app won the
+     * concurrent-capture arbitration. Re-initializing the recorder cannot beat that — the policy
+     * is re-applied to the new client — so this distinguishes "give up cleanly" from "the
+     * recorder itself wedged and a restart may help".
+     */
+    private fun isSilencedByPolicy(record: AudioRecord): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return try {
+            record.activeRecordingConfiguration?.isClientSilenced == true
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not read active recording configuration", e)
+            false
+        }
     }
 
     private fun connectWebSocket() {
@@ -127,6 +151,15 @@ class VibeVoiceClient(
                     isWsOpen = true
                     
                     if (isReconnecting) {
+                        // Audio recorded while the socket was down went into BOTH the rolling
+                        // buffer and preOpenBuffer. The unconfirmed-bytes flush below already
+                        // covers it, so dropping the queue here avoids sending it twice —
+                        // duplicated audio makes the server repeat words in the transcript.
+                        if (preOpenBuffer.isNotEmpty()) {
+                            VibeVoiceDebugLogger.log("Reconnect: dropping ${preOpenBuffer.size} queued frames already covered by the rolling buffer")
+                            preOpenBuffer.clear()
+                            preOpenBufferSizeBytes = 0
+                        }
                         val unconfirmed = (totalRead - audioConfirmedBytes).toInt()
                         val clampLength = minOf(unconfirmed, totalRead.toInt(), rollingBuffer.size)
                         if (clampLength > 0) {
@@ -143,6 +176,14 @@ class VibeVoiceClient(
                     }
                     preOpenBuffer.clear()
                     preOpenBufferSizeBytes = 0
+
+                    // stopStreaming() ran before the handshake completed, so it could not send
+                    // END_STREAM without it overtaking the auth frame above.
+                    if (pendingEndStream) {
+                        pendingEndStream = false
+                        VibeVoiceDebugLogger.log("Sending deferred END_STREAM after auth")
+                        webSocket.send("END_STREAM")
+                    }
                 }
             }
 
@@ -253,6 +294,7 @@ class VibeVoiceClient(
         retryCount = 0
         audioConfirmedBytes = 0L
         isWsOpen = false
+        pendingEndStream = false
 
         synchronized(preOpenBuffer) {
             preOpenBuffer.clear()
@@ -280,13 +322,35 @@ class VibeVoiceClient(
                 Log.e(TAG, "Error releasing old AudioRecord", e)
             }
             try {
-                val record = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                    sampleRate,
-                    channelConfig,
-                    audioFormat,
-                    bufferSize
-                )
+                val record = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    // VOICE_RECOGNITION is not privacy-sensitive by default, and Android's
+                    // concurrent-capture policy always hands the audio to the privacy-sensitive
+                    // client — so any app recording from VOICE_COMMUNICATION (which is
+                    // privacy-sensitive by default, e.g. a messenger's own voice input) wins and
+                    // we are silently fed zeroed buffers. Marking our capture privacy-sensitive
+                    // too moves the tie-break to "most recently started wins", which we win
+                    // because the user just triggered us.
+                    AudioRecord.Builder()
+                        .setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+                        .setAudioFormat(
+                            AudioFormat.Builder()
+                                .setEncoding(audioFormat)
+                                .setSampleRate(sampleRate)
+                                .setChannelMask(channelConfig)
+                                .build()
+                        )
+                        .setBufferSizeInBytes(bufferSize)
+                        .setPrivacySensitive(true)
+                        .build()
+                } else {
+                    AudioRecord(
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                        sampleRate,
+                        channelConfig,
+                        audioFormat,
+                        bufferSize
+                    )
+                }
                 audioRecord = record
 
                 if (record.state != AudioRecord.STATE_INITIALIZED) {
@@ -379,27 +443,39 @@ class VibeVoiceClient(
                     }
 
                     if (totalReadsInSession > 5 && isSilencedTooLong) {
-                        val reason = "2s of consecutive zeros"
-                        VibeVoiceDebugLogger.log("Dead microphone detected ($reason). Attempting recovery...")
+                        if (isSilencedByPolicy(currentRecord)) {
+                            // Another app holds the mic. Restarting is pointless, and killing the
+                            // session outright throws away everything the server transcribed
+                            // before the mic went quiet — so wind down through the normal stop
+                            // path and let the final result be committed.
+                            VibeVoiceDebugLogger.log(
+                                "Microphone silenced by system capture policy (another app is recording). Ending session gracefully."
+                            )
+                            listener.onWarning(WARN_MIC_BUSY)
+                            stopStreaming()
+                            break
+                        }
+
+                        VibeVoiceDebugLogger.log("Dead microphone detected (2s of consecutive zeros). Attempting recovery...")
 
                         if (recoveryAttempts < maxRecoveryAttempts) {
                             recoveryAttempts++
                             VibeVoiceDebugLogger.log("Re-initializing AudioRecord (attempt $recoveryAttempts/$maxRecoveryAttempts)")
-                            
+
                             try {
                                 currentRecord.stop()
                             } catch (_: Exception) {}
-                            
+
                             delay(300)
-                            
+
                             if (initAudioRecord()) {
                                 consecutiveZeroBytes = 0L
                                 totalReadsInSession = 0
                                 continue
                             }
                         } else {
-                            VibeVoiceDebugLogger.log("Max recovery attempts reached. Stopping session.")
-                            listener.onError("Microphone unavailable")
+                            VibeVoiceDebugLogger.log("Max recovery attempts reached. Ending session gracefully.")
+                            listener.onWarning(WARN_MIC_UNAVAILABLE)
                             stopStreaming()
                             break
                         }
@@ -444,8 +520,10 @@ class VibeVoiceClient(
                             continue
                         }
                     } else {
-                        VibeVoiceDebugLogger.log("AudioRecord read error: $read — stopping session")
-                        listener.onError("Microphone read error: $read")
+                        // Same reasoning as above: the audio already streamed is still worth a
+                        // transcript, so stop gracefully instead of discarding the session.
+                        VibeVoiceDebugLogger.log("AudioRecord read error: $read — ending session gracefully")
+                        listener.onWarning(WARN_MIC_UNAVAILABLE)
                         stopStreaming()
                         break
                     }
@@ -463,7 +541,17 @@ class VibeVoiceClient(
         cleanupAudioCapture()
 
         val ws = webSocket
-        ws?.send("END_STREAM")
+        // Sending END_STREAM before the handshake finishes queues it ahead of the auth frame that
+        // onOpen sends, and the server answers "invalid_auth_format" and drops the session. This
+        // happens whenever a session is stopped within the first few hundred milliseconds.
+        synchronized(preOpenBuffer) {
+            if (isWsOpen) {
+                ws?.send("END_STREAM")
+            } else {
+                VibeVoiceDebugLogger.log("Socket not open yet — deferring END_STREAM until after auth")
+                pendingEndStream = true
+            }
+        }
         closureJob = scope.launch {
             VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
             delay(3000)
@@ -501,6 +589,11 @@ class VibeVoiceClient(
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
         private const val TAG = "VibeVoiceClient"
         private const val MAX_RETRIES = 3
+
+        /** Another app won the concurrent-capture arbitration and the system is feeding us silence. */
+        const val WARN_MIC_BUSY = "mic_busy"
+        /** The recorder stopped delivering usable audio and restarting it did not help. */
+        const val WARN_MIC_UNAVAILABLE = "mic_unavailable"
 
         @JvmField val sharedHttpClient = OkHttpClient.Builder()
             .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)

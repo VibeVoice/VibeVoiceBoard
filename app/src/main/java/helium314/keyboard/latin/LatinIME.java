@@ -1627,6 +1627,23 @@ public class LatinIME extends InputMethodService implements
                 }
 
                 @Override
+                public void onWarning(@NonNull String code) {
+                    mUiHandler.post(() -> {
+                        if (mVibeVoiceClient == null) return;
+                        final int messageRes = VibeVoiceClient.WARN_MIC_BUSY.equals(code)
+                                ? R.string.vibevoice_mic_busy
+                                : R.string.vibevoice_mic_unavailable;
+                        android.widget.Toast
+                                .makeText(LatinIME.this, messageRes, android.widget.Toast.LENGTH_LONG)
+                                .show();
+                        // The client is winding the session down through the normal stop path, so
+                        // the pending final result still arrives. Do NOT finish the session here —
+                        // doing so is what used to drop the already-transcribed text on the floor.
+                        mIsStoppingVoice = true;
+                    });
+                }
+
+                @Override
                 public void onClosed() {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient != null) {

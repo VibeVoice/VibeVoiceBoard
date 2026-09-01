@@ -70,6 +70,10 @@
     <string name="vibevoice_not_linked">Please link VibeVoice in Settings</string>
     <string name="vibevoice_listening">Listening…</string>
     <string name="vibevoice_error">Voice error: %s</string>
+    <!-- Shown when another app won Android's concurrent-capture arbitration and the keyboard is fed silence -->
+    <string name="vibevoice_mic_busy">Microphone is in use by another app. Transcription stopped.</string>
+    <!-- Shown when the microphone stopped delivering audio and restarting it did not help -->
+    <string name="vibevoice_mic_unavailable">Microphone stopped working. Transcription stopped.</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
     <string name="vibevoice_hold_to_transcribe">Hold to Transcribe</string>
