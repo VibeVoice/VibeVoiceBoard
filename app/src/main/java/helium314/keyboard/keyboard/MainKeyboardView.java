@@ -732,17 +732,13 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         super.onDrawKeyTopVisuals(key, canvas, paint, params);
         final int code = key.getCode();
         if (code == Constants.CODE_SPACE) {
-            final LatinIME latinIME = KeyboardSwitcher.getInstance().getLatinIME();
-            if ((latinIME != null && latinIME.isRecordingVoice())
-                    || mLanguageOnSpacebarFormatType != LanguageOnSpacebarUtils.FORMAT_TYPE_NONE) {
-                drawLanguageOnSpacebar(key, canvas, paint);
-            }
-            // Whether space key needs to show the "..." popup hint for special purposes
-            if (key.isLongPressEnabled() && mHasMultipleEnabledIMEsOrSubtypes && Settings.getValues().mSpaceForLangChange) {
-                drawKeyPopupHint(key, canvas, paint, params);
-            }
-        } else if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
-                || code == KeyCode.ALPHA) {
+            // The spacebar text is the voice input hint, not the language indicator it replaced, so it
+            // must not be gated on the subtype format type: that is FORMAT_TYPE_NONE for the common
+            // single-language setup, which used to hide the hint from most users entirely.
+            drawLanguageOnSpacebar(key, canvas, paint);
+            // No "..." popup hint here: long-pressing space starts voice input and never opens a
+            // popup panel or the IME switcher, see PointerTracker#onLongPressed.
+        } else if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.ALPHA) {
             drawImeSwitcherIconOnKey(key, canvas);
         }
     }

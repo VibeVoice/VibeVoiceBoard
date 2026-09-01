@@ -1215,9 +1215,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             cancelKeyTracking();
             return;
         }
-        if (code == KeyCode.LANGUAGE_SWITCH
-                || (code == Constants.CODE_SPACE && key.getPopupKeys() == null && Settings.getValues().mSpaceForLangChange)
-        ) {
+        // CODE_SPACE returned above (long-press on space starts voice input), so it cannot reach here.
+        if (code == KeyCode.LANGUAGE_SWITCH) {
             // Long pressing the space key invokes IME switcher dialog.
             if (sListener.onCustomRequest(KeyboardActionListener.CustomAction.SHOW_INPUT_METHOD_PICKER)) {
                 cancelKeyTracking();
@@ -1229,8 +1228,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             sListener.onLongPressAlphaSymbolForNumpad();
             return;
         }
-        if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.SYMBOL_ALPHA
-                || code == KeyCode.ALPHA) {
+        // LANGUAGE_SWITCH and SYMBOL_ALPHA both returned above and would be unreachable here.
+        if (code == KeyCode.SYMBOL || code == KeyCode.ALPHA) {
             // Long pressing these keys invokes IME switcher dialog.
             if (sListener.onCustomRequest(KeyboardActionListener.CustomAction.SHOW_INPUT_METHOD_PICKER)) {
                 cancelKeyTracking();
