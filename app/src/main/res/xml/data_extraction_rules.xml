@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+SPDX-License-Identifier: GPL-3.0-only
+See backup_rules.xml: the stored API key cannot survive a transfer and should not be copied off the
+device, so it is excluded from both cloud backup and device-to-device transfer.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="vibevoice_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="vibevoice_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="vibevoice_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="vibevoice_prefs.xml" />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,5 +1,6 @@
 import com.android.build.api.variant.ApplicationVariant
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -17,6 +18,16 @@ val vMinor = versionParts.getOrElse(1) { 1 }
 val vPatch = versionParts.getOrElse(2) { 1 }
 val computedVersionCode = vMajor * 100000 + vMinor * 1000 + vPatch
 
+// Release signing material. Never committed: put it in keystore.properties (gitignored) or pass it
+// through the environment on CI. When it is absent the release variants stay unsigned, exactly as
+// they were before, so debug workflows are unaffected.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun signingValue(property: String, environment: String): String? =
+    keystoreProperties.getProperty(property) ?: System.getenv(environment)
+
 android {
     compileSdk = 36
 
@@ -33,18 +44,35 @@ android {
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
 
+    signingConfigs {
+        val storePath = signingValue("storeFile", "VVB_KEYSTORE_FILE")
+        if (storePath != null) {
+            create("release") {
+                storeFile = file(storePath)
+                storePassword = signingValue("storePassword", "VVB_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "VVB_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "VVB_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = false
             isDebuggable = false
             isJniDebuggable = false
+            signingConfig = signingConfigs.findByName("release")
         }
         create("nouserlib") { // same as release, but does not allow the user to provide a library
             isMinifyEnabled = true
             isShrinkResources = false
             isDebuggable = false
             isJniDebuggable = false
+            // This is the variant to ship on Google Play: JniUtils skips the user-supplied
+            // libjni_latinime.so here, and loading executable code from outside the APK is not
+            // allowed under the Play "Device and Network Abuse" policy.
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             // "normal" debug has minify for smaller APK to fit the GitHub 25 MB limit when zipped

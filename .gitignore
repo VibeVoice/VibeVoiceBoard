@@ -33,3 +33,8 @@ crash_reports/
 tools/last-build.log
 tools/build-*.log
 tools/.build.lock
+
+# Release signing material - never commit
+keystore.properties
+*.jks
+*.keystore
