@@ -832,6 +832,10 @@ New dictionary:
     <string name="get_layouts_message">"You can find and share layouts in the %s."</string>
     <!-- Text to be used in get_colors_message and get_layouts_message -->
     <string name="discussion_section_link">"discussion section"</string>
+    <!-- Message displayed when clicking add button for layouts -->
+    <string name="message_add_custom_layout_plain">Select a file in a compatible format.</string>
+    <!-- Message displayed when clicking "load" button in color theme picker -->
+    <string name="message_load_colors">Select a file containing a color theme.</string>
     <!-- Settings screen title for about -->
     <string name="settings_screen_about">About</string>
     <!-- version for about screen -->
