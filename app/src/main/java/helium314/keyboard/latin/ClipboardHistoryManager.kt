@@ -198,6 +198,12 @@ class ClipboardHistoryManager(
 
     fun addTextToHistory(text: String) {
         if (text.isEmpty()) return
+        // This writes straight to the database, so it has to apply the same gates fetchPrimaryClip
+        // relies on: the user's history setting, and never persisting what was typed into a password
+        // or otherwise sensitive field.
+        if (!latinIME.mSettings.current.mClipboardHistoryEnabled) return
+        val inputType = latinIME.currentInputEditorInfo?.inputType ?: InputType.TYPE_NULL
+        if (InputTypeUtils.isPasswordInputType(inputType)) return
         scope.launch(Dispatchers.IO) {
             clipboardDao?.addClip(System.currentTimeMillis(), false, text)
         }
