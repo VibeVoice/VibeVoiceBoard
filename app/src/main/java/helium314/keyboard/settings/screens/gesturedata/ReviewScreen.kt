@@ -109,7 +109,8 @@ fun ReviewScreen(
     var endDate: Long? by rememberSaveable { mutableStateOf(null) }
     fun setAndSortWords(infos: List<GestureDataInfo>) {
         gestureDataInfos = if (sortByName) {
-            if (reverseSort) infos.sortedWith(compareBy<GestureDataInfo, String>(String.CASE_INSENSITIVE_ORDER) { it.targetWord }.reversed())
+            // compareByDescending instead of compareBy(...).reversed(): Comparator.reversed() is API 24+
+            if (reverseSort) infos.sortedWith(compareByDescending<GestureDataInfo, String>(String.CASE_INSENSITIVE_ORDER) { it.targetWord })
             else infos.sortedWith(compareBy<GestureDataInfo, String>(String.CASE_INSENSITIVE_ORDER) { it.targetWord })
         } else {
             if (reverseSort) infos.sortedByDescending { it.timestamp }
