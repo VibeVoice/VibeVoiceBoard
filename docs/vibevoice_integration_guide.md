@@ -178,10 +178,10 @@ To prevent audio loss and transcription gaps during momentary network drops, the
        +---------------------------------------------+
        |           WebSocket Connection              |
        +----------------------+----------------------+
-                              | Receives "dur" (seconds)
+                              | On drop: remember totalRead
                               v
        +---------------------------------------------+
-       |    Update audioConfirmedBytes = dur * 32k   |
+       |   Resend everything recorded after that     |
        +---------------------------------------------+
 ```
 
@@ -195,12 +195,21 @@ When a user starts a voice session, establishing a WebSocket connection can take
 ### Mid-Session Reconnections
 If the connection is interrupted mid-stream:
 1. **Maintain a Rolling Buffer**: The client holds the last 30 seconds of recorded audio (960,000 bytes at 16kHz, 16-bit mono) in a cyclic/rolling memory buffer.
-2. **Track Confirmed Audio**: The server sends the cumulative processed duration in seconds using the `dur` field in transcription messages. The client calculates confirmed bytes:
-   $$\text{audioConfirmedBytes} = \text{duration} \times 32000$$
+2. **Mark the drop point**: When the socket goes down, record the current `totalRead`. Audio handed
+   to the socket before that point reached the server; audio recorded after it did not.
+
+   > Earlier revisions of this guide described a `dur` field carrying the cumulative processed
+   > duration, from which the client was to derive `audioConfirmedBytes`. **The server has never sent
+   > that field.** `duration_s` exists in `streaming_ws.py` but is only used for quota accounting and
+   > logging, and never reaches the wire. A client that relied on it kept `audioConfirmedBytes` at 0
+   > and resent its entire rolling buffer on every reconnect — 15 s and 26 s of already-transcribed
+   > audio in the two reconnect flushes we have on record, which the server then transcribes a second
+   > time and the client applies as new text. If the server ever does acknowledge processed seconds,
+   > that is the better signal and this step should use it.
 3. **Resend on Reconnect**: If the WebSocket drops, the client triggers a reconnect attempt (up to 3 retries, with exponential backoff, e.g., 500ms, 1000ms, 2000ms).
-4. **Flush Remaining Audio**: Upon successful reconnection, the client calculates the number of unconfirmed bytes:
-   $$\text{unconfirmedBytes} = \text{totalRecordedBytes} - \text{audioConfirmedBytes}$$
-   The client reads these unconfirmed bytes from the rolling buffer and flushes them to the new WebSocket connection before continuing with new microphone data. This prevents words from being omitted during transient network handovers.
+4. **Flush the gap**: On reconnect, read everything recorded after the drop point out of the rolling
+   buffer and send it before resuming live audio. A reconnect is a **new server-side session**: its
+   frame numbering restarts at 1, so a client tracking frame indices must reset them here.
 
 ---
 
@@ -208,25 +217,39 @@ If the connection is interrupted mid-stream:
 
 The server communicates using JSON text frames.
 
-### Partial Transcription Result
-The server sends partial transcription results as the user speaks. These results are volatile and may change as context is updated.
+### Content Frame
+Each frame carries **one piece** of the transcript. Pieces do not overlap and are never repeated, so
+a client concatenates them — it does not compare them, and it must not treat a frame as a replacement
+for what came before.
+
 ```json
 {
-  "text": "this is a partial transcription",
-  "is_final": false,
-  "dur": 4.12
+  "text": "this is one piece of the transcript",
+  "idx": 3
 }
 ```
 
-### Final Transcription Result
-The server sends a final result when a segment/sentence has been finalized.
+`idx` counts content frames from 1, densely. It exists so a client can keep a set of what it has
+already applied instead of guessing from position and length; applying a piece twice is what pastes
+the user's words in twice. It was added on 2026-09-02 and is purely additive — servers older than
+that omit it, and a client that does not know the field ignores it.
+
+Note there is no `dur`, and `is_final` is absent on content frames rather than present and false.
+
+### End-of-Stream Marker
+Sent once, after the last content frame, so a client can conclude without racing its backstop timer.
+
 ```json
 {
-  "text": "This is a final transcription.",
+  "text": "",
   "is_final": true,
-  "dur": 5.50
+  "idx": 4
 }
 ```
+
+**Its text is empty by design** — it is a marker, not a piece, and there is nothing in it to apply.
+Its `idx` is how many content frames were sent, which is the only way to tell a genuinely short
+transcript apart from one where a frame went missing.
 
 ### Error Message
 If an error occurs on the server (e.g. rate limit exceeded, invalid key), it sends an error payload:

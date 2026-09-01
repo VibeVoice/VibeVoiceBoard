@@ -63,7 +63,21 @@ class VibeVoiceClient(
     // bytes while the reader is still copying them, corrupting exactly the unconfirmed audio the
     // reconnect exists to preserve. @Volatile on totalRead does not protect the array itself.
     private val rollingBufferLock = Any()
-    @Volatile private var audioConfirmedBytes = 0L
+    // How much audio had been handed to the socket when it dropped. Everything after this point
+    // never reached the server and is what a reconnect has to resend.
+    //
+    // This used to resend everything since `audioConfirmedBytes`, which was derived from a `dur`
+    // field in the result frames -- except the server has never sent that field, on any branch, so
+    // the value stayed at 0 and every reconnect resent the whole 30-second buffer. The two flushes
+    // in the bug report logs are 15.4 s and 26 s of already-transcribed audio, which the server
+    // then transcribes a second time. If the server ever starts acknowledging processed seconds,
+    // that is the better signal and belongs here.
+    @Volatile private var disconnectedAtBytes = 0L
+    // Index of the last content frame applied, and how many have been applied on this connection.
+    // Both reset on reconnect: a reconnect is a new server-side session and its frame numbering
+    // starts at 1 again, so carrying them over would make us discard every frame of the new one.
+    @Volatile private var lastAppliedIdx = 0
+    @Volatile private var framesAppliedThisConnection = 0
     @Volatile private var isReconnecting = false
     @Volatile private var retryCount = 0
     @Volatile private var isWsOpen = false
@@ -126,6 +140,7 @@ class VibeVoiceClient(
         if (!isStreaming) return
         isReconnecting = true
         synchronized(preOpenBuffer) {
+            if (isWsOpen) disconnectedAtBytes = totalRead
             isWsOpen = false
         }
         
@@ -172,7 +187,9 @@ class VibeVoiceClient(
                             preOpenBuffer.clear()
                             preOpenBufferSizeBytes = 0
                         }
-                        val flushData = readUnconfirmedAudio(audioConfirmedBytes)
+                        lastAppliedIdx = 0
+                        framesAppliedThisConnection = 0
+                        val flushData = readUnconfirmedAudio(disconnectedAtBytes)
                         if (flushData != null) {
                             VibeVoiceDebugLogger.log("Reconnected: flushing ${flushData.size} bytes of unconfirmed audio")
                             webSocket.send(flushData.toByteString(0, flushData.size))
@@ -203,26 +220,34 @@ class VibeVoiceClient(
                     if (json.has("text")) {
                         val resultText = json.getString("text")
                         val isFinal = json.optBoolean("is_final", false)
-                        
-                        if (json.has("dur")) {
-                            val dur = json.optDouble("dur", 0.0)
-                            audioConfirmedBytes = (dur * 32000).toLong()
-                        }
+                        // Content frames count from 1, densely, and never repeat; the pieces do not
+                        // overlap, so a client applies each index exactly once and concatenates.
+                        // Servers before 2026-09-02 omit the field, hence the fallback further down.
+                        val idx = json.optInt("idx", 0)
 
-                        VibeVoiceDebugLogger.log("WS msg text len: ${resultText.length}, final: $isFinal")
+                        VibeVoiceDebugLogger.log("WS msg text len: ${resultText.length}, final: $isFinal, idx: $idx")
                         if (isFinal) {
+                            // End-of-stream marker. Its text is empty by contract and its idx is how
+                            // many content frames were sent, which is the only way to tell a short
+                            // transcript apart from a lost frame.
+                            if (idx > 0 && idx != framesAppliedThisConnection) {
+                                VibeVoiceDebugLogger.log(
+                                    "[FRAME_GAP] server reports $idx content frames, applied $framesAppliedThisConnection"
+                                )
+                            }
                             if (resultText.isBlank()) {
                                 VibeVoiceDebugLogger.log("[EMPTY_RESULT] onFinal received empty text")
                             }
-                            
-                            val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
-                            if (isNewSegment) {
+
+                            val isNewSegment = if (idx > 0) framesAppliedThisConnection > 0
+                                else lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
+                            if (isNewSegment && resultText.isNotBlank()) {
                                 VibeVoiceDebugLogger.log("New segment detected onFinal. Prev: '${lastFullText.take(20)}...', New: '${resultText.take(20)}...'")
                             }
                             lastFullText = resultText
-                            
+
                             listener.onFinal(resultText, isNewSegment)
-                            
+
                             if (!isStreaming) {
                                 VibeVoiceDebugLogger.log("Closing WS immediately after final result marker")
                                 closureJob?.cancel()
@@ -233,12 +258,33 @@ class VibeVoiceClient(
                                 }
                             }
                         } else {
-                            val isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
+                            val isNewSegment: Boolean
+                            if (idx > 0) {
+                                // A frame we have already applied. Cannot happen on a healthy
+                                // connection, but applying one twice is what pastes the user's
+                                // words in twice, so refuse it rather than trust the wire.
+                                if (idx <= lastAppliedIdx) {
+                                    VibeVoiceDebugLogger.log("Ignoring already applied frame idx=$idx (last=$lastAppliedIdx)")
+                                    return
+                                }
+                                if (idx > lastAppliedIdx + 1) {
+                                    VibeVoiceDebugLogger.log("[FRAME_GAP] jumped from idx=$lastAppliedIdx to idx=$idx")
+                                }
+                                // Every piece after the first opens a new segment: the pieces do not
+                                // overlap, so the one being displayed has to be committed first.
+                                isNewSegment = framesAppliedThisConnection > 0
+                                lastAppliedIdx = idx
+                                framesAppliedThisConnection++
+                            } else {
+                                // Server without idx: infer it from the text, as before. A piece that
+                                // does not continue the previous one starts a new segment.
+                                isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
+                            }
                             if (isNewSegment) {
                                 VibeVoiceDebugLogger.log("New segment detected onPartial. Prev: '${lastFullText.take(20)}...', New: '${resultText.take(20)}...'")
                             }
                             lastFullText = resultText
-                            
+
                             listener.onPartial(resultText, isNewSegment)
                         }
                     } else if (json.has("error")) {
@@ -302,7 +348,9 @@ class VibeVoiceClient(
         closureJob = null
         isReconnecting = false
         retryCount = 0
-        audioConfirmedBytes = 0L
+        disconnectedAtBytes = 0L
+        lastAppliedIdx = 0
+        framesAppliedThisConnection = 0
         isWsOpen = false
         pendingEndStream = false
 
