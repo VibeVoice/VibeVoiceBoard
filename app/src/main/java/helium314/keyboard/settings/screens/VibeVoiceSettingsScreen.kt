@@ -96,10 +96,22 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
             val res = VibeVoiceClient.requestDeviceCode("VibeVoiceBoard Android", BuildConfig.VERSION_NAME)
             isLoading = false
             if (res != null) {
-                userCode = res.getString("user_code")
-                verificationUri = res.getString("verification_uri")
-                val deviceCode = res.getString("device_code")
-                val interval = res.optInt("interval", 5)
+                // A body without these keys -- an error payload, an API change, a captive portal
+                // answering 200 with HTML -- used to throw JSONException out of the coroutine and
+                // take the settings activity down with it.
+                val code = res.optString("user_code").takeIf { it.isNotBlank() }
+                val uri = res.optString("verification_uri").takeIf { it.isNotBlank() }
+                val deviceCode = res.optString("device_code").takeIf { it.isNotBlank() }
+                if (code == null || uri == null || deviceCode == null) {
+                    errorMessage = context.getString(R.string.vibevoice_failed_request_device_code)
+                    return@launch
+                }
+                userCode = code
+                verificationUri = uri
+                val interval = res.optInt("interval", 5).coerceAtLeast(1)
+                // RFC 8628 device codes expire; without this the loop below polls forever whenever
+                // pollForToken keeps returning null (offline, or the user never finishes in the browser).
+                val expiresAt = System.currentTimeMillis() + res.optInt("expires_in", 600).coerceAtLeast(30) * 1000L
 
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$verificationUri?code=$userCode"))
@@ -112,6 +124,12 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 var polling = true
                 while (polling && isActive) {
                     delay(interval * 1000L)
+                    if (System.currentTimeMillis() > expiresAt) {
+                        polling = false
+                        userCode = null
+                        errorMessage = context.getString(R.string.vibevoice_linking_failed, "expired_token")
+                        break
+                    }
                     val tokenRes = VibeVoiceClient.pollForToken(deviceCode)
                     if (tokenRes != null) {
                         if (tokenRes.has("api_key")) {
