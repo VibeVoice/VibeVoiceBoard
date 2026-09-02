@@ -118,9 +118,13 @@ class VoiceWaveView @JvmOverloads constructor(
 
         paint.strokeWidth = STROKE_WIDTH_DP * density
         val spacing = height / (WAVE_COUNT + 1)
-        // Finer than the web's fixed 4 px: the ripple below runs at a much shorter wavelength and
-        // would alias into a staircase at that resolution.
-        val step = (width / 220f).coerceAtLeast(3f)
+        val step = (width / 120f).coerceAtLeast(4f)
+        // Everything below is expressed in cycles across the width rather than radians per pixel.
+        // The web constants are radians per pixel on a 350 px canvas, where the fundamental works
+        // out to 0.84 cycles — under one period, which is why it reads as a swell. Copied verbatim
+        // into a 1080 px keyboard the same numbers gave four periods and looked like wallpaper.
+        // In these units the picture is also identical on a phone and on a tablet.
+        val cycle = (2.0 * Math.PI / width).toFloat()
 
         for (w in 0 until WAVE_COUNT) {
             val baseOffsetY = spacing * 0.9f + w * spacing * 1.05f
@@ -132,22 +136,32 @@ class VoiceWaveView @JvmOverloads constructor(
             val alpha = (restAlpha * (1f + level * ALPHA_LEVEL_GAIN)).coerceIn(0.02f, 0.85f)
             paint.color = Color.argb((alpha * 255).toInt(), red, green, blue)
 
-            // Resting height in dp, scaled by the level. The web values are cut roughly in half:
-            // they were drawn for a full-page hero, not for a few hundred pixels of keyboard.
-            val amp = (AMP_BASE_DP + (w % 3) * AMP_STEP_DP) * density *
-                    (1f + level * AMP_LEVEL_GAIN)
+            // Amplitude as a fraction of the gap between waves, not an absolute size. That is the
+            // only way neighbours can be made to cross: on the web a loud syllable puts the
+            // excursion just past one full spacing, and they interleave. The three terms sum to at
+            // most 1.7, so the peak here is 1.7 * amp * envelope — roughly a quarter of a spacing
+            // in silence and a little over a full spacing when the voice is loud.
+            val amp = spacing * AMP_REST_FRACTION * (1f + level * AMP_LEVEL_GAIN)
 
-            var x = 0f
+            // Each wave is detuned a little. Without this every line is the same curve shifted in
+            // phase; under one visible period that passes for organic, at four periods it reads as
+            // a repeated pattern.
+            val detune = 1f + w * WAVE_DETUNE
+
             var first = true
+            var x = 0f
             while (x <= width) {
-                val sin1 = sin(x * (0.024f + (w % 2) * 0.005f) + wavePhase)
-                val sin2 = sin(x * 0.056f - wavePhase * (0.7f + (w % 2) * 0.2f)) * 0.45f
-                val cos1 = cos(x * 0.019f + wavePhase * 0.6f) * 0.25f
-                // Only present while there is sound, and it is what makes the line read as a
-                // waveform rather than as a contour on a map: a short wavelength that roughens the
-                // curve as the voice gets louder, and vanishes completely in silence.
-                val ripple = sin(x * 0.105f + wavePhase * 2.1f) * RIPPLE_GAIN * level
-                val y = baseOffsetY + (sin1 + sin2 + cos1 + ripple) * amp
+                val nx = x * cycle
+                val sin1 = sin(nx * CYCLES_FUNDAMENTAL * detune + wavePhase)
+                val sin2 = sin(nx * CYCLES_SECOND * detune - wavePhase * (0.7f + (w % 2) * 0.2f)) * 0.45f
+                val cos1 = cos(nx * CYCLES_THIRD * detune + wavePhase * 0.6f) * 0.25f
+                // A slow swell along the width, so the line breathes instead of running at one
+                // height from edge to edge. This is what a waveform looks like, and it replaces the
+                // short ripple that was here before — that added texture but also four more
+                // periods, which is the opposite of what was wanted.
+                val envelope = ENVELOPE_FLOOR + (1f - ENVELOPE_FLOOR) *
+                        (0.5f + 0.5f * sin(nx * CYCLES_ENVELOPE + wavePhase * 0.3f))
+                val y = baseOffsetY + (sin1 + sin2 + cos1) * amp * envelope
                 if (first) {
                     wavePath.moveTo(x, y)
                     first = false
@@ -180,13 +194,21 @@ class VoiceWaveView @JvmOverloads constructor(
         private const val FRAME_INTERVAL_MS = 33L // ~30fps; 60 buys nothing here and costs battery
         private const val LEVEL_ATTACK = 0.55f
         private const val LEVEL_RELEASE = 0.16f
-        private const val RIPPLE_GAIN = 0.55f
-        private const val PHASE_STEP = 0.040f
+        /** Periods across the view's width. Under two, so one swell spans most of the keyboard. */
+        private const val CYCLES_FUNDAMENTAL = 1.2f
+        private const val CYCLES_SECOND = 2.3f // deliberately not exactly double, that beats visibly
+        private const val CYCLES_THIRD = 0.9f
+        private const val CYCLES_ENVELOPE = 0.6f
+        private const val ENVELOPE_FLOOR = 0.45f
+        private const val WAVE_DETUNE = 0.06f
+        // Apparent travel is phase speed divided by spatial frequency, so dropping from four
+        // periods to one and a bit makes the same phase step look three times faster. This keeps
+        // the motion roughly where it was.
+        private const val PHASE_STEP = 0.012f
         private const val PHASE_LEVEL_GAIN = 3.2f
         private const val ALPHA_LEVEL_GAIN = 3.0f
         private const val AMP_LEVEL_GAIN = 4.0f
-        private const val AMP_BASE_DP = 3.0f
-        private const val AMP_STEP_DP = 1.4f
+        private const val AMP_REST_FRACTION = 0.18f
         private const val REST_ALPHA = 0.30f
         private const val REST_ALPHA_FALLOFF = 0.15f
         private const val STROKE_WIDTH_DP = 1.2f
