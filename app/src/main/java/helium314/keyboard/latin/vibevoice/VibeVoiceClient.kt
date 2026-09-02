@@ -53,6 +53,14 @@ class VibeVoiceClient(
     @Volatile private var audioJob: Job? = null
     @Volatile private var totalRead = 0L
     @Volatile private var lastFullText = ""
+    /**
+     * RMS of the most recent audio buffer, 0..1. Written by the capture coroutine roughly every
+     * 100 ms and read once per frame by [VoiceWaveView] — never delivered through a callback or a
+     * Handler, because the only consumer is an animation that paints itself and would gain nothing
+     * from being woken on the UI thread thirty times a second.
+     */
+    @Volatile var currentLevel = 0f
+        private set
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
     @Volatile private var closureJob: Job? = null
@@ -435,6 +443,7 @@ class VibeVoiceClient(
             return
         }
 
+        currentLevel = 0f
         totalRead = 0L // Reset for new session
         lastFullText = ""
         audioJob = scope.launch {
@@ -468,14 +477,20 @@ class VibeVoiceClient(
                     totalReadsInSession++
                     
                     val numSamples = read / 2
+                    var bufferSquares = 0L
                     for (i in 0 until numSamples) {
                         val b1 = buffer[2 * i].toInt() and 0xFF
                         val b2 = buffer[2 * i + 1].toInt() and 0xFF
                         val sample = ((b2 shl 8) or b1).toShort()
                         val sampleVal = sample.toLong()
-                        sumOfSquares += sampleVal * sampleVal
+                        bufferSquares += sampleVal * sampleVal
                     }
+                    sumOfSquares += bufferSquares
                     totalSamples += numSamples
+                    if (numSamples > 0) {
+                        currentLevel = (Math.sqrt(bufferSquares.toDouble() / numSamples) / 32768.0)
+                            .toFloat().coerceIn(0f, 1f)
+                    }
                     
                     var isAllZeros = true
                     for (i in 0 until read) {

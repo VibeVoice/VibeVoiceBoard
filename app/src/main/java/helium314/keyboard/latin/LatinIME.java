@@ -42,6 +42,7 @@ import helium314.keyboard.latin.vibevoice.PermissionActivity;
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient;
 import helium314.keyboard.latin.vibevoice.VibeVoiceDebugLogger;
 import helium314.keyboard.latin.vibevoice.VibeVoiceListener;
+import helium314.keyboard.latin.vibevoice.VoiceWaveView;
 import helium314.keyboard.event.HapticEvent;
 import helium314.keyboard.keyboard.KeyboardActionListener;
 import helium314.keyboard.keyboard.KeyboardActionListenerImpl;
@@ -1525,12 +1526,27 @@ public class LatinIME extends InputMethodService implements
 
     private void updateVoiceInputState(boolean isRecording) {
         mIsRecordingVoice = isRecording;
+        // Capture the client here: by the time the runnable below runs, finishVoiceSession may have
+        // nulled the field, and the waves would then start against a source that is already gone.
+        final VibeVoiceClient client = mVibeVoiceClient;
         mUiHandler.post(() -> {
             if (mSuggestionStripView != null) {
                 mSuggestionStripView.updateVoiceKey();
             }
             if (mKeyboardSwitcher != null && mKeyboardSwitcher.getMainKeyboardView() != null) {
                 mKeyboardSwitcher.getMainKeyboardView().invalidateAllKeys();
+            }
+            // The single place the background waves are switched. Every path that ends a session --
+            // the user stopping it, the microphone being silenced by another app, recovery running
+            // out, the connection dying -- goes through finishVoiceSession and lands here with
+            // false, so none of them can leave an animation running.
+            if (mKeyboardSwitcher != null && mKeyboardSwitcher.getVoiceWaveView() != null) {
+                final VoiceWaveView waves = mKeyboardSwitcher.getVoiceWaveView();
+                if (isRecording && client != null) {
+                    waves.start(client::getCurrentLevel);
+                } else {
+                    waves.stop();
+                }
             }
         });
     }
