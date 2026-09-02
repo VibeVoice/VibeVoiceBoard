@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.R
 import androidx.compose.material3.HorizontalDivider
+import helium314.keyboard.latin.settings.DebugSettings
+import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
@@ -345,6 +347,15 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 )
             }
 
+            // Developer tuning, hidden unless "show debug settings" is on. These are for finding
+            // the look, not for shipping: nine sliders with deliberately unreasonable ranges have
+            // no place in front of someone who just wants to dictate.
+            // context.prefs(), not the screen's `prefs` — that one is the encrypted VibeVoice
+            // store holding the API key. The debug flag and the sliders both live in the app's
+            // default preferences.
+            if (context.prefs().getBoolean(
+                    DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)) {
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
 
             Text(
@@ -431,6 +442,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 range = 0f..1f,
                 description = { if (it < 0.02f) "none" else "${(100 * it).toInt()}%" }
             ) { }
+            }
         }
 
         if (showBugReportDialog) {

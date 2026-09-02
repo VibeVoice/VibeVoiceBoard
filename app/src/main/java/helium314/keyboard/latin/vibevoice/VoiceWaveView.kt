@@ -145,12 +145,17 @@ class VoiceWaveView @JvmOverloads constructor(
 
         for (w in 0 until waveCount) {
             val baseOffsetY = spacing * 0.9f + w * spacing * 1.05f
-            // Spread around a full cycle instead of nudged by a fixed 0.6 rad. That offset was
-            // under a tenth of a period, so each wave was doing very nearly what its neighbour had
-            // done a moment earlier: they ran parallel and followed each other. Two waves only
-            // cross if they are moving in different directions, so this — not the amplitude — is
-            // what decides whether they ever meet.
-            val wavePhase = phase + w * spread * (2.0 * Math.PI / waveCount).toFloat()
+            // Offsets by the golden angle rather than an even slice of the cycle. An even slice is
+            // a linear progression in w, so with every wave the same shape the crests stepped along
+            // by a constant amount and lined up on a straight diagonal. The golden angle is the
+            // least well approximated by any fraction, which is exactly the property that stops
+            // repeating alignment — the same reason leaves grow at it.
+            //
+            // The drift term does the rest: each wave advances its phase at a slightly different
+            // rate, so any alignment that does occur pulls apart again instead of standing still.
+            // Both scale with spread, so at 0 the waves are still exactly parallel.
+            val wavePhase = phase * (1f + w * spread * PHASE_DRIFT) +
+                    w * spread * GOLDEN_ANGLE
 
             // Resting alpha fades with depth; speech brightens the whole set. The level term is 1
             // at silence, so a quiet keyboard looks exactly as the theme intends.
@@ -223,7 +228,10 @@ class VoiceWaveView @JvmOverloads constructor(
         private const val JITTER_RATIO = 7.5f
         private const val CYCLES_ENVELOPE = 0.6f
         private const val ENVELOPE_FLOOR = 0.45f
-        private const val WAVE_DETUNE = 0.06f
+        private const val WAVE_DETUNE = 0.11f
+        /** 2*pi * (1 - 1/phi). The angle that never settles into a repeating pattern. */
+        private const val GOLDEN_ANGLE = 2.39996f
+        private const val PHASE_DRIFT = 0.09f
         private const val PHASE_LEVEL_GAIN = 3.2f
         private const val ALPHA_LEVEL_GAIN = 3.0f
         private const val REST_ALPHA = 0.30f
