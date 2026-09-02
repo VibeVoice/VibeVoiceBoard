@@ -118,6 +118,8 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_WAVE_SPREAD = "vibevoice_wave_spread";
     public static final String PREF_WAVE_JITTER = "vibevoice_wave_jitter";
     public static final String PREF_WAVE_COUNT = "vibevoice_wave_count";
+    public static final String PREF_WAVE_ATTACK = "vibevoice_wave_attack";
+    public static final String PREF_WAVE_DAMPING = "vibevoice_wave_damping";
     public static final String PREF_HINT_FONT_SCALE = "hint_font_scale";
     public static final String PREF_EMOJI_FONT_SCALE = "emoji_font_scale";
     public static final String PREF_EMOJI_KEY_FIT = "emoji_key_fit";

@@ -102,7 +102,10 @@ class VoiceWaveView @JvmOverloads constructor(
         // Asymmetric, the way a level meter behaves: jump at the onset of a syllable, fall back
         // slowly. The web component uses one constant for both directions, which is what made the
         // swell arrive late and then linger. Attack is more than three times the release here.
-        val coeff = if (raw > level) LEVEL_ATTACK else LEVEL_RELEASE
+        val p0 = context.prefs()
+        val coeff = if (raw > level)
+            p0.getFloat(Settings.PREF_WAVE_ATTACK, Defaults.PREF_WAVE_ATTACK)
+        else p0.getFloat(Settings.PREF_WAVE_DAMPING, Defaults.PREF_WAVE_DAMPING)
         level += (raw - level) * coeff
 
         // Louder speech travels faster as well as reaching higher; without this the amplitude grows
@@ -213,8 +216,6 @@ class VoiceWaveView @JvmOverloads constructor(
 
     companion object {
         private const val FRAME_INTERVAL_MS = 33L // ~30fps; 60 buys nothing here and costs battery
-        private const val LEVEL_ATTACK = 0.55f
-        private const val LEVEL_RELEASE = 0.16f
         // Multiples of the fundamental, which is a setting. Not whole numbers on purpose: an exact
         // double beats visibly and the composite starts to read as a repeat.
         private const val SECOND_RATIO = 1.92f

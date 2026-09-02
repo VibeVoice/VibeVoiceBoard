@@ -363,7 +363,9 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 key = Settings.PREF_WAVE_AMPLITUDE,
                 default = Defaults.PREF_WAVE_AMPLITUDE,
                 range = 0.05f..1.2f,
-                description = { "${(100 * it).toInt()}% of the gap between waves" }
+                // The three terms sum to at most 1.7, so what you see is 1.7x this value. The
+                // label reports the excursion, not the raw factor.
+                description = { "${(170 * it).toInt()}% of the gap between waves" }
             ) { }
             SliderPreference(
                 name = stringResource(R.string.vibevoice_waves_reaction),
@@ -371,6 +373,22 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 default = Defaults.PREF_WAVE_REACTION,
                 range = 0f..12f,
                 description = { "loud voice = ${String.format(Locale.US, "%.1f", 1f + it)}x the size" }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_attack),
+                key = Settings.PREF_WAVE_ATTACK,
+                default = Defaults.PREF_WAVE_ATTACK,
+                range = 0.05f..1f,
+                description = { if (it > 0.95f) "instant" else String.format(Locale.US, "%.2f", it) }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_damping),
+                key = Settings.PREF_WAVE_DAMPING,
+                default = Defaults.PREF_WAVE_DAMPING,
+                range = 0.02f..1f,
+                description = {
+                    if (it < 0.06f) "swings on for a while" else String.format(Locale.US, "%.2f", it)
+                }
             ) { }
             SliderPreference(
                 name = stringResource(R.string.vibevoice_waves_spread),

@@ -79,6 +79,8 @@
     <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. Changes apply immediately \u2014 open a chat next to this screen and hold space to watch them.</string>
     <string name="vibevoice_waves_amplitude">Size</string>
     <string name="vibevoice_waves_reaction">Reaction to your voice</string>
+    <string name="vibevoice_waves_attack">Attack (how fast it rises)</string>
+    <string name="vibevoice_waves_damping">Damping (how fast it settles)</string>
     <string name="vibevoice_waves_spread">Spread between waves</string>
     <string name="vibevoice_waves_cycles">Periods across the width</string>
     <string name="vibevoice_waves_count">Number of waves</string>
