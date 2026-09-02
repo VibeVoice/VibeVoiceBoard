@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -182,7 +184,9 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
         title = stringResource(R.string.vibevoice_integration_title),
         settings = emptyList() // Not a SearchSettingsScreen with list preferences
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        // SearchScreen only attaches verticalScroll to its settings-list path; a screen that
+        // supplies its own content gets a plain Column, so anything past the fold was unreachable.
+        Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text(
                 stringResource(R.string.vibevoice_account_linking_description),
                 style = MaterialTheme.typography.bodyMedium
