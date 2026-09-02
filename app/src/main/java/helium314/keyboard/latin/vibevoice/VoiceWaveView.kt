@@ -43,6 +43,21 @@ class VoiceWaveView @JvmOverloads constructor(
     private var level = 0f
     private var running = false
 
+    // The tuning values, read once per session in [start] rather than once per frame. Reading them
+    // in onDraw meant eight synchronized lookups on SharedPreferencesImpl thirty times a second, on
+    // the UI thread, while the user is typing. The sliders only exist in debug builds and are set
+    // from the settings screen with the keyboard closed, so a value picked up at the next session
+    // is soon enough.
+    private var attack = Defaults.PREF_WAVE_ATTACK
+    private var damping = Defaults.PREF_WAVE_DAMPING
+    private var ampFraction = Defaults.PREF_WAVE_AMPLITUDE
+    private var reaction = Defaults.PREF_WAVE_REACTION
+    private var cycles = Defaults.PREF_WAVE_CYCLES
+    private var speed = Defaults.PREF_WAVE_SPEED
+    private var spread = Defaults.PREF_WAVE_SPREAD
+    private var jitter = Defaults.PREF_WAVE_JITTER
+    private var waveCount = Defaults.PREF_WAVE_COUNT.toInt()
+
     init {
         isClickable = false
         isFocusable = false
@@ -55,6 +70,7 @@ class VoiceWaveView @JvmOverloads constructor(
      */
     fun start(source: () -> Float) {
         levelSource = source
+        readTuning()
         if (running) return
         running = true
         phase = 0f
@@ -96,33 +112,23 @@ class VoiceWaveView @JvmOverloads constructor(
         if (!running) return
         val width = width.toFloat()
         val height = height.toFloat()
-        if (width <= 0f || height <= 0f) return
+        // Not laid out yet. This happens when a session is resumed on a freshly inflated input view
+        // -- the window is shown before the wrapper has given us our bounds. Keep the loop alive
+        // instead of returning into silence, or the animation never starts for that session.
+        if (width <= 0f || height <= 0f) {
+            if (animationsEnabled()) postInvalidateDelayed(FRAME_INTERVAL_MS)
+            return
+        }
 
         val raw = levelSource?.invoke() ?: 0f
         // Asymmetric, the way a level meter behaves: jump at the onset of a syllable, fall back
         // slowly. The web component uses one constant for both directions, which is what made the
         // swell arrive late and then linger. Attack is more than three times the release here.
-        val p0 = context.prefs()
-        val coeff = if (raw > level)
-            p0.getFloat(Settings.PREF_WAVE_ATTACK, Defaults.PREF_WAVE_ATTACK)
-        else p0.getFloat(Settings.PREF_WAVE_DAMPING, Defaults.PREF_WAVE_DAMPING)
-        level += (raw - level) * coeff
+        level += (raw - level) * (if (raw > level) attack else damping)
 
         // Louder speech travels faster as well as reaching higher; without this the amplitude grows
         // but the motion still reads as idle.
-        // Read once per frame so the tuning sliders take effect while the keyboard is open, with
-        // no restart. Cheap: seven lookups in an in-memory map.
-        val p = context.prefs()
-        val ampFraction = p.getFloat(Settings.PREF_WAVE_AMPLITUDE, Defaults.PREF_WAVE_AMPLITUDE)
-        val reaction = p.getFloat(Settings.PREF_WAVE_REACTION, Defaults.PREF_WAVE_REACTION)
-        val cycles = p.getFloat(Settings.PREF_WAVE_CYCLES, Defaults.PREF_WAVE_CYCLES)
-        val spread = p.getFloat(Settings.PREF_WAVE_SPREAD, Defaults.PREF_WAVE_SPREAD)
-        val jitter = p.getFloat(Settings.PREF_WAVE_JITTER, Defaults.PREF_WAVE_JITTER)
-        val waveCount = p.getFloat(Settings.PREF_WAVE_COUNT, Defaults.PREF_WAVE_COUNT)
-            .toInt().coerceIn(1, 12)
-
-        phase += p.getFloat(Settings.PREF_WAVE_SPEED, Defaults.PREF_WAVE_SPEED) *
-                (1f + level * PHASE_LEVEL_GAIN)
+        phase += speed * (1f + level * PHASE_LEVEL_GAIN)
 
         val baseColor = try {
             Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
@@ -210,6 +216,20 @@ class VoiceWaveView @JvmOverloads constructor(
     }
 
     private val wavePath = android.graphics.Path()
+
+    private fun readTuning() {
+        val p = context.prefs()
+        attack = p.getFloat(Settings.PREF_WAVE_ATTACK, Defaults.PREF_WAVE_ATTACK)
+        damping = p.getFloat(Settings.PREF_WAVE_DAMPING, Defaults.PREF_WAVE_DAMPING)
+        ampFraction = p.getFloat(Settings.PREF_WAVE_AMPLITUDE, Defaults.PREF_WAVE_AMPLITUDE)
+        reaction = p.getFloat(Settings.PREF_WAVE_REACTION, Defaults.PREF_WAVE_REACTION)
+        cycles = p.getFloat(Settings.PREF_WAVE_CYCLES, Defaults.PREF_WAVE_CYCLES)
+        speed = p.getFloat(Settings.PREF_WAVE_SPEED, Defaults.PREF_WAVE_SPEED)
+        spread = p.getFloat(Settings.PREF_WAVE_SPREAD, Defaults.PREF_WAVE_SPREAD)
+        jitter = p.getFloat(Settings.PREF_WAVE_JITTER, Defaults.PREF_WAVE_JITTER)
+        waveCount = p.getFloat(Settings.PREF_WAVE_COUNT, Defaults.PREF_WAVE_COUNT)
+            .toInt().coerceIn(1, 12)
+    }
 
     private fun animationsEnabled(): Boolean = try {
         AndroidSettings.Global.getFloat(

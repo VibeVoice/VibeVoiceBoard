@@ -726,6 +726,14 @@ public class LatinIME extends InputMethodService implements
             mVibeVoiceClient.cancel();
             mVibeVoiceClient = null;
         }
+        // onDestroy does not go through finishVoiceSession, so it is the one teardown path that
+        // never reaches updateVoiceInputState. onDetachedFromWindow normally catches this, but the
+        // order of window teardown and service destruction is not ours to rely on, and a surviving
+        // frame callback would poll a cancelled client.
+        mIsRecordingVoice = false;
+        if (mKeyboardSwitcher != null && mKeyboardSwitcher.getVoiceWaveView() != null) {
+            mKeyboardSwitcher.getVoiceWaveView().stop();
+        }
         super.onDestroy();
         mHandler.removeCallbacksAndMessages(null);
         deallocateMemory();
@@ -1065,6 +1073,7 @@ public class LatinIME extends InputMethodService implements
         if (hasSuggestionStripView() && mIsRecordingVoice) {
             mSuggestionStripView.updateVoiceKey();
         }
+        syncVoiceWaves();
     }
 
     @Override
@@ -1533,24 +1542,36 @@ public class LatinIME extends InputMethodService implements
             if (mKeyboardSwitcher != null && mKeyboardSwitcher.getMainKeyboardView() != null) {
                 mKeyboardSwitcher.getMainKeyboardView().invalidateAllKeys();
             }
-            // The single place the background waves are switched. Every path that ends a session --
-            // the user stopping it, the microphone being silenced by another app, recovery running
-            // out, the connection dying -- goes through finishVoiceSession and lands here with
-            // false, so none of them can leave an animation running.
-            if (mKeyboardSwitcher != null && mKeyboardSwitcher.getVoiceWaveView() != null) {
-                final VoiceWaveView waves = mKeyboardSwitcher.getVoiceWaveView();
-                // Read the field here rather than capturing it before the post. handleVoiceInput
-                // calls this with true *before* it assigns mVibeVoiceClient, so a capture reads null
-                // and silently stops the animation instead of starting it. This runnable is queued
-                // behind the current UI message, so by the time it runs the field is set.
-                final VibeVoiceClient client = mVibeVoiceClient;
-                if (isRecording && client != null) {
-                    waves.start(client::getCurrentLevel);
-                } else {
-                    waves.stop();
-                }
-            }
+            syncVoiceWaves();
         });
+    }
+
+    /**
+     * Brings the background waves in line with {@link #mIsRecordingVoice}. Called from
+     * {@link #updateVoiceInputState} for the state changes themselves, and from
+     * {@link #onWindowShown} because the input view is thrown away and re-inflated on an
+     * orientation, theme or keyboard-height change: the new VoiceWaveView starts stopped and hidden
+     * while the microphone is still running, and nothing else would ever start it again.
+     *
+     * <p>Must be called on the UI thread.
+     */
+    private void syncVoiceWaves() {
+        if (mKeyboardSwitcher == null || mKeyboardSwitcher.getVoiceWaveView() == null) return;
+        final VoiceWaveView waves = mKeyboardSwitcher.getVoiceWaveView();
+        // Read the field here rather than capturing it before the post. handleVoiceInput calls
+        // updateVoiceInputState(true) *before* it assigns mVibeVoiceClient, so a capture reads null
+        // and silently stops the animation instead of starting it. The posted runnable is queued
+        // behind the current UI message, so by the time it runs the field is set.
+        final VibeVoiceClient client = mVibeVoiceClient;
+        // Every path that ends a session -- the user stopping it, the microphone being silenced by
+        // another app, recovery running out, the connection dying -- goes through
+        // finishVoiceSession and lands here with mIsRecordingVoice false, so none of them can
+        // leave an animation running.
+        if (mIsRecordingVoice && client != null) {
+            waves.start(client::getCurrentLevel);
+        } else {
+            waves.stop();
+        }
     }
 
     public void handleVoiceInput() {

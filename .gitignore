@@ -38,3 +38,4 @@ tools/.build.lock
 keystore.properties
 *.jks
 *.keystore
+.wt/
