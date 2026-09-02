@@ -58,6 +58,7 @@ class VoiceWaveView @JvmOverloads constructor(
         phase = 0f
         level = 0f
         visibility = VISIBLE
+        VibeVoiceDebugLogger.log("VoiceWaveView start, size=${width}x${height}, animated=${animationsEnabled()}")
         invalidate()
     }
 
@@ -71,6 +72,7 @@ class VoiceWaveView @JvmOverloads constructor(
         levelSource = null
         level = 0f
         visibility = GONE
+        VibeVoiceDebugLogger.log("VoiceWaveView stop")
     }
 
     override fun onDetachedFromWindow() {

@@ -1526,9 +1526,6 @@ public class LatinIME extends InputMethodService implements
 
     private void updateVoiceInputState(boolean isRecording) {
         mIsRecordingVoice = isRecording;
-        // Capture the client here: by the time the runnable below runs, finishVoiceSession may have
-        // nulled the field, and the waves would then start against a source that is already gone.
-        final VibeVoiceClient client = mVibeVoiceClient;
         mUiHandler.post(() -> {
             if (mSuggestionStripView != null) {
                 mSuggestionStripView.updateVoiceKey();
@@ -1542,6 +1539,11 @@ public class LatinIME extends InputMethodService implements
             // false, so none of them can leave an animation running.
             if (mKeyboardSwitcher != null && mKeyboardSwitcher.getVoiceWaveView() != null) {
                 final VoiceWaveView waves = mKeyboardSwitcher.getVoiceWaveView();
+                // Read the field here rather than capturing it before the post. handleVoiceInput
+                // calls this with true *before* it assigns mVibeVoiceClient, so a capture reads null
+                // and silently stops the animation instead of starting it. This runnable is queued
+                // behind the current UI message, so by the time it runs the field is set.
+                final VibeVoiceClient client = mVibeVoiceClient;
                 if (isRecording && client != null) {
                     waves.start(client::getCurrentLevel);
                 } else {
