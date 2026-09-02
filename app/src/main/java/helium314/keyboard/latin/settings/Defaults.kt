@@ -112,9 +112,9 @@ object Defaults {
     const val PREF_WAVE_JITTER = 0.12f
     const val PREF_WAVE_COUNT = 6.0f
     /** How fast the waves follow a rising voice. */
-    const val PREF_WAVE_ATTACK = 0.55f
+    const val PREF_WAVE_ATTACK = 0.70f
     /** How fast they settle once it stops. Low values let them swing on like a resonator. */
-    const val PREF_WAVE_DAMPING = 0.16f
+    const val PREF_WAVE_DAMPING = 0.25f
     const val PREF_HINT_FONT_SCALE = DEFAULT_SIZE_SCALE
     const val PREF_EMOJI_FONT_SCALE = DEFAULT_SIZE_SCALE
     const val PREF_EMOJI_KEY_FIT = true
