@@ -366,9 +366,11 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.size(8.dp))
 
-            // VoiceWaveView re-reads these every frame, so dragging a slider moves the waves while
-            // the keyboard is open. Ranges are deliberately wide: this is for finding the look, not
-            // for keeping anyone inside sensible values.
+            // VoiceWaveView reads these once per dictation session, in start(), so a change takes
+            // effect at the next session rather than under a moving slider -- reading them per frame
+            // meant eight synchronized SharedPreferences lookups thirty times a second on the UI
+            // thread, to feed an animation nobody can see from this screen. Ranges are deliberately
+            // wide: this is for finding the look, not for keeping anyone inside sensible values.
             SliderPreference(
                 name = stringResource(R.string.vibevoice_waves_amplitude),
                 key = Settings.PREF_WAVE_AMPLITUDE,
