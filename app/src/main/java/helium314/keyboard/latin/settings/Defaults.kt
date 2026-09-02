@@ -97,6 +97,20 @@ object Defaults {
     @JvmField
     val PREF_KEY_GAP_SCALE = Array(4) { DEFAULT_SIZE_SCALE }
     const val PREF_FONT_SCALE = DEFAULT_SIZE_SCALE
+    /** Peak excursion as a fraction of the gap between waves, before the level multiplies it. */
+    const val PREF_WAVE_AMPLITUDE = 0.30f
+    /** How much a loud voice multiplies the amplitude. */
+    const val PREF_WAVE_REACTION = 4.0f
+    /** Periods of the fundamental across the keyboard width. */
+    const val PREF_WAVE_CYCLES = 1.2f
+    /** Phase advance per frame. Apparent travel is this divided by the spatial frequency. */
+    const val PREF_WAVE_SPEED = 0.012f
+    /** How far the waves are spread around the cycle. At 1.0 they are evenly spread and cross;
+     *  at 0.0 they run parallel and merely follow each other. */
+    const val PREF_WAVE_SPREAD = 1.0f
+    /** Short-wavelength roughness that only appears while there is sound. */
+    const val PREF_WAVE_JITTER = 0.12f
+    const val PREF_WAVE_COUNT = 5.0f
     const val PREF_HINT_FONT_SCALE = DEFAULT_SIZE_SCALE
     const val PREF_EMOJI_FONT_SCALE = DEFAULT_SIZE_SCALE
     const val PREF_EMOJI_KEY_FIT = true

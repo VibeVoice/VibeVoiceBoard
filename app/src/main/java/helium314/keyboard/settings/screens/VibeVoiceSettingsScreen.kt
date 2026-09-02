@@ -38,7 +38,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.R
+import androidx.compose.material3.HorizontalDivider
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import helium314.keyboard.settings.preferences.SliderPreference
+import java.util.Locale
 import helium314.keyboard.settings.SearchSettingsScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -335,6 +340,75 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.outline
                 )
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
+
+            Text(
+                stringResource(R.string.vibevoice_waves_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.size(4.dp))
+            Text(
+                stringResource(R.string.vibevoice_waves_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+
+            // VoiceWaveView re-reads these every frame, so dragging a slider moves the waves while
+            // the keyboard is open. Ranges are deliberately wide: this is for finding the look, not
+            // for keeping anyone inside sensible values.
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_amplitude),
+                key = Settings.PREF_WAVE_AMPLITUDE,
+                default = Defaults.PREF_WAVE_AMPLITUDE,
+                range = 0.05f..1.2f,
+                description = { "${(100 * it).toInt()}% of the gap between waves" }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_reaction),
+                key = Settings.PREF_WAVE_REACTION,
+                default = Defaults.PREF_WAVE_REACTION,
+                range = 0f..12f,
+                description = { "loud voice = ${String.format(Locale.US, "%.1f", 1f + it)}x the size" }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_spread),
+                key = Settings.PREF_WAVE_SPREAD,
+                default = Defaults.PREF_WAVE_SPREAD,
+                range = 0f..1f,
+                description = {
+                    if (it < 0.05f) "parallel, never crossing" else "${(100 * it).toInt()}% apart"
+                }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_cycles),
+                key = Settings.PREF_WAVE_CYCLES,
+                default = Defaults.PREF_WAVE_CYCLES,
+                range = 0.3f..6f,
+                description = { String.format(Locale.US, "%.1f periods across the width", it) }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_count),
+                key = Settings.PREF_WAVE_COUNT,
+                default = Defaults.PREF_WAVE_COUNT,
+                range = 1f..12f,
+                description = { "${it.toInt()}" }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_speed),
+                key = Settings.PREF_WAVE_SPEED,
+                default = Defaults.PREF_WAVE_SPEED,
+                range = 0f..0.06f,
+                description = { String.format(Locale.US, "%.3f", it) }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_jitter),
+                key = Settings.PREF_WAVE_JITTER,
+                default = Defaults.PREF_WAVE_JITTER,
+                range = 0f..1f,
+                description = { if (it < 0.02f) "none" else "${(100 * it).toInt()}%" }
+            ) { }
         }
 
         if (showBugReportDialog) {

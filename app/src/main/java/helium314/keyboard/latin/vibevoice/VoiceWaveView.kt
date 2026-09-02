@@ -9,7 +9,9 @@ import android.provider.Settings as AndroidSettings
 import android.util.AttributeSet
 import android.view.View
 import helium314.keyboard.latin.common.ColorType
+import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.prefs
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -105,7 +107,19 @@ class VoiceWaveView @JvmOverloads constructor(
 
         // Louder speech travels faster as well as reaching higher; without this the amplitude grows
         // but the motion still reads as idle.
-        phase += PHASE_STEP * (1f + level * PHASE_LEVEL_GAIN)
+        // Read once per frame so the tuning sliders take effect while the keyboard is open, with
+        // no restart. Cheap: seven lookups in an in-memory map.
+        val p = context.prefs()
+        val ampFraction = p.getFloat(Settings.PREF_WAVE_AMPLITUDE, Defaults.PREF_WAVE_AMPLITUDE)
+        val reaction = p.getFloat(Settings.PREF_WAVE_REACTION, Defaults.PREF_WAVE_REACTION)
+        val cycles = p.getFloat(Settings.PREF_WAVE_CYCLES, Defaults.PREF_WAVE_CYCLES)
+        val spread = p.getFloat(Settings.PREF_WAVE_SPREAD, Defaults.PREF_WAVE_SPREAD)
+        val jitter = p.getFloat(Settings.PREF_WAVE_JITTER, Defaults.PREF_WAVE_JITTER)
+        val waveCount = p.getFloat(Settings.PREF_WAVE_COUNT, Defaults.PREF_WAVE_COUNT)
+            .toInt().coerceIn(1, 12)
+
+        phase += p.getFloat(Settings.PREF_WAVE_SPEED, Defaults.PREF_WAVE_SPEED) *
+                (1f + level * PHASE_LEVEL_GAIN)
 
         val baseColor = try {
             Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
@@ -117,7 +131,7 @@ class VoiceWaveView @JvmOverloads constructor(
         val blue = Color.blue(baseColor)
 
         paint.strokeWidth = STROKE_WIDTH_DP * density
-        val spacing = height / (WAVE_COUNT + 1)
+        val spacing = height / (waveCount + 1)
         val step = (width / 120f).coerceAtLeast(4f)
         // Everything below is expressed in cycles across the width rather than radians per pixel.
         // The web constants are radians per pixel on a 350 px canvas, where the fundamental works
@@ -126,13 +140,18 @@ class VoiceWaveView @JvmOverloads constructor(
         // In these units the picture is also identical on a phone and on a tablet.
         val cycle = (2.0 * Math.PI / width).toFloat()
 
-        for (w in 0 until WAVE_COUNT) {
+        for (w in 0 until waveCount) {
             val baseOffsetY = spacing * 0.9f + w * spacing * 1.05f
-            val wavePhase = phase + w * 0.6f
+            // Spread around a full cycle instead of nudged by a fixed 0.6 rad. That offset was
+            // under a tenth of a period, so each wave was doing very nearly what its neighbour had
+            // done a moment earlier: they ran parallel and followed each other. Two waves only
+            // cross if they are moving in different directions, so this — not the amplitude — is
+            // what decides whether they ever meet.
+            val wavePhase = phase + w * spread * (2.0 * Math.PI / waveCount).toFloat()
 
             // Resting alpha fades with depth; speech brightens the whole set. The level term is 1
             // at silence, so a quiet keyboard looks exactly as the theme intends.
-            val restAlpha = REST_ALPHA - w * (REST_ALPHA_FALLOFF / WAVE_COUNT)
+            val restAlpha = REST_ALPHA - w * (REST_ALPHA_FALLOFF / waveCount)
             val alpha = (restAlpha * (1f + level * ALPHA_LEVEL_GAIN)).coerceIn(0.02f, 0.85f)
             paint.color = Color.argb((alpha * 255).toInt(), red, green, blue)
 
@@ -141,7 +160,7 @@ class VoiceWaveView @JvmOverloads constructor(
             // excursion just past one full spacing, and they interleave. The three terms sum to at
             // most 1.7, so the peak here is 1.7 * amp * envelope — roughly a quarter of a spacing
             // in silence and a little over a full spacing when the voice is loud.
-            val amp = spacing * AMP_REST_FRACTION * (1f + level * AMP_LEVEL_GAIN)
+            val amp = spacing * ampFraction * (1f + level * reaction)
 
             // Each wave is detuned a little. Without this every line is the same curve shifted in
             // phase; under one visible period that passes for organic, at four periods it reads as
@@ -152,16 +171,19 @@ class VoiceWaveView @JvmOverloads constructor(
             var x = 0f
             while (x <= width) {
                 val nx = x * cycle
-                val sin1 = sin(nx * CYCLES_FUNDAMENTAL * detune + wavePhase)
-                val sin2 = sin(nx * CYCLES_SECOND * detune - wavePhase * (0.7f + (w % 2) * 0.2f)) * 0.45f
-                val cos1 = cos(nx * CYCLES_THIRD * detune + wavePhase * 0.6f) * 0.25f
+                val sin1 = sin(nx * cycles * detune + wavePhase)
+                val sin2 = sin(nx * cycles * SECOND_RATIO * detune - wavePhase * (0.7f + (w % 2) * 0.2f)) * 0.45f
+                val cos1 = cos(nx * cycles * THIRD_RATIO * detune + wavePhase * 0.6f) * 0.25f
+                // Fine roughness, present only while there is sound. Small by default — a large one
+                // is what made the whole picture look like wallpaper two versions ago.
+                val fine = sin(nx * cycles * JITTER_RATIO + wavePhase * 2.1f) * jitter * level
                 // A slow swell along the width, so the line breathes instead of running at one
                 // height from edge to edge. This is what a waveform looks like, and it replaces the
                 // short ripple that was here before — that added texture but also four more
                 // periods, which is the opposite of what was wanted.
                 val envelope = ENVELOPE_FLOOR + (1f - ENVELOPE_FLOOR) *
                         (0.5f + 0.5f * sin(nx * CYCLES_ENVELOPE + wavePhase * 0.3f))
-                val y = baseOffsetY + (sin1 + sin2 + cos1) * amp * envelope
+                val y = baseOffsetY + (sin1 + sin2 + cos1 + fine) * amp * envelope
                 if (first) {
                     wavePath.moveTo(x, y)
                     first = false
@@ -190,25 +212,19 @@ class VoiceWaveView @JvmOverloads constructor(
     }
 
     companion object {
-        private const val WAVE_COUNT = 5
         private const val FRAME_INTERVAL_MS = 33L // ~30fps; 60 buys nothing here and costs battery
         private const val LEVEL_ATTACK = 0.55f
         private const val LEVEL_RELEASE = 0.16f
-        /** Periods across the view's width. Under two, so one swell spans most of the keyboard. */
-        private const val CYCLES_FUNDAMENTAL = 1.2f
-        private const val CYCLES_SECOND = 2.3f // deliberately not exactly double, that beats visibly
-        private const val CYCLES_THIRD = 0.9f
+        // Multiples of the fundamental, which is a setting. Not whole numbers on purpose: an exact
+        // double beats visibly and the composite starts to read as a repeat.
+        private const val SECOND_RATIO = 1.92f
+        private const val THIRD_RATIO = 0.75f
+        private const val JITTER_RATIO = 7.5f
         private const val CYCLES_ENVELOPE = 0.6f
         private const val ENVELOPE_FLOOR = 0.45f
         private const val WAVE_DETUNE = 0.06f
-        // Apparent travel is phase speed divided by spatial frequency, so dropping from four
-        // periods to one and a bit makes the same phase step look three times faster. This keeps
-        // the motion roughly where it was.
-        private const val PHASE_STEP = 0.012f
         private const val PHASE_LEVEL_GAIN = 3.2f
         private const val ALPHA_LEVEL_GAIN = 3.0f
-        private const val AMP_LEVEL_GAIN = 4.0f
-        private const val AMP_REST_FRACTION = 0.18f
         private const val REST_ALPHA = 0.30f
         private const val REST_ALPHA_FALLOFF = 0.15f
         private const val STROKE_WIDTH_DP = 1.2f
