@@ -97,9 +97,11 @@ class VoiceWaveView @JvmOverloads constructor(
         if (width <= 0f || height <= 0f) return
 
         val raw = levelSource?.invoke() ?: 0f
-        // Follows a spoken syllable rather than every click in the room. Same constant as the web
-        // component, which arrived at it for the same reason.
-        level += (raw - level) * LEVEL_SMOOTHING
+        // Asymmetric, the way a level meter behaves: jump at the onset of a syllable, fall back
+        // slowly. The web component uses one constant for both directions, which is what made the
+        // swell arrive late and then linger. Attack is more than three times the release here.
+        val coeff = if (raw > level) LEVEL_ATTACK else LEVEL_RELEASE
+        level += (raw - level) * coeff
 
         // Louder speech travels faster as well as reaching higher; without this the amplitude grows
         // but the motion still reads as idle.
@@ -116,7 +118,9 @@ class VoiceWaveView @JvmOverloads constructor(
 
         paint.strokeWidth = STROKE_WIDTH_DP * density
         val spacing = height / (WAVE_COUNT + 1)
-        val step = (width / 120f).coerceAtLeast(4f)
+        // Finer than the web's fixed 4 px: the ripple below runs at a much shorter wavelength and
+        // would alias into a staircase at that resolution.
+        val step = (width / 220f).coerceAtLeast(3f)
 
         for (w in 0 until WAVE_COUNT) {
             val baseOffsetY = spacing * 0.9f + w * spacing * 1.05f
@@ -136,10 +140,14 @@ class VoiceWaveView @JvmOverloads constructor(
             var x = 0f
             var first = true
             while (x <= width) {
-                val sin1 = sin(x * (0.015f + (w % 2) * 0.003f) + wavePhase)
-                val sin2 = sin(x * 0.035f - wavePhase * (0.7f + (w % 2) * 0.2f)) * 0.45f
-                val cos1 = cos(x * 0.012f + wavePhase * 0.6f) * 0.25f
-                val y = baseOffsetY + (sin1 + sin2 + cos1) * amp
+                val sin1 = sin(x * (0.024f + (w % 2) * 0.005f) + wavePhase)
+                val sin2 = sin(x * 0.056f - wavePhase * (0.7f + (w % 2) * 0.2f)) * 0.45f
+                val cos1 = cos(x * 0.019f + wavePhase * 0.6f) * 0.25f
+                // Only present while there is sound, and it is what makes the line read as a
+                // waveform rather than as a contour on a map: a short wavelength that roughens the
+                // curve as the voice gets louder, and vanishes completely in silence.
+                val ripple = sin(x * 0.105f + wavePhase * 2.1f) * RIPPLE_GAIN * level
+                val y = baseOffsetY + (sin1 + sin2 + cos1 + ripple) * amp
                 if (first) {
                     wavePath.moveTo(x, y)
                     first = false
@@ -170,8 +178,10 @@ class VoiceWaveView @JvmOverloads constructor(
     companion object {
         private const val WAVE_COUNT = 5
         private const val FRAME_INTERVAL_MS = 33L // ~30fps; 60 buys nothing here and costs battery
-        private const val LEVEL_SMOOTHING = 0.28f
-        private const val PHASE_STEP = 0.025f
+        private const val LEVEL_ATTACK = 0.55f
+        private const val LEVEL_RELEASE = 0.16f
+        private const val RIPPLE_GAIN = 0.55f
+        private const val PHASE_STEP = 0.040f
         private const val PHASE_LEVEL_GAIN = 3.2f
         private const val ALPHA_LEVEL_GAIN = 3.0f
         private const val AMP_LEVEL_GAIN = 4.0f

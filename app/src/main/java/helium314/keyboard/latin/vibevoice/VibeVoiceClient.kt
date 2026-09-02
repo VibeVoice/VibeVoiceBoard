@@ -488,7 +488,23 @@ class VibeVoiceClient(
                     sumOfSquares += bufferSquares
                     totalSamples += numSamples
                     if (numSamples > 0) {
-                        val rms = Math.sqrt(bufferSquares.toDouble() / numSamples) / 32768.0
+                        // Measured over the tail of the buffer, not all of it. A read carries
+                        // 160-250 ms of audio, so averaging the whole thing centres the estimate
+                        // more than a tenth of a second in the past and the waves visibly trail the
+                        // voice. The last quarter is the freshest part we have; the animation reads
+                        // this thirty times a second and would happily take more.
+                        val tailStart = (numSamples * 3) / 4
+                        var tailSquares = 0L
+                        for (i in tailStart until numSamples) {
+                            val b1 = buffer[2 * i].toInt() and 0xFF
+                            val b2 = buffer[2 * i + 1].toInt() and 0xFF
+                            val sample = ((b2 shl 8) or b1).toShort().toLong()
+                            tailSquares += sample * sample
+                        }
+                        val tailCount = numSamples - tailStart
+                        val rms = if (tailCount > 0)
+                            Math.sqrt(tailSquares.toDouble() / tailCount) / 32768.0
+                        else Math.sqrt(bufferSquares.toDouble() / numSamples) / 32768.0
                         // Raw RMS of speech sits around 0.02..0.06 and peaks near 0.17 -- the session
                         // totals in the bug report logs bear that out -- so feeding it straight to the
                         // animation moved the waves by a couple of percent and read as no reaction at
