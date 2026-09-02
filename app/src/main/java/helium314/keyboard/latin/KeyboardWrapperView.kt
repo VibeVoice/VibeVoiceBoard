@@ -135,6 +135,9 @@ class KeyboardWrapperView @JvmOverloads constructor(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         if (!oneHandedModeEnabled) {
             super.onLayout(changed, left, top, right, bottom)
+            // Measures to 0x0 so it cannot inflate this wrap_content container, so its bounds have
+            // to be handed to it here.
+            voiceWaveView?.layout(0, 0, right - left, bottom - top)
             return
         }
 

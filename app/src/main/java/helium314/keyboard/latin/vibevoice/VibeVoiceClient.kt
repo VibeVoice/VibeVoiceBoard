@@ -488,8 +488,14 @@ class VibeVoiceClient(
                     sumOfSquares += bufferSquares
                     totalSamples += numSamples
                     if (numSamples > 0) {
-                        currentLevel = (Math.sqrt(bufferSquares.toDouble() / numSamples) / 32768.0)
-                            .toFloat().coerceIn(0f, 1f)
+                        val rms = Math.sqrt(bufferSquares.toDouble() / numSamples) / 32768.0
+                        // Raw RMS of speech sits around 0.02..0.06 and peaks near 0.17 -- the session
+                        // totals in the bug report logs bear that out -- so feeding it straight to the
+                        // animation moved the waves by a couple of percent and read as no reaction at
+                        // all. The square root against a 0.15 full scale spreads that range over most
+                        // of 0..1, which is where the web pipeline's FFT average already lands.
+                        currentLevel = Math.sqrt(rms / LEVEL_FULL_SCALE)
+                            .coerceIn(0.0, 1.0).toFloat()
                     }
                     
                     var isAllZeros = true
@@ -661,6 +667,8 @@ class VibeVoiceClient(
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
         private const val TAG = "VibeVoiceClient"
         private const val MAX_RETRIES = 3
+        /** RMS that counts as a full-scale level for the waves; see where currentLevel is written. */
+        private const val LEVEL_FULL_SCALE = 0.15
 
         /** Another app won the concurrent-capture arbitration and the system is feeding us silence. */
         const val WARN_MIC_BUSY = "mic_busy"

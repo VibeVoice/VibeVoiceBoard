@@ -29,8 +29,8 @@
              gaps between keys. -->
         <helium314.keyboard.latin.vibevoice.VoiceWaveView
             android:id="@+id/voice_wave_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
 
         <helium314.keyboard.keyboard.MainKeyboardView
             android:id="@+id/keyboard_view"

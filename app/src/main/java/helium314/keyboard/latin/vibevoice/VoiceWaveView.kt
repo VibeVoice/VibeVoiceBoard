@@ -75,6 +75,16 @@ class VoiceWaveView @JvmOverloads constructor(
         VibeVoiceDebugLogger.log("VoiceWaveView stop")
     }
 
+    /**
+     * Measures to nothing on purpose. The keyboard wrapper is a `wrap_content` FrameLayout, so a
+     * `match_parent` child claims the whole window and drags the keyboard's height up with it — the
+     * keyboard grew to fill the screen the moment a session started. [KeyboardWrapperView] gives
+     * this view its real bounds in `onLayout`, once the keys have been measured.
+     */
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        setMeasuredDimension(0, 0)
+    }
+
     override fun onDetachedFromWindow() {
         stop()
         super.onDetachedFromWindow()
