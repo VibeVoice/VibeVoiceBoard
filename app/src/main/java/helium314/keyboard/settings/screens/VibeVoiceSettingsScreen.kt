@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.dp
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.R
 import androidx.compose.material3.HorizontalDivider
-import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
@@ -347,14 +346,11 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 )
             }
 
-            // Developer tuning, hidden unless "show debug settings" is on. These are for finding
-            // the look, not for shipping: nine sliders with deliberately unreasonable ranges have
-            // no place in front of someone who just wants to dictate.
-            // context.prefs(), not the screen's `prefs` — that one is the encrypted VibeVoice
-            // store holding the API key. The debug flag and the sliders both live in the app's
-            // default preferences.
-            if (context.prefs().getBoolean(
-                    DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)) {
+            // Developer tuning, debug builds only. Deliberately not a preference: a toggle is
+            // something a Play Store user can find and switch on, and these ranges are for finding
+            // a look, not for shipping. BuildConfig.DEBUG is false in release and nouserlib, so the
+            // block cannot render there and R8 drops it; the debug APKs keep the sliders.
+            if (BuildConfig.DEBUG) {
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
 
