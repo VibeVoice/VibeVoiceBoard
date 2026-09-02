@@ -1568,7 +1568,7 @@ public class LatinIME extends InputMethodService implements
         // finishVoiceSession and lands here with mIsRecordingVoice false, so none of them can
         // leave an animation running.
         if (mIsRecordingVoice && client != null) {
-            waves.start(client::getCurrentLevel);
+            waves.start(client);
         } else {
             waves.stop();
         }

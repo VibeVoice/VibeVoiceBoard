@@ -35,6 +35,20 @@ class KeyboardWrapperView @JvmOverloads constructor(
     private lateinit var resizeOneHandedModeBtn: ImageButton
     private var voiceWaveView: View? = null
 
+    /**
+     * Measures the wave view to exactly the bounds it is about to be laid out at, then lays it out.
+     * The measure is not ceremony: the view answers the wrap_content pass with 0x0 so it cannot
+     * stretch this container, and without an EXACTLY pass of its own its measured size would stay
+     * 0x0 forever while it painted at full size.
+     */
+    private fun View.setBounds(left: Int, top: Int, right: Int, bottom: Int) {
+        measure(
+            MeasureSpec.makeMeasureSpec(right - left, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(bottom - top, MeasureSpec.EXACTLY)
+        )
+        layout(left, top, right, bottom)
+    }
+
     var oneHandedModeEnabled = false
         set(enabled) {
             field = enabled
@@ -135,9 +149,9 @@ class KeyboardWrapperView @JvmOverloads constructor(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         if (!oneHandedModeEnabled) {
             super.onLayout(changed, left, top, right, bottom)
-            // Measures to 0x0 so it cannot inflate this wrap_content container, so its bounds have
-            // to be handed to it here.
-            voiceWaveView?.layout(0, 0, right - left, bottom - top)
+            // Answers the wrap_content measure pass with 0x0 so it cannot inflate this container,
+            // so its bounds have to be handed to it here.
+            voiceWaveView?.setBounds(0, 0, right - left, bottom - top)
             return
         }
 
@@ -166,7 +180,7 @@ class KeyboardWrapperView @JvmOverloads constructor(
         }
         // The branch above lays children out by hand, so anything it does not name stays at 0x0.
         // Match the keyboard so the waves sit behind the keys here too.
-        voiceWaveView?.layout(
+        voiceWaveView?.setBounds(
                 keyboardLeft,
                 0,
                 keyboardLeft + keyboardView.measuredWidth,

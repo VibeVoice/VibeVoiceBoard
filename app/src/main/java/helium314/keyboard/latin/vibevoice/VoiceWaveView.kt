@@ -8,10 +8,12 @@ import android.graphics.Paint
 import android.provider.Settings as AndroidSettings
 import android.util.AttributeSet
 import android.view.View
+import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.prefs
+import java.lang.ref.WeakReference
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -37,8 +39,16 @@ class VoiceWaveView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val density = context.resources.displayMetrics.density
 
-    /** Reads the live microphone level, 0..1. Null while no session is running. */
-    @Volatile private var levelSource: (() -> Float)? = null
+    /**
+     * The client whose microphone level is drawn, held weakly. A method reference would have kept
+     * the client alive, and through its listener the whole [helium314.keyboard.latin.LatinIME]
+     * instance, for as long as this view held it -- so any path that failed to call [stop] would
+     * turn a stuck animation into a leaked service. Weak, the worst case is a still line.
+     */
+    @Volatile private var client: WeakReference<VibeVoiceClient>? = null
+
+    /** The wave colour, resolved once per session rather than per frame. */
+    private var baseColor = Color.GRAY
     private var phase = 0f
     private var level = 0f
     private var running = false
@@ -68,9 +78,18 @@ class VoiceWaveView @JvmOverloads constructor(
      * Starts the animation. [source] is polled once per frame rather than pushed, so the capture
      * coroutine never has to touch the UI thread just to move a wave.
      */
-    fun start(source: () -> Float) {
-        levelSource = source
+    fun start(source: VibeVoiceClient) {
+        client = WeakReference(source)
         readTuning()
+        // Resolved here and not in onDraw: the settings may legitimately not be loaded yet, and a
+        // try/catch is the honest way to say so -- but it belongs on a once-per-session call, not
+        // on a path that runs thirty times a second. A theme change re-inflates the input view, so
+        // a new view with a freshly resolved colour is what follows it anyway.
+        baseColor = try {
+            Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
+        } catch (e: Exception) {
+            Color.GRAY
+        }
         if (running) return
         running = true
         phase = 0f
@@ -87,20 +106,35 @@ class VoiceWaveView @JvmOverloads constructor(
      */
     fun stop() {
         running = false
-        levelSource = null
+        client = null
         level = 0f
         visibility = GONE
         VibeVoiceDebugLogger.log("VoiceWaveView stop")
     }
 
     /**
-     * Measures to nothing on purpose. The keyboard wrapper is a `wrap_content` FrameLayout, so a
-     * `match_parent` child claims the whole window and drags the keyboard's height up with it — the
-     * keyboard grew to fill the screen the moment a session started. [KeyboardWrapperView] gives
-     * this view its real bounds in `onLayout`, once the keys have been measured.
+     * Contributes nothing to the parent's measurement, on purpose. The keyboard wrapper is a
+     * `wrap_content` FrameLayout, so a child that answers an AT_MOST spec with the full available
+     * size claims the whole window and drags the keyboard's height up with it — the keyboard grew to
+     * fill the screen the moment a session started. [KeyboardWrapperView] gives this view its real
+     * bounds in `onLayout`, once the keys have been measured.
      */
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        setMeasuredDimension(0, 0)
+        // An EXACTLY spec is a different question from the one above: it is KeyboardWrapperView
+        // telling us our bounds in onLayout, not asking how big we would like to be. Honouring it
+        // keeps measuredWidth/measuredHeight in agreement with what is actually drawn, instead of
+        // leaving a permanent 0x0 for anything that inspects this view.
+        setMeasuredDimension(
+            if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) MeasureSpec.getSize(widthMeasureSpec) else 0,
+            if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) MeasureSpec.getSize(heightMeasureSpec) else 0
+        )
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        // The bounds arrive from KeyboardWrapperView.onLayout, after onDraw may already have run
+        // and rescheduled itself. Draw now rather than sitting out the rest of that frame interval.
+        if (running && w > 0 && h > 0) invalidate()
     }
 
     override fun onDetachedFromWindow() {
@@ -120,7 +154,7 @@ class VoiceWaveView @JvmOverloads constructor(
             return
         }
 
-        val raw = levelSource?.invoke() ?: 0f
+        val raw = client?.get()?.currentLevel ?: 0f
         // Asymmetric, the way a level meter behaves: jump at the onset of a syllable, fall back
         // slowly. The web component uses one constant for both directions, which is what made the
         // swell arrive late and then linger. Attack is more than three times the release here.
@@ -130,11 +164,6 @@ class VoiceWaveView @JvmOverloads constructor(
         // but the motion still reads as idle.
         phase += speed * (1f + level * PHASE_LEVEL_GAIN)
 
-        val baseColor = try {
-            Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
-        } catch (e: Exception) {
-            Color.GRAY // settings not loaded yet; one grey frame is better than a crash in onDraw
-        }
         val red = Color.red(baseColor)
         val green = Color.green(baseColor)
         val blue = Color.blue(baseColor)
@@ -217,7 +246,15 @@ class VoiceWaveView @JvmOverloads constructor(
 
     private val wavePath = android.graphics.Path()
 
+    /**
+     * Debug builds only, deliberately. The sliders that write these keys are gated on
+     * [BuildConfig.DEBUG] in the settings screen, so in a Play build there is nothing that could
+     * have written them and nothing that could reset them either -- reading them there would mean
+     * a restored backup or a stray key silently changing what every user sees, with no way back.
+     * R8 drops the whole body from the release variant.
+     */
     private fun readTuning() {
+        if (!BuildConfig.DEBUG) return
         val p = context.prefs()
         attack = p.getFloat(Settings.PREF_WAVE_ATTACK, Defaults.PREF_WAVE_ATTACK)
         damping = p.getFloat(Settings.PREF_WAVE_DAMPING, Defaults.PREF_WAVE_DAMPING)
