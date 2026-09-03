@@ -43,10 +43,6 @@ class VoiceSessionService : Service() {
 
     private var client: VibeVoiceClient? = null
     private var onStopRequested: Runnable? = null
-    private var transcript: String = ""
-
-    /** Set once the user has asked to stop, while the last result is still on its way. */
-    private var finishing = false
 
     private val notificationHandler = Handler(Looper.getMainLooper())
     private var lastPostedAt = 0L
@@ -156,11 +152,12 @@ class VoiceSessionService : Service() {
         // The live transcript is the whole point of showing anything: it is the only way to tell a
         // session that is hearing you from one that is recording silence. VISIBILITY_SECRET above
         // keeps it off the lock screen, because it is the user's words.
+        val shown = transcript
         if (finishing) {
             builder.setContentText(getString(R.string.vibevoice_session_finishing))
-        } else if (transcript.isNotBlank()) {
-            builder.setContentText(transcript)
-            builder.setStyle(NotificationCompat.BigTextStyle().bigText(transcript))
+        } else if (shown.isNotBlank()) {
+            builder.setContentText(shown)
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(shown))
         } else {
             builder.setContentText(getString(R.string.vibevoice_session_listening))
         }
@@ -235,6 +232,12 @@ class VoiceSessionService : Service() {
                 VibeVoiceDebugLogger.log("Could not start the session service: ${e.message}")
                 return
             }
+            // Cleared here, synchronously, and not on claim: attach runs at the start of a
+            // session, before any result for it can arrive, whereas a claim happens whenever the
+            // platform gets round to onStartCommand -- by then the first partial may already have
+            // been shown, and clearing then would wipe it.
+            transcript = ""
+            finishing = false
             // Always left for onStartCommand to pick up, never written into `instance` here.
             // Between a detach and this call the old service can be alive but already scheduled for
             // destruction: writing into it would hand the new session to an instance whose
@@ -242,7 +245,6 @@ class VoiceSessionService : Service() {
             // onStartCommand -- on whichever instance the platform gives us -- claims it instead.
             pendingClient = session
             pendingOnStop = onStop
-            pendingTranscript = true
         }
 
         /** Ends the foreground state. The session itself is stopped by its owner, not here. */
@@ -250,7 +252,8 @@ class VoiceSessionService : Service() {
         fun detach(context: Context) {
             pendingClient = null
             pendingOnStop = null
-            pendingTranscript = false
+            transcript = ""
+            finishing = false
             val service = instance
             if (service != null) {
                 service.client = null
@@ -268,29 +271,31 @@ class VoiceSessionService : Service() {
         /** Puts the latest transcript in the notification, so it shows what is being heard. */
         @JvmStatic
         fun showTranscript(text: String) {
-            val service = instance ?: return
-            if (service.transcript == text) return
-            service.transcript = text
-            service.refreshNotification()
+            if (transcript == text) return
+            transcript = text
+            instance?.refreshNotification()
         }
 
         private const val MIN_POST_INTERVAL_MS = 400L
 
         @Volatile private var pendingClient: VibeVoiceClient? = null
         @Volatile private var pendingOnStop: Runnable? = null
-        @Volatile private var pendingTranscript = false
+
+        /**
+         * What the notification says, held here rather than on the instance. A session can be
+         * stopped and restarted faster than a service is destroyed and created, and anything kept
+         * on the instance during that window is written to the one on its way out and then lost.
+         * The service is a holder of foreground state; what it displays belongs to the session.
+         */
+        @Volatile private var transcript: String = ""
+        @Volatile private var finishing: Boolean = false
 
         internal fun claimPending(service: VoiceSessionService) {
-            if (pendingClient == null && !pendingTranscript) return
+            if (pendingClient == null) return
             service.client = pendingClient
             service.onStopRequested = pendingOnStop
-            if (pendingTranscript) {
-                service.transcript = ""
-                service.finishing = false
-            }
             pendingClient = null
             pendingOnStop = null
-            pendingTranscript = false
         }
     }
 }

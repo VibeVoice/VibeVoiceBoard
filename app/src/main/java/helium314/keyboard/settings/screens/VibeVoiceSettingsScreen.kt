@@ -32,6 +32,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +45,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -93,12 +97,24 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
     var notificationsGranted by remember { mutableStateOf(notificationsAllowed()) }
-    // Re-read on every recomposition rather than remembered: the user grants this in the system
-    // settings, so we come back to this screen with it changed and no result to tell us.
     var overlayAllowed by remember { mutableStateOf(VoiceOverlay.isAllowed(context)) }
     val overlaySettings = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { overlayAllowed = VoiceOverlay.isAllowed(context) }
+    // Re-read on resume, not only on the launcher's result. This permission lives in the system
+    // settings and the user can perfectly well walk there themselves, in which case there is no
+    // result to tell us and the screen would keep offering a button for something already granted.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                overlayAllowed = VoiceOverlay.isAllowed(context)
+                notificationsGranted = notificationsAllowed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val askForNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> notificationsGranted = granted }
