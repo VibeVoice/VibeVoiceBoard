@@ -11,7 +11,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -42,19 +45,28 @@ class VoiceSessionService : Service() {
     private var onStopRequested: Runnable? = null
     private var transcript: String = ""
 
+    /** Set once the user has asked to stop, while the last result is still on its way. */
+    private var finishing = false
+
+    private val notificationHandler = Handler(Looper.getMainLooper())
+    private var lastPostedAt = 0L
+    private val postRunnable = Runnable { postNotification() }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
-        // attach() may have run before this instance existed -- startForegroundService only queues
-        // the start. Whatever it left behind is picked up here.
-        claimPending(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             VibeVoiceDebugLogger.log("Stop requested from the notification")
+            // Say so before asking, and drop the button. Stopping waits for the last result, which
+            // can take a second or two; an unchanged notification reads as a tap that did nothing,
+            // and the second tap forces the session to finish and throws that result away.
+            finishing = true
+            postNotification()
             // Routed back to LatinIME rather than stopping the client here: stopping a session is a
             // state transition (mIsStoppingVoice, the pending final, the composing text) and that
             // state lives there. Reaching around it would leave the keyboard believing it is still
@@ -62,6 +74,9 @@ class VoiceSessionService : Service() {
             onStopRequested?.run()
             return START_NOT_STICKY
         }
+        // Whatever attach() left behind is claimed here rather than in onCreate, because this runs
+        // for an instance that already exists as well as for a fresh one.
+        claimPending(this)
         startForegroundNotification()
         // START_NOT_STICKY: a session that died with the process should stay dead. Restarting the
         // service without the client it was holding would show a notification for a session that
@@ -70,9 +85,19 @@ class VoiceSessionService : Service() {
     }
 
     override fun onDestroy() {
+        notificationHandler.removeCallbacks(postRunnable)
         instance = null
         client = null
         onStopRequested = null
+        // Explicitly, rather than trusting the notification to go with the service. An ongoing
+        // notification that outlives its service is not merely untidy: its stop button reaches a
+        // service with nothing to stop, so it says a session is running that is not.
+        try {
+            androidx.core.app.ServiceCompat.stopForeground(this, androidx.core.app.ServiceCompat.STOP_FOREGROUND_REMOVE)
+            NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID)
+        } catch (e: Exception) {
+            VibeVoiceDebugLogger.log("Could not clear the session notification: ${e.message}")
+        }
         super.onDestroy()
     }
 
@@ -83,9 +108,19 @@ class VoiceSessionService : Service() {
      */
     private fun startForegroundNotification() {
         createChannel()
-        androidx.core.app.ServiceCompat.startForeground(
-            this, NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        )
+        try {
+            androidx.core.app.ServiceCompat.startForeground(
+                this, NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+            lastPostedAt = SystemClock.uptimeMillis()
+        } catch (e: Exception) {
+            // ForegroundServiceStartNotAllowedException from Android 12, or a SecurityException if
+            // RECORD_AUDIO went away between the start and here. A started service that never
+            // reaches the foreground is worse than none: it would be killed for it. The session
+            // itself carries on and simply does not survive the keyboard being dismissed.
+            VibeVoiceDebugLogger.log("startForeground refused: ${e.message}")
+            stopSelf()
+        }
     }
 
     private fun createChannel() {
@@ -115,11 +150,15 @@ class VoiceSessionService : Service() {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_SECRET)
-            .addAction(0, getString(R.string.vibevoice_session_stop), stopPending)
+        if (!finishing) {
+            builder.addAction(0, getString(R.string.vibevoice_session_stop), stopPending)
+        }
         // The live transcript is the whole point of showing anything: it is the only way to tell a
         // session that is hearing you from one that is recording silence. VISIBILITY_SECRET above
         // keeps it off the lock screen, because it is the user's words.
-        if (transcript.isNotBlank()) {
+        if (finishing) {
+            builder.setContentText(getString(R.string.vibevoice_session_finishing))
+        } else if (transcript.isNotBlank()) {
             builder.setContentText(transcript)
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(transcript))
         } else {
@@ -128,21 +167,38 @@ class VoiceSessionService : Service() {
         return builder.build()
     }
 
+    /**
+     * Rate-limits the posting. Partial results arrive several times a second while someone is
+     * speaking, and one Binder call to the notification service per partial is both wasted work and
+     * enough to hit the framework's own "posting too frequently" limiter, which drops updates -- so
+     * posting less often actually shows more. The trailing post matters: the last partial before a
+     * pause is the one left on screen.
+     */
     private fun refreshNotification() {
         if (instance == null) return
-        // From Android 13 posting is a runtime permission, and an input method cannot ask for one
-        // itself. Denied only costs the display: startForeground is unaffected, so the service
-        // keeps running and the microphone stays open with no notification to show for it.
+        val since = SystemClock.uptimeMillis() - lastPostedAt
+        notificationHandler.removeCallbacks(postRunnable)
+        if (since >= MIN_POST_INTERVAL_MS) {
+            postNotification()
+        } else {
+            notificationHandler.postDelayed(postRunnable, MIN_POST_INTERVAL_MS - since)
+        }
+    }
+
+    private fun postNotification() {
+        if (instance == null) return
+        // From Android 13 posting is a runtime permission. Denied only costs the display:
+        // startForeground is unaffected, so the service keeps running and the microphone stays open
+        // with no notification to show for it.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
             return
         }
         try {
+            lastPostedAt = SystemClock.uptimeMillis()
             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification())
         } catch (e: Exception) {
-            // Posting can fail when notifications are denied (Android 13+). The service keeps
-            // running and the microphone stays open; only the display is lost.
             VibeVoiceDebugLogger.log("Could not update the session notification: ${e.message}")
         }
     }
@@ -179,17 +235,14 @@ class VoiceSessionService : Service() {
                 VibeVoiceDebugLogger.log("Could not start the session service: ${e.message}")
                 return
             }
-            // onStartCommand runs on the main thread, and so does this, so by the time a later
-            // message runs the instance is set. Assigning through the companion covers the case
-            // where it is already up from a previous session in the same process.
-            instance?.let {
-                it.client = session
-                it.onStopRequested = onStop
-                it.transcript = ""
-            } ?: run {
-                pendingClient = session
-                pendingOnStop = onStop
-            }
+            // Always left for onStartCommand to pick up, never written into `instance` here.
+            // Between a detach and this call the old service can be alive but already scheduled for
+            // destruction: writing into it would hand the new session to an instance whose
+            // onDestroy is still queued, and that onDestroy would then null it out again. The next
+            // onStartCommand -- on whichever instance the platform gives us -- claims it instead.
+            pendingClient = session
+            pendingOnStop = onStop
+            pendingTranscript = true
         }
 
         /** Ends the foreground state. The session itself is stopped by its owner, not here. */
@@ -197,6 +250,7 @@ class VoiceSessionService : Service() {
         fun detach(context: Context) {
             pendingClient = null
             pendingOnStop = null
+            pendingTranscript = false
             val service = instance
             if (service != null) {
                 service.client = null
@@ -220,14 +274,23 @@ class VoiceSessionService : Service() {
             service.refreshNotification()
         }
 
+        private const val MIN_POST_INTERVAL_MS = 400L
+
         @Volatile private var pendingClient: VibeVoiceClient? = null
         @Volatile private var pendingOnStop: Runnable? = null
+        @Volatile private var pendingTranscript = false
 
         internal fun claimPending(service: VoiceSessionService) {
+            if (pendingClient == null && !pendingTranscript) return
             service.client = pendingClient
             service.onStopRequested = pendingOnStop
+            if (pendingTranscript) {
+                service.transcript = ""
+                service.finishing = false
+            }
             pendingClient = null
             pendingOnStop = null
+            pendingTranscript = false
         }
     }
 }

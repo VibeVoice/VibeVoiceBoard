@@ -1756,14 +1756,20 @@ public class LatinIME extends InputMethodService implements
                     });
                 }
             });
+            // Only when background dictation is on. With it off the session ends with the keyboard
+            // anyway, so the service would buy nothing and the notification would announce a
+            // capability the user has switched off.
+            //
             // Before startStreaming, and while the keyboard is on screen: a microphone-typed
             // foreground service cannot be started from the background, and the whole point of it
             // is to already be running by the time the keyboard is dismissed. The stop callback
             // comes back through handleVoiceInput so the notification's button and the space key
             // end a session by exactly the same path.
-            VoiceSessionService.attach(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
-                if (sessionId == mVoiceSessionId) handleVoiceInput();
-            }));
+            if (mSettings.getCurrent().mVoiceBackgroundEnabled) {
+                VoiceSessionService.attach(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
+                    if (sessionId == mVoiceSessionId) handleVoiceInput();
+                }));
+            }
             mVibeVoiceClient.startStreaming();
         } catch (Exception e) {
             android.widget.Toast.makeText(this, getString(R.string.vibevoice_error, e.getMessage()), android.widget.Toast.LENGTH_LONG)

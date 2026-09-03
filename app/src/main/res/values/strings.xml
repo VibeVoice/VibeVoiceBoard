@@ -83,6 +83,8 @@
     <string name="vibevoice_session_title">VibeVoice is listening</string>
     <string name="vibevoice_session_listening">Waiting for speech\u2026</string>
     <string name="vibevoice_session_stop">Stop</string>
+    <string name="vibevoice_session_finishing">Finishing the last sentence\u2026</string>
+    <string name="vibevoice_background_needs_notifications">Allow notifications, or a session running in the background has no visible indicator and no way to stop it.</string>
     <string name="vibevoice_waves_title">Sound waves</string>
     <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. A change takes effect the next time you start dictating.</string>
     <string name="vibevoice_waves_amplitude">Size</string>

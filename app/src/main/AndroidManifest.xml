@@ -16,8 +16,10 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- A dictation session has to survive the keyboard being dismissed, and a process with no
-         visible window may not use the microphone from Android 11 on. All three are install-time
-         permissions: keeping the session alive in the background costs the user no dialog. -->
+         visible window may not use the microphone from Android 11 on. The two FOREGROUND_SERVICE
+         permissions are install-time, so keeping the session alive costs the user no dialog.
+         POST_NOTIFICATIONS is not: it is a runtime permission from Android 13, and it governs only
+         whether the session notification can be shown. Denied, the service still runs. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

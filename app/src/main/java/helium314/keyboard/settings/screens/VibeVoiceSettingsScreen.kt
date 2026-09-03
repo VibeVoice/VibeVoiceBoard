@@ -1,6 +1,12 @@
 package helium314.keyboard.settings.screens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -79,6 +85,15 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     var backgroundDictation by remember {
         mutableStateOf(appPrefs.getBoolean(Settings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
     }
+    // Only this screen can ask: an input method has no way to request a runtime permission itself,
+    // which is why the keyboard sends the user here for the microphone too.
+    fun notificationsAllowed() = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+    var notificationsGranted by remember { mutableStateOf(notificationsAllowed()) }
+    val askForNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> notificationsGranted = granted }
     var isBugReportSuccess by remember { mutableStateOf(false) }
 
     var quotaInfo by remember { mutableStateOf<org.json.JSONObject?>(null) }
@@ -382,7 +397,21 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     onCheckedChange = {
                         backgroundDictation = it
                         appPrefs.edit().putBoolean(Settings.PREF_VOICE_BACKGROUND, it).apply()
+                        // Asked here and not at the first session: a session that runs on in the
+                        // background with notifications denied is an open microphone with nothing
+                        // showing it and no button to stop it.
+                        if (it && !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            askForNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                     }
+                )
+            }
+            if (backgroundDictation && !notificationsGranted) {
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    stringResource(R.string.vibevoice_background_needs_notifications),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
 
