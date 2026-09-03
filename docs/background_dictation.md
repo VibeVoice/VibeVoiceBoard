@@ -101,13 +101,46 @@ wo er hingehört. Passwort- und Incognito-Felder bekommen den Chip gar nicht ers
 Das ist heute schon halb da: die aktuelle Regel lässt eine Session über einen Feldwechsel
 weiterlaufen und bricht nur bei Passwort- oder Incognito-Feldern ab.
 
+### Geprüft: was welche Berechtigung wirklich tut
+
+Nachgeschlagen in der Android-Doku am 2026-09-03, weil die Annahmen darüber falsch waren.
+
+**`SYSTEM_ALERT_WINDOW` ist nicht das, was das Mikrofon offen hält.** Das tut allein der Foreground
+Service vom Typ `microphone`. Das Overlay ist reine Oberfläche — es ändert nichts daran, ob
+aufgenommen werden darf. Die beiden Dinge waren in der Diskussion verknüpft und sind es nicht.
+
+**Der Service braucht keine Zustimmung.** `FOREGROUND_SERVICE` und `FOREGROUND_SERVICE_MICROPHONE`
+sind Install-Time-Permissions, keine Laufzeitdialoge. `RECORD_AUDIO` haben wir bereits. Das heißt:
+Hintergrunddiktat kostet den Nutzer **keinen einzigen zusätzlichen Berechtigungsdialog**. Der
+einzige sichtbare Schalter ist `POST_NOTIFICATIONS` (ab Android 13) — und der entscheidet nur, ob
+die Notification *angezeigt* wird, nicht ob der Service läuft.
+
+**Die Startbeschränkung greift bei uns nicht.** Ein `microphone`-Service darf nicht aus dem
+Hintergrund gestartet werden. Wir starten ihn, während die Tastatur sichtbar ist — der dokumentierte
+Normalfall. Zusätzlich ist „die App ist die aktuelle Eingabemethode" ausdrücklich als Ausnahme
+gelistet, was uns Luft gibt, falls später doch aus dem Hintergrund gestartet werden muss.
+
+**Bubbles fallen aus.** Seit Android 11 muss eine Notification einen Sharing Shortcut haben und als
+Konversation gelten, um zu bubblen. Eine Diktatsession ist keine Konversation. Man könnte einen
+Shortcut vortäuschen, aber der Nutzer kann Bubbles außerdem pro App abschalten — als Träger einer
+Funktion untauglich. Damit ist die Frage von oben beantwortet: es bleibt bei Notification oder
+Overlay.
+
+**Play Console:** Bei targetSdk 34+ — wir sind auf 36 — müssen die Foreground-Service-Typen im
+Play-Formular deklariert werden.
+
+Folge für die Produktentscheidung: die Zustimmung, die du beschrieben hast, ist trotzdem baubar,
+aber als **Schalter in unseren Einstellungen**, nicht als Systemberechtigung. Das ist besser: eigene
+Formulierung, ein Tap, kein Ausflug in die Systemeinstellungen.
+
 ### Stufe 4 — das schwebende Widget
 
 Die Idee mit dem Herausziehen des Mikrofonsymbols. Ehrlich bewertet:
 
 **Was es braucht.** `SYSTEM_ALERT_WINDOW` — eine Sonderberechtigung, die der Nutzer in den
 Systemeinstellungen erteilen muss, nicht per Dialog. Play prüft sie genauer als normale Rechte, und
-sie ist der Grund, warum viele Apps das Feature gar nicht erst anbieten.
+sie ist der Grund, warum viele Apps das Feature gar nicht erst anbieten. Wichtig: sie kauft **keine**
+Funktion, die wir sonst nicht hätten. Das Diktat läuft auch ohne sie im Hintergrund weiter.
 
 **Was die Geste kostet.** Das IME-Fenster endet an seiner Oberkante; ein Drag darüber hinaus ist
 kein normales Drag, sondern muss beim Überschreiten der Kante in ein Overlay-Fenster übergeben
@@ -126,9 +159,10 @@ genau. Andersherum baut man die Sonderberechtigung ein, bevor man weiß, ob man 
 
 Zwei Punkte, die früh geklärt sein wollen, weil sie die Architektur bestimmen:
 
-- Ein **Foreground Service vom Typ `microphone`** muss im Play-Formular begründet werden. Eine
-  Tastatur, die im Hintergrund das Mikrofon offen hält, ist eine Kombination, die Prüfung anzieht.
-  Die Begründung ist gut — Diktat, das ein App-Wechsel nicht abschneidet — aber sie muss stehen.
+- Ein **Foreground Service vom Typ `microphone`** muss im Play-Formular deklariert und begründet
+  werden (Pflicht ab targetSdk 34, wir sind auf 36). Eine Tastatur, die im Hintergrund das Mikrofon
+  offen hält, ist eine Kombination, die Prüfung anzieht. Die Begründung ist gut — Diktat, das ein
+  App-Wechsel nicht abschneidet — aber sie muss stehen.
 - **`SYSTEM_ALERT_WINDOW`** (Stufe 4) zieht dieselbe Prüfung noch einmal, zusätzlich.
 
 Das ist ein weiteres Argument, Stufe 4 zu vertagen: eine Einreichung mit einer erklärungsbedürftigen
