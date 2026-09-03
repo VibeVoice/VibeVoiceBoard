@@ -6,7 +6,9 @@ set -e
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 HOOKS_SRC="$REPO_ROOT/tools/hooks"
-HOOKS_DEST="$REPO_ROOT/.git/hooks"
+# git rev-parse, not "$REPO_ROOT/.git": in a worktree .git is a file, and the hooks live in the
+# main checkout's git directory.
+HOOKS_DEST="$(git rev-parse --git-common-dir)/hooks"
 
 # Remove old post-commit hook if present
 rm -f "$HOOKS_DEST/post-commit"

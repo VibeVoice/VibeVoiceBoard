@@ -1018,6 +1018,10 @@ public class LatinIME extends InputMethodService implements
         }
 
         if (isDifferentTextField) {
+            // Whatever is still being said was said for the field the user just left. The
+            // connection now points at a new one, so a pending final would be typed into it --
+            // possibly a password field, which is how this stops being merely wrong.
+            abortVoiceSession("focus moved to a different text field");
             mainKeyboardView.closing();
             suggest.setAutoCorrectionThreshold(currentSettingsValues.mAutoCorrectionThreshold);
             switcher.reloadMainKeyboard();
@@ -1080,6 +1084,12 @@ public class LatinIME extends InputMethodService implements
     public void onWindowHidden() {
         super.onWindowHidden();
         Log.i(TAG, "onWindowHidden");
+        // A dictation session has nowhere to put its text once the keyboard is gone, so leaving it
+        // running is pure cost: a microphone open behind another app, audio still going to the
+        // server, and a socket nobody is waiting on. Ended here rather than in onFinishInputView,
+        // which also fires for the view rebuild on an orientation change -- that must not end a
+        // session.
+        abortVoiceSession("keyboard window hidden");
         final MainKeyboardView mainKeyboardView = mKeyboardSwitcher.getMainKeyboardView();
         if (mainKeyboardView != null) {
             mainKeyboardView.closing();
@@ -1544,6 +1554,28 @@ public class LatinIME extends InputMethodService implements
             }
             syncVoiceWaves();
         });
+    }
+
+    /**
+     * Ends a dictation session without committing anything, for the paths where the text has
+     * nowhere safe to go: the keyboard has been dismissed, or the focus has moved to a field the
+     * words were not meant for. Deliberately not the graceful stop the user gets -- that one exists
+     * to deliver the last transcript, and delivering it is the problem here.
+     *
+     * <p>Bumping the session id is what makes it stick: callbacks already in flight on the UI
+     * handler check it and return, so a late final cannot resurrect the session. Does nothing when
+     * no session is running, so it is safe on any path.
+     */
+    private void abortVoiceSession(final String reason) {
+        if (mVibeVoiceClient == null && !mIsRecordingVoice) return;
+        VibeVoiceDebugLogger.log("Aborting dictation session: " + reason);
+        mVoiceSessionId++;
+        mIsStoppingVoice = false;
+        mVoiceComposingText = "";
+        final VibeVoiceClient client = mVibeVoiceClient;
+        mVibeVoiceClient = null;
+        if (client != null) client.cancel();
+        updateVoiceInputState(false);
     }
 
     /**

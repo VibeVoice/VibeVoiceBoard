@@ -202,8 +202,17 @@ class ClipboardHistoryManager(
         // relies on: the user's history setting, and never persisting what was typed into a password
         // or otherwise sensitive field.
         if (!latinIME.mSettings.current.mClipboardHistoryEnabled) return
+        // Incognito covers this too. The flag is set both by the "always incognito" setting and by
+        // an editor asking for no personalized learning -- a private browsing tab, say. Suppressing
+        // dictionary learning there while writing the same words to a database the user can open
+        // from the clipboard drawer would be the wrong half of the promise.
+        if (latinIME.mSettings.current.mIncognitoModeEnabled) return
         val inputType = latinIME.currentInputEditorInfo?.inputType ?: InputType.TYPE_NULL
-        if (InputTypeUtils.isPasswordInputType(inputType)) return
+        // isAnyPasswordInputType, not isPasswordInputType: the latter misses
+        // TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, which is what a password field becomes the moment
+        // the user taps "show password". Dictating a password into one would have written it to
+        // the clipboard database in the clear.
+        if (InputTypeUtils.isAnyPasswordInputType(inputType)) return
         scope.launch(Dispatchers.IO) {
             clipboardDao?.addClip(System.currentTimeMillis(), false, text)
         }

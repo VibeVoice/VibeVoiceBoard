@@ -165,6 +165,13 @@ class VibeVoiceClient(
             VibeVoiceDebugLogger.log("Reconnecting in ${delayMs}ms (attempt $retryCount/$MAX_RETRIES)...")
             scope.launch {
                 delay(delayMs)
+                // The session can end inside that delay -- the user stops it, or the microphone is
+                // taken away. Reconnecting then opens a socket nobody asked for, and the backstop
+                // timer that would have closed it was armed on the previous one.
+                if (!isStreaming) {
+                    VibeVoiceDebugLogger.log("Reconnect cancelled: session no longer streaming")
+                    return@launch
+                }
                 connectWebSocket()
             }
         } else {
@@ -298,6 +305,14 @@ class VibeVoiceClient(
                     } else if (json.has("error")) {
                         val errorMsg = json.optString("error", "Unknown server error")
                         VibeVoiceDebugLogger.log("WS server error: $errorMsg")
+                        // An error frame is the server refusing the session, not a hiccup: a bad key
+                        // or an exhausted quota will refuse the next three attempts too. Tearing the
+                        // session down here matters because the close that follows would otherwise
+                        // find isStreaming still true and start reconnecting into the same refusal,
+                        // with the microphone running throughout.
+                        isStreaming = false
+                        cleanupAudioCapture()
+                        abandonSocket("server error")
                         listener.onError(errorMsg)
                     } else {
                         VibeVoiceDebugLogger.log("WS msg no text: $text")
@@ -377,6 +392,7 @@ class VibeVoiceClient(
             VibeVoiceDebugLogger.log("AudioRecord.getMinBufferSize failed: $minBuf")
             listener.onError("AudioRecord init failed")
             isStreaming = false
+            abandonSocket("mic unavailable")
             return
         }
         val bufferSize = minBuf * 4
@@ -440,6 +456,11 @@ class VibeVoiceClient(
             cleanupAudioCapture()
             listener.onError("Microphone unavailable")
             isStreaming = false
+            // The socket was opened before the microphone was, so it is still there, still
+            // completing its handshake and still about to authenticate for a session that no longer
+            // exists. Without this it stays open until the server tires of it, and its late
+            // callbacks land on an aborted session.
+            abandonSocket("mic unavailable")
             return
         }
 
@@ -627,6 +648,19 @@ class VibeVoiceClient(
             VibeVoiceDebugLogger.log("Session complete. Final total bytes: $totalRead, Overall RMS: ${String.format(java.util.Locale.US, "%.6f", overallRms)}")
             Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead, Overall RMS: $overallRms")
         }
+    }
+
+    /**
+     * Drops the socket without the graceful END_STREAM handshake, for the paths where there is no
+     * session left to be graceful about. Safe to call when there is no socket.
+     */
+    private fun abandonSocket(reason: String) {
+        val ws = webSocket ?: return
+        webSocket = null
+        isWsOpen = false
+        pendingEndStream = false
+        VibeVoiceDebugLogger.log("Abandoning socket: $reason")
+        ws.cancel()
     }
 
     fun stopStreaming() {

@@ -1233,6 +1233,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             // Long pressing these keys invokes IME switcher dialog.
             if (sListener.onCustomRequest(KeyboardActionListener.CustomAction.SHOW_INPUT_METHOD_PICKER)) {
                 cancelKeyTracking();
+                // Same as the LANGUAGE_SWITCH branch above: without the release the switcher and
+                // the action listener never learn the key came back up, and the modifier state they
+                // track stays as it was while the dialog was open.
+                sListener.onReleaseKey(code, false);
                 return;
             }
         }

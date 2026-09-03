@@ -6,7 +6,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 VERSION_FILE="$REPO_ROOT/VERSION"
 
 # Guard 1: Skip if merge is in progress (post-merge hook handles minor release bumps)
-if [ -f "$REPO_ROOT/.git/MERGE_HEAD" ]; then
+# git rev-parse --git-path, not "$REPO_ROOT/.git": in a worktree .git is a file, not a directory.
+if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
   exit 0
 fi
 

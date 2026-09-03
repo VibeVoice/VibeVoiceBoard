@@ -1,6 +1,8 @@
 #!/bin/bash
-# post-merge: bump minor version and reset patch on merges to primary branches
-# Only fires when merging INTO main/master/feature/vibevoice-integration
+# post-merge: bump minor version and reset patch on merges to the integration branch
+# Deliberately NOT main/master: AGENTS.md requires main to stay a pure mirror of upstream
+# HeliBoard, and this hook commits. Bumping there would have put a chore(version) commit on the
+# mirror and broken the next pull from upstream.
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 VERSION_FILE="$REPO_ROOT/VERSION"
@@ -9,7 +11,7 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 # Only bump minor on primary branches
 case "$CURRENT_BRANCH" in
-  main|master|feature/vibevoice-integration)
+  feature/vibevoice-integration)
     ;;
   *)
     exit 0

@@ -59,6 +59,10 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
 
     override fun onLongPressKey(primaryCode: Int) {
         if (primaryCode == Constants.CODE_SPACE) {
+            // Feedback first: this is the one long press whose whole point is that you keep holding,
+            // and without the pulse there is nothing but the screen to tell you the threshold was
+            // reached.
+            performHapticFeedback(HapticEvent.KEY_LONG_PRESS)
             latinIME.handleVoiceInput()
             return
         }

@@ -68,6 +68,13 @@ class VoiceWaveView @JvmOverloads constructor(
     private var jitter = Defaults.PREF_WAVE_JITTER
     private var waveCount = Defaults.PREF_WAVE_COUNT.toInt()
 
+    /**
+     * Whether the system allows animations, sampled once per session. Reading it is a
+     * ContentResolver query -- an IPC to the settings provider -- and it used to sit in the frame
+     * loop, thirty of them a second on the UI thread. Nobody changes this setting mid-dictation.
+     */
+    private var animationsEnabled = true
+
     init {
         isClickable = false
         isFocusable = false
@@ -81,6 +88,7 @@ class VoiceWaveView @JvmOverloads constructor(
     fun start(source: VibeVoiceClient) {
         client = WeakReference(source)
         readTuning()
+        animationsEnabled = readAnimationsEnabled()
         // Resolved here and not in onDraw: the settings may legitimately not be loaded yet, and a
         // try/catch is the honest way to say so -- but it belongs on a once-per-session call, not
         // on a path that runs thirty times a second. A theme change re-inflates the input view, so
@@ -95,7 +103,7 @@ class VoiceWaveView @JvmOverloads constructor(
         phase = 0f
         level = 0f
         visibility = VISIBLE
-        VibeVoiceDebugLogger.log("VoiceWaveView start, size=${width}x${height}, animated=${animationsEnabled()}")
+        VibeVoiceDebugLogger.log("VoiceWaveView start, size=${width}x${height}, animated=$animationsEnabled")
         invalidate()
     }
 
@@ -150,7 +158,7 @@ class VoiceWaveView @JvmOverloads constructor(
         // -- the window is shown before the wrapper has given us our bounds. Keep the loop alive
         // instead of returning into silence, or the animation never starts for that session.
         if (width <= 0f || height <= 0f) {
-            if (animationsEnabled()) postInvalidateDelayed(FRAME_INTERVAL_MS)
+            if (animationsEnabled) postInvalidateDelayed(FRAME_INTERVAL_MS)
             return
         }
 
@@ -241,7 +249,7 @@ class VoiceWaveView @JvmOverloads constructor(
 
         // Honouring the system "remove animations" setting, the Android counterpart of the
         // prefers-reduced-motion check the web component makes: one static frame, no loop.
-        if (animationsEnabled()) postInvalidateDelayed(FRAME_INTERVAL_MS)
+        if (animationsEnabled) postInvalidateDelayed(FRAME_INTERVAL_MS)
     }
 
     private val wavePath = android.graphics.Path()
@@ -268,7 +276,7 @@ class VoiceWaveView @JvmOverloads constructor(
             .toInt().coerceIn(1, 12)
     }
 
-    private fun animationsEnabled(): Boolean = try {
+    private fun readAnimationsEnabled(): Boolean = try {
         AndroidSettings.Global.getFloat(
             context.contentResolver, AndroidSettings.Global.ANIMATOR_DURATION_SCALE, 1f
         ) != 0f

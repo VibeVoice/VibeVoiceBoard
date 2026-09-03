@@ -125,7 +125,13 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$verificationUri?code=$userCode"))
                     context.startActivity(intent)
                 } catch (_: android.content.ActivityNotFoundException) {
+                    // Nothing can approve the code without a browser, so polling for ten minutes
+                    // would only hide the message behind a spinner: the error is rendered by the
+                    // branch that userCode being set takes the screen out of.
                     errorMessage = context.getString(R.string.vibevoice_no_browser)
+                    userCode = null
+                    verificationUri = null
+                    return@launch
                 }
 
                 // Poll

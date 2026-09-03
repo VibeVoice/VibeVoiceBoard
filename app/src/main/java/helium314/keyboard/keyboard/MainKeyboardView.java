@@ -738,7 +738,12 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             drawLanguageOnSpacebar(key, canvas, paint);
             // No "..." popup hint here: long-pressing space starts voice input and never opens a
             // popup panel or the IME switcher, see PointerTracker#onLongPressed.
-        } else if (code == KeyCode.LANGUAGE_SWITCH || code == KeyCode.SYMBOL || code == KeyCode.ALPHA) {
+        } else if (code == KeyCode.LANGUAGE_SWITCH
+                || ((code == KeyCode.SYMBOL || code == KeyCode.ALPHA) && mHasMultipleEnabledIMEsOrSubtypes)) {
+            // The symbol and alpha keys only carry the switcher badge when there is a switcher to
+            // open. Without the guard they advertised a picker that showInputPickerDialog declines
+            // to show with a single IME, and the long press then fell through to a plain tap on
+            // release -- the badge promised a dialog and delivered a layout switch.
             drawImeSwitcherIconOnKey(key, canvas);
         }
     }

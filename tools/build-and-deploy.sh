@@ -3,12 +3,15 @@
 set -e
 
 # 1. Environment Setup & Paths
+# Defined before it is used below: the vendored platform-tools are found relative to this script,
+# so the script works in any clone rather than only in the author's.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "$OSTYPE" == "darwin"* ]]; then
   echo "macOS detected."
   if [ -d "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home" ]; then
     export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
   fi
-  export PATH="$PATH:/Users/schneider/repos/VibeVoiceBoard/android-sdk/platform-tools"
+  export PATH="$PATH:$REPO_ROOT/android-sdk/platform-tools"
 else
   echo "Linux detected."
   export JAVA_HOME="/usr/lib/jvm/default-java"

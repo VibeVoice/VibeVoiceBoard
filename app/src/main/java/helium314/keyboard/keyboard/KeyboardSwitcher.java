@@ -226,7 +226,12 @@ public final class KeyboardSwitcher implements KeyboardState.SwitchActions {
         keyboardView.setKeyboard(newKeyboard);
         mCurrentInputView.setKeyboardTopPadding(newKeyboard.mTopPadding);
         keyboardView.setKeyPreviewPopupEnabled(currentSettingsValues.mKeyPreviewPopupOn);
-        keyboardView.updateShortcutKey(mRichImm.isShortcutImeReady());
+        // Always enabled, never isShortcutImeReady(): that asks whether the system has a voice
+        // recognition IME such as Google Voice Typing installed, which is the right question
+        // upstream and the wrong one here -- this fork brings its own dictation. The toolbar mic
+        // key was freed of the same gate; a mic key placed in a layout was still greyed out on any
+        // device without Google's, which is exactly the audience most likely to place one.
+        keyboardView.updateShortcutKey(true);
         final boolean subtypeChanged = (oldKeyboard == null) || !newKeyboard.mId.getSubtype().equals(oldKeyboard.mId.getSubtype());
         final int languageOnSpacebarFormatType = LanguageOnSpacebarUtils.getLanguageOnSpacebarFormatType(newKeyboard.mId.getSubtype());
         final boolean hasMultipleEnabledIMEsOrSubtypes = mRichImm.hasMultipleEnabledIMEsOrSubtypes(true);

@@ -35,7 +35,14 @@ object VibeVoiceBugReporter {
                 val fileLength = debugLogFile.length()
                 if (fileLength > MAX_LOG_BYTES) {
                     debugLogFile.inputStream().use { stream ->
-                        stream.skip(fileLength - MAX_LOG_BYTES)
+                        // skip() may cover less than asked, so it has to be driven to the target or
+                        // the report carries more than the cap it promises.
+                        var remaining = fileLength - MAX_LOG_BYTES
+                        while (remaining > 0) {
+                            val skipped = stream.skip(remaining)
+                            if (skipped <= 0) break
+                            remaining -= skipped
+                        }
                         logsBuilder.append(stream.readBytes().decodeToString())
                     }
                 } else {
