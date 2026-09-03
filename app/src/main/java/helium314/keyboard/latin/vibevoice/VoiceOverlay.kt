@@ -68,12 +68,12 @@ class VoiceOverlay(context: Context) : View(context) {
         }
     }
 
-    /** Set by [show]; a tap runs it. */
-    private var onTap: Runnable? = null
+    /** Set by [show]; running it ends the session. Reached by dropping on the target, never by a tap. */
+    private var onDismiss: Runnable? = null
 
-    private fun start(client: VibeVoiceClient, onTap: Runnable) {
+    private fun start(client: VibeVoiceClient, onDismiss: Runnable) {
         this.levelSource = WeakReference(client)
-        this.onTap = onTap
+        this.onDismiss = onDismiss
         readThemeColors()
         bars.fill(0f)
         running = true
@@ -83,7 +83,7 @@ class VoiceOverlay(context: Context) : View(context) {
     private fun stopAnimating() {
         running = false
         levelSource = null
-        onTap = null
+        onDismiss = null
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -171,7 +171,13 @@ class VoiceOverlay(context: Context) : View(context) {
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.rawX - downX
                 val dy = event.rawY - downY
-                if (abs(dx) > touchSlop || abs(dy) > touchSlop) dragged = true
+                if (!dragged && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
+                    dragged = true
+                    // The target appears only once a drag has actually begun. Ending a session is
+                    // the one thing here that cannot be undone, so its target is not on screen at
+                    // times when nobody is reaching for it.
+                    DismissTarget.show(context, discColor, barColor)
+                }
                 if (dragged) {
                     params.x = startX + dx.toInt()
                     params.y = startY + dy.toInt()
@@ -180,20 +186,40 @@ class VoiceOverlay(context: Context) : View(context) {
                     } catch (e: Exception) {
                         VibeVoiceDebugLogger.log("Could not move the overlay: ${e.message}")
                     }
+                    DismissTarget.setArmed(isOverTarget(params))
                 }
                 return true
             }
-            MotionEvent.ACTION_UP -> {
-                // A drag must not stop the session. Getting it out of the way and ending it are
-                // both things people will do in a hurry, and confusing them costs a transcript.
-                if (!dragged) {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val onTarget = dragged && event.actionMasked == MotionEvent.ACTION_UP && isOverTarget(params)
+                DismissTarget.hide(context)
+                // A tap does nothing on purpose. Getting the mark out of the way and ending the
+                // session are both done in a hurry, and a tap that ended it would keep costing
+                // transcripts to a slip of the thumb.
+                if (onTarget) {
+                    VibeVoiceDebugLogger.log("Overlay dropped on the dismiss target")
+                    onDismiss?.run()
+                } else if (!dragged) {
                     performClick()
-                    onTap?.run()
                 }
+                dragged = false
                 return true
             }
         }
         return false
+    }
+
+    /** Whether the mark's centre is inside the target's catch radius. */
+    private fun isOverTarget(params: WindowManager.LayoutParams): Boolean {
+        val size = SIZE_DP * density
+        val cx = params.x + size / 2f
+        val cy = params.y + size / 2f
+        val metrics = context.resources.displayMetrics
+        val tx = metrics.widthPixels / 2f
+        val ty = metrics.heightPixels - TARGET_BOTTOM_DP * density
+        val dx = cx - tx
+        val dy = cy - ty
+        return dx * dx + dy * dy <= (CATCH_RADIUS_DP * density) * (CATCH_RADIUS_DP * density)
     }
 
     override fun performClick(): Boolean {
@@ -223,6 +249,9 @@ class VoiceOverlay(context: Context) : View(context) {
         private const val SECOND_RATIO = 1.92f
         private const val THIRD_RATIO = 0.75f
         private const val PROFILE_FLOOR = 0.45f
+        /** Distance of the target's centre from the bottom of the screen. */
+        private const val TARGET_BOTTOM_DP = 104f
+        private const val CATCH_RADIUS_DP = 76f
 
         private var current: VoiceOverlay? = null
 
@@ -239,7 +268,7 @@ class VoiceOverlay(context: Context) : View(context) {
 
         /** Puts the mark on screen. Does nothing, quietly, when the permission is not granted. */
         @JvmStatic
-        fun show(context: Context, client: VibeVoiceClient, onTap: Runnable) {
+        fun show(context: Context, client: VibeVoiceClient, onDismiss: Runnable) {
             if (current != null) return
             if (!isAllowed(context)) {
                 VibeVoiceDebugLogger.log("Overlay not shown: drawing over other apps is not allowed")
@@ -271,7 +300,7 @@ class VoiceOverlay(context: Context) : View(context) {
                 VibeVoiceDebugLogger.log("Could not add the overlay: ${e.message}")
                 return
             }
-            overlay.start(client, onTap)
+            overlay.start(client, onDismiss)
             current = overlay
             VibeVoiceDebugLogger.log("Overlay shown")
         }
@@ -279,6 +308,7 @@ class VoiceOverlay(context: Context) : View(context) {
         /** Takes it off screen. Safe to call when there is none. */
         @JvmStatic
         fun hide(context: Context) {
+            DismissTarget.hide(context)
             val overlay = current ?: return
             current = null
             overlay.stopAnimating()
