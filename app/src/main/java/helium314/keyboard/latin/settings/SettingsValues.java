@@ -154,6 +154,8 @@ public class SettingsValues {
     private final boolean mOverrideShowingSuggestions;
     public final boolean mSuggestClipboardContent;
     public final boolean mIncognitoModeEnabled;
+    /** Whether a dictation session keeps recording after the keyboard is dismissed. */
+    public final boolean mVoiceBackgroundEnabled;
     public final boolean mLongPressSymbolsForNumpad;
 
     // From the input box
@@ -267,6 +269,7 @@ public class SettingsValues {
             && (mInputAttributes.mShouldShowSuggestions || mOverrideShowingSuggestions) && !mSuggestionStripHiddenPerUserSettings;
         mIncognitoModeEnabled = prefs.getBoolean(Settings.PREF_ALWAYS_INCOGNITO_MODE, Defaults.PREF_ALWAYS_INCOGNITO_MODE) || mInputAttributes.mNoLearning
                 || mInputAttributes.mIsPasswordField;
+        mVoiceBackgroundEnabled = prefs.getBoolean(Settings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND);
         mBottomRowScale = Settings.readBottomRowScale(prefs, isLandscape, isFolded);
         mSpaceSwipeHorizontal = Settings.readHorizontalSpaceSwipe(prefs);
         mSpaceSwipeVertical = Settings.readVerticalSpaceSwipe(prefs);

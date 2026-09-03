@@ -20,6 +20,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,6 +74,11 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     var bugDescription by remember { mutableStateOf("") }
     var isSubmittingBugReport by remember { mutableStateOf(false) }
     var bugReportStatus by remember { mutableStateOf<String?>(null) }
+
+    val appPrefs = remember(context) { context.prefs() }
+    var backgroundDictation by remember {
+        mutableStateOf(appPrefs.getBoolean(Settings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
+    }
     var isBugReportSuccess by remember { mutableStateOf(false) }
 
     var quotaInfo by remember { mutableStateOf<org.json.JSONObject?>(null) }
@@ -349,6 +355,34 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     stringResource(R.string.vibevoice_not_linked),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
+                )
+            }
+
+            Spacer(modifier = Modifier.size(24.dp))
+
+            Text(
+                stringResource(R.string.vibevoice_background_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.size(4.dp))
+            Text(
+                stringResource(R.string.vibevoice_background_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.vibevoice_background_switch))
+                Switch(
+                    checked = backgroundDictation,
+                    onCheckedChange = {
+                        backgroundDictation = it
+                        appPrefs.edit().putBoolean(Settings.PREF_VOICE_BACKGROUND, it).apply()
+                    }
                 )
             }
 

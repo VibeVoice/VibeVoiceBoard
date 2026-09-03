@@ -75,8 +75,16 @@
     <!-- Shown when the microphone stopped delivering audio and restarting it did not help -->
     <string name="vibevoice_mic_unavailable">Microphone stopped working. Transcription stopped.</string>
     <!-- Section heading for the sliders that shape the sound waves drawn behind the keys -->
+    <!-- Background dictation -->
+    <string name="vibevoice_background_title">Keep listening in the background</string>
+    <string name="vibevoice_background_desc">Off, dictation ends when the keyboard closes and whatever was said until then is committed. On, it carries on while you switch apps, and a notification shows what is being heard with a button to stop it.</string>
+    <string name="vibevoice_background_switch">Carry on after the keyboard closes</string>
+    <string name="vibevoice_session_channel">Dictation session</string>
+    <string name="vibevoice_session_title">VibeVoice is listening</string>
+    <string name="vibevoice_session_listening">Waiting for speech\u2026</string>
+    <string name="vibevoice_session_stop">Stop</string>
     <string name="vibevoice_waves_title">Sound waves</string>
-    <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. Changes apply immediately \u2014 open a chat next to this screen and hold space to watch them.</string>
+    <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. A change takes effect the next time you start dictating.</string>
     <string name="vibevoice_waves_amplitude">Size</string>
     <string name="vibevoice_waves_reaction">Reaction to your voice</string>
     <string name="vibevoice_waves_attack">Attack (how fast it rises)</string>

@@ -98,6 +98,9 @@ object Defaults {
     val PREF_KEY_GAP_SCALE = Array(4) { DEFAULT_SIZE_SCALE }
     const val PREF_FONT_SCALE = DEFAULT_SIZE_SCALE
     /** Peak excursion as a fraction of the gap between waves, before the level multiplies it. */
+    // Off by default: a keyboard that keeps the microphone open after it is dismissed is not what
+    // anyone expects of a keyboard, so it is something the user turns on rather than discovers.
+    const val PREF_VOICE_BACKGROUND = false
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f
