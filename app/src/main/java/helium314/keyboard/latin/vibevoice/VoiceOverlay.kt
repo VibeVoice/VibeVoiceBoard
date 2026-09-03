@@ -15,8 +15,11 @@ import android.view.View
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.common.ColorType
+import helium314.keyboard.latin.settings.Settings
 import java.lang.ref.WeakReference
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.sin
 
 /**
@@ -35,8 +38,11 @@ import kotlin.math.sin
 class VoiceOverlay(context: Context) : View(context) {
 
     private val density = context.resources.displayMetrics.density
-    private val markPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val discPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
     private val drawable = ContextCompat.getDrawable(context, R.drawable.ic_vibevoice_active)
 
     private var levelSource: WeakReference<VibeVoiceClient>? = null
@@ -44,12 +50,32 @@ class VoiceOverlay(context: Context) : View(context) {
     private var pulse = 0f
     private var running = false
 
+    /** Per-bar heights, smoothed between frames so a bar falls back rather than snapping. */
+    private val bars = FloatArray(BAR_COUNT / 2 + 1)
+
+    /** Both from the keyboard's own theme, so the mark reads as part of it. */
+    private var discColor = Color.argb(235, 20, 20, 24)
+    private var barColor = Color.rgb(0x9F, 0x00, 0xA1)
+
+    private fun readThemeColors() {
+        try {
+            val colors = Settings.getValues().mColors
+            discColor = colors.get(ColorType.MAIN_BACKGROUND)
+            barColor = colors.get(ColorType.GESTURE_TRAIL)
+        } catch (e: Exception) {
+            // Settings not loaded; the defaults above stand in for one session.
+            VibeVoiceDebugLogger.log("Overlay could not read the theme: ${e.message}")
+        }
+    }
+
     /** Set by [show]; a tap runs it. */
     private var onTap: Runnable? = null
 
     private fun start(client: VibeVoiceClient, onTap: Runnable) {
         this.levelSource = WeakReference(client)
         this.onTap = onTap
+        readThemeColors()
+        bars.fill(0f)
         running = true
         invalidate()
     }
@@ -71,21 +97,53 @@ class VoiceOverlay(context: Context) : View(context) {
         val cx = width / 2f
         val cy = height / 2f
         val base = SIZE_DP * density / 2f
+        val discRadius = base * DISC_FRACTION
 
-        // The resting breath keeps it visibly alive during a pause, so a silence does not look like
-        // a session that has died.
-        val breath = 1f + BREATH * sin(pulse)
-        val ringRadius = base * (0.72f + level * 0.5f) * breath
-        ringPaint.strokeWidth = 2f * density
-        ringPaint.color = Color.argb((90 + 140 * level).toInt().coerceIn(0, 255), 0x9F, 0x00, 0xA1)
-        canvas.drawCircle(cx, cy, ringRadius, ringPaint)
+        // The disc first, in the keyboard's own background colour, so the bars stand on the same
+        // ground the keys do.
+        discPaint.color = discColor
+        canvas.drawCircle(cx, cy, discRadius, discPaint)
 
-        markPaint.color = Color.argb(235, 20, 20, 24)
-        canvas.drawCircle(cx, cy, base * 0.68f, markPaint)
+        // A ring of bars around it, the way an audio visualiser draws a spectrum: each bar is a
+        // slice of the same composite the keyboard's waves are drawn from, so the two read as one
+        // thing. Only half are computed and the ring is mirrored, which is what stops it looking
+        // like noise -- an asymmetric ring reads as random, a symmetric one reads as a waveform.
+        val half = bars.size - 1
+        for (i in bars.indices) {
+            val t = i / half.toFloat()
+            // The profile falls from the top of the ring towards the bottom, so the ring has a
+            // shape of its own even before the voice moves it.
+            val profile = PROFILE_FLOOR + (1f - PROFILE_FLOOR) * (0.5f + 0.5f * cos(t * Math.PI.toFloat()))
+            val wave = sin(t * SPAN + pulse) +
+                    sin(t * SPAN * SECOND_RATIO - pulse * 0.7f) * 0.45f +
+                    cos(t * SPAN * THIRD_RATIO + pulse * 0.6f) * 0.25f
+            val target = (profile * (REST_HEIGHT + level * (1f - REST_HEIGHT)) *
+                    (0.55f + 0.45f * abs(wave) / 1.7f)).coerceIn(0f, 1f)
+            // Asymmetric smoothing, as everywhere else here: rise with the syllable, fall behind it.
+            bars[i] += (target - bars[i]) * (if (target > bars[i]) BAR_ATTACK else BAR_RELEASE)
+        }
+
+        barPaint.strokeWidth = BAR_WIDTH_DP * density
+        val inner = discRadius + BAR_GAP_DP * density
+        val maxOut = base - BAR_WIDTH_DP * density * 0.5f
+        for (b in 0 until BAR_COUNT) {
+            // Mirrored: index 0 at the top, walking down both sides.
+            val idx = if (b <= half) b else BAR_COUNT - b
+            val h = bars[idx.coerceIn(0, half)]
+            val angle = (-Math.PI / 2 + b * 2.0 * Math.PI / BAR_COUNT).toFloat()
+            val ca = cos(angle)
+            val sa = sin(angle)
+            val outer = inner + (maxOut - inner) * h
+            barPaint.color = Color.argb(
+                (110 + 145 * h).toInt().coerceIn(0, 255),
+                Color.red(barColor), Color.green(barColor), Color.blue(barColor)
+            )
+            canvas.drawLine(cx + ca * inner, cy + sa * inner, cx + ca * outer, cy + sa * outer, barPaint)
+        }
 
         drawable?.let {
-            val half = (base * 0.4f).toInt()
-            it.setBounds(cx.toInt() - half, cy.toInt() - half, cx.toInt() + half, cy.toInt() + half)
+            val iconHalf = (discRadius * 0.62f).toInt()
+            it.setBounds(cx.toInt() - iconHalf, cy.toInt() - iconHalf, cx.toInt() + iconHalf, cy.toInt() + iconHalf)
             it.draw(canvas)
         }
 
@@ -146,12 +204,25 @@ class VoiceOverlay(context: Context) : View(context) {
     private val touchSlop = android.view.ViewConfiguration.get(context).scaledTouchSlop
 
     companion object {
-        private const val SIZE_DP = 56f
+        private const val SIZE_DP = 72f
         private const val FRAME_INTERVAL_MS = 33L
         private const val ATTACK = 0.6f
         private const val RELEASE = 0.18f
         private const val PULSE_STEP = 0.12f
-        private const val BREATH = 0.05f
+
+        private const val BAR_COUNT = 36
+        private const val DISC_FRACTION = 0.52f
+        private const val BAR_WIDTH_DP = 2.2f
+        private const val BAR_GAP_DP = 3f
+        /** What a bar shows in silence, so the ring is a ring and not a bare disc. */
+        private const val REST_HEIGHT = 0.16f
+        private const val BAR_ATTACK = 0.55f
+        private const val BAR_RELEASE = 0.16f
+        /** Radians across half the ring. Under two periods, the same choice as the keyboard waves. */
+        private const val SPAN = 5.2f
+        private const val SECOND_RATIO = 1.92f
+        private const val THIRD_RATIO = 0.75f
+        private const val PROFILE_FLOOR = 0.45f
 
         private var current: VoiceOverlay? = null
 
