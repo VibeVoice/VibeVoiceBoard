@@ -24,6 +24,7 @@ import android.view.View.OnLongClickListener
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityEvent
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
@@ -171,9 +172,13 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 pinnedKeyInToolbar.background = enabledToolKeyBackground
         }
         toolbarContainer.doOnNextLayout {
-            // set min with of the toolbar so the weight of the toolbar keys actually does something
+            // set min width of the toolbar so the weight of the toolbar keys actually does something
             // todo: results in requestLayout() improperly called by android.widget.LinearLayout during layout: running second layout pass
-            toolbar.minimumWidth = toolbarContainer.width
+            toolbarContainer.post {
+                if (toolbar.minimumWidth != toolbarContainer.width) {
+                    toolbar.minimumWidth = toolbarContainer.width
+                }
+            }
         }
 
         updateKeys()
@@ -375,7 +380,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 addKeyToPinnedKeys(tag)
                 toolbar.findViewWithTag<View>(tag).background = enabledToolKeyBackground
                 addPinnedKey(context.prefs(), tag)
-            } else {
+            } else if (tag != ToolbarKey.VOICE) {
                 removePinnedKey(context.prefs(), tag)
                 toolbar.findViewWithTag<View>(tag).background = defaultToolbarBackground.constantState?.newDrawable(resources)
                 pinnedKeys.removeView(pinnedKeyView)
@@ -501,9 +506,35 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     }
 
     fun updateVoiceKey() {
-        val show = Settings.getValues().mShowsVoiceInputKey
-        toolbar.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
-        pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
+        val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
+        // VibeVoice key is always visible — it is not gated on system voice IME availability
+        updateVoiceKeyButton(toolbar.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+        updateVoiceKeyButton(pinnedKeys.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+    }
+
+    private fun updateVoiceKeyButton(view: View?, show: Boolean, isActivated: Boolean) {
+        val button = view as? ImageButton ?: return
+        button.isVisible = show
+        button.isActivated = isActivated
+        if (isActivated) {
+            button.setImageResource(R.drawable.ic_vibevoice_active)
+            button.background = null
+            button.clearColorFilter()
+            button.scaleType = ImageView.ScaleType.FIT_CENTER
+        } else {
+            button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
+            // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"
+            // highlight. Restoring the plain background unconditionally used to strip that highlight
+            // from VOICE alone, both at startup and again after every recording.
+            val isPinnedInToolbar = button.parent === toolbar
+                    && Settings.getValues().mQuickPinToolbarKeys
+                    && pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE) != null
+            button.background = if (isPinnedInToolbar) enabledToolKeyBackground
+                else defaultToolbarBackground.constantState?.newDrawable(resources)
+            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
+            button.scaleType = ImageView.ScaleType.CENTER
+            view.rotation = 0f // an older build left the key tilted; clear it once
+        }
     }
 
     private fun updateKeys() {

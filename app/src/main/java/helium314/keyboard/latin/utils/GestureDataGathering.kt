@@ -41,7 +41,8 @@ object BackgroundGatheringCache {
 
     private fun updateIcon(save: Boolean = false) {
         scope.launch(Dispatchers.Main) { // on main thread because it's touching views
-            KeyboardSwitcher.getInstance().setBackgroundGatheringIndicator(useBackgroundGathering, cachedWords.isNotEmpty(), save)
+            val hasWords = synchronized(cachedWords) { cachedWords.isNotEmpty() }
+            KeyboardSwitcher.getInstance().setBackgroundGatheringIndicator(useBackgroundGathering, hasWords, save)
         }
     }
 
@@ -51,19 +52,21 @@ object BackgroundGatheringCache {
             return
         }
         if (DEBUG) Log.i(TAG, "adding ${word.topSuggestion}")
-        cachedWords.add(word)
+        synchronized(cachedWords) {
+            cachedWords.add(word)
+        }
         updateIcon()
     }
 
     // used when pressing backspace or entering inline emoji search, because in this case the word is added before the internalAction is set
-    fun removeLast(word: String) {
+    fun removeLast(word: String) = synchronized(cachedWords) {
         if (cachedWords.lastOrNull()?.topSuggestion?.word?.equals(word, true) != true) return
         if (DEBUG) Log.i(TAG, "removing $word")
         cachedWords.removeAt(cachedWords.lastIndex)
         updateIcon()
     }
 
-    fun onPickSuggestionAfterGesturing(suggestion: SuggestedWords.SuggestedWordInfo, originalWord: String) {
+    fun onPickSuggestionAfterGesturing(suggestion: SuggestedWords.SuggestedWordInfo, originalWord: String) = synchronized(cachedWords) {
         // replace the latest entry in cache, but do a sanity check
         if (DEBUG) Log.i(TAG, "picked ${suggestion.word} instead of $originalWord after gesturing")
         val lastEntry = cachedWords.lastOrNull()
@@ -77,7 +80,7 @@ object BackgroundGatheringCache {
         if (DEBUG) Log.i(TAG, "setting target word to ${lastEntry.targetWord}")
     }
 
-    fun onPickSuggestion(suggestion: SuggestedWords.SuggestedWordInfo, originalWord: String) {
+    fun onPickSuggestion(suggestion: SuggestedWords.SuggestedWordInfo, originalWord: String) = synchronized(cachedWords) {
         // this happens after tap-typing (new word or corrected gesture word), or when moving the cursor and then selecting a different suggestion
         // don't update anything if we have the word more than once
         val word = cachedWords.singleOrNull { it.topSuggestion?.word?.equals(originalWord, true) == true } ?: return
@@ -85,7 +88,7 @@ object BackgroundGatheringCache {
         if (DEBUG) Log.i(TAG, "picked ${word.targetWord} instead of $originalWord")
     }
 
-    fun onRejectedSuggestion(suggestion: String) {
+    fun onRejectedSuggestion(suggestion: String) = synchronized(cachedWords) {
         if (DEBUG) Log.i(TAG, "rejected $suggestion")
         if (cachedWords.lastOrNull()?.topSuggestion?.word?.equals(suggestion, true) != true) {
             if (DEBUG) Log.w(TAG, "...but last word is ${cachedWords.lastOrNull()?.topSuggestion?.word}")
@@ -95,7 +98,7 @@ object BackgroundGatheringCache {
         updateIcon()
     }
 
-    fun onUndo(lastComposedWord: CharSequence) {
+    fun onUndo(lastComposedWord: CharSequence) = synchronized(cachedWords) {
         if (DEBUG) Log.i(TAG, "undo after committing $lastComposedWord")
         if (cachedWords.lastOrNull()?.topSuggestion == lastComposedWord || cachedWords.lastOrNull()?.targetWord == lastComposedWord) {
             if (DEBUG) Log.i(TAG, "removing $lastComposedWord")
@@ -104,7 +107,7 @@ object BackgroundGatheringCache {
         updateIcon()
     }
 
-    fun onEditWord(word: String) {
+    fun onEditWord(word: String) = synchronized(cachedWords) {
         // this is pretty aggressive, because repeated backspace might remove different words
         // but better remove a few % of the words instead of having potentially bad data
         if (DEBUG) Log.i(TAG, "edit something in $word")
@@ -112,7 +115,7 @@ object BackgroundGatheringCache {
         updateIcon()
     }
 
-    fun onEditSelection(selection: CharSequence?, before: CharSequence?, after: CharSequence?) {
+    fun onEditSelection(selection: CharSequence?, before: CharSequence?, after: CharSequence?) = synchronized(cachedWords) {
         // null should only occur in very rare cases when there are problems communicating with the text field
         if (selection == null || before == null || after == null) return
 
@@ -144,9 +147,12 @@ object BackgroundGatheringCache {
 
     fun save(context: Context) {
         // save all words and clear cache
-        val words = cachedWords.toList()
+        val words = synchronized(cachedWords) {
+            val list = cachedWords.toList()
+            cachedWords.clear()
+            list
+        }
         if (DEBUG) Log.i(TAG, "save cached data")
-        cachedWords.clear()
         updateIcon(words.isNotEmpty())
         scope.launch { words.forEach { it.save(context) } }
     }
@@ -154,11 +160,13 @@ object BackgroundGatheringCache {
     fun clear() {
         // just clear it without saving
         if (DEBUG) Log.i(TAG, "clear cache")
-        cachedWords.clear()
+        synchronized(cachedWords) {
+            cachedWords.clear()
+        }
         updateIcon()
     }
 
-    val isEmpty get() = cachedWords.isEmpty()
+    val isEmpty get() = synchronized(cachedWords) { cachedWords.isEmpty() }
 }
 
 @JvmField

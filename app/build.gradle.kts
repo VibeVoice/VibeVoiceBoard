@@ -1,5 +1,6 @@
 import com.android.build.api.variant.ApplicationVariant
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -8,20 +9,51 @@ plugins {
     kotlin("plugin.compose") version "2.3.20"
 }
 
+// Read version from centralized VERSION file
+val versionFilePath = rootProject.file("VERSION")
+val versionString = if (versionFilePath.exists()) versionFilePath.readText().trim() else "4.1.1"
+val versionParts = versionString.split(".").mapNotNull { it.toIntOrNull() }
+val vMajor = versionParts.getOrElse(0) { 4 }
+val vMinor = versionParts.getOrElse(1) { 1 }
+val vPatch = versionParts.getOrElse(2) { 1 }
+val computedVersionCode = vMajor * 100000 + vMinor * 1000 + vPatch
+
+// Release signing material. Never committed: put it in keystore.properties (gitignored) or pass it
+// through the environment on CI. When it is absent the release variants stay unsigned, exactly as
+// they were before, so debug workflows are unaffected.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun signingValue(property: String, environment: String): String? =
+    keystoreProperties.getProperty(property) ?: System.getenv(environment)
+
 android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "helium314.keyboard"
+        applicationId = "org.vibevoice.board"
         minSdk = 21
         targetSdk = 36
-        versionCode = 4006
-        versionName = "4.0-dev1"
+        versionCode = computedVersionCode
+        versionName = versionString
         ndk {
             abiFilters.clear()
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
         }
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+    }
+
+    signingConfigs {
+        val storePath = signingValue("storeFile", "VVB_KEYSTORE_FILE")
+        if (storePath != null) {
+            create("release") {
+                storeFile = file(storePath)
+                storePassword = signingValue("storePassword", "VVB_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "VVB_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "VVB_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -30,12 +62,17 @@ android {
             isShrinkResources = false
             isDebuggable = false
             isJniDebuggable = false
+            signingConfig = signingConfigs.findByName("release")
         }
         create("nouserlib") { // same as release, but does not allow the user to provide a library
             isMinifyEnabled = true
             isShrinkResources = false
             isDebuggable = false
             isJniDebuggable = false
+            // This is the variant to ship on Google Play: JniUtils skips the user-supplied
+            // libjni_latinime.so here, and loading executable code from outside the APK is not
+            // allowed under the Play "Device and Network Abuse" policy.
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             // "normal" debug has minify for smaller APK to fit the GitHub 25 MB limit when zipped
@@ -55,7 +92,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
         }
-
+        base.archivesBaseName = "VibeVoiceBoard_$versionString"
         androidComponents.onVariants { variant: ApplicationVariant ->
             if (variant.buildType == "debug") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
@@ -67,7 +104,7 @@ android {
             }
             variant.outputs.forEach { output ->
                 if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
-                    output.outputFileName = "HeliBoard_${defaultConfig.versionName}-${variant.buildType}.apk"
+                    output.outputFileName = "VibeVoiceBoard_$versionString-${variant.buildType}.apk"
                 }
             }
         }
@@ -112,7 +149,7 @@ android {
         }
     }
 
-    // see https://github.com/HeliBorg/HeliBoard/issues/477
+    // see https://github.com/Helium314/HeliBoard/issues/477
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -121,6 +158,9 @@ android {
     namespace = "helium314.keyboard.latin"
     lint {
         abortOnError = true
+        // Locale resources are managed by Weblate upstream and must not be hand-edited here, so an
+        // incomplete translation set is the normal state of this tree rather than a build error.
+        disable += "MissingTranslation"
     }
 }
 
@@ -146,6 +186,11 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("sh.calvin.reorderable:reorderable:3.1.0") // for easier re-ordering
     implementation("com.github.skydoves:colorpicker-compose:1.1.3") // for user-defined colors
+
+    // vibevoice
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // test
     testImplementation(kotlin("test"))

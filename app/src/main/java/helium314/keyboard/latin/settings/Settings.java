@@ -110,6 +110,17 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_FLOATING_POS_X_PREFIX = "floating_pos_x";
     public static final String PREF_FLOATING_POS_Y_PREFIX = "floating_pos_y";
     public static final String PREF_FONT_SCALE = "font_scale";
+    // Voice wave background, tunable from the VibeVoice settings screen
+    public static final String PREF_VOICE_BACKGROUND = "vibevoice_background_dictation";
+    public static final String PREF_WAVE_AMPLITUDE = "vibevoice_wave_amplitude";
+    public static final String PREF_WAVE_REACTION = "vibevoice_wave_reaction";
+    public static final String PREF_WAVE_CYCLES = "vibevoice_wave_cycles";
+    public static final String PREF_WAVE_SPEED = "vibevoice_wave_speed";
+    public static final String PREF_WAVE_SPREAD = "vibevoice_wave_spread";
+    public static final String PREF_WAVE_JITTER = "vibevoice_wave_jitter";
+    public static final String PREF_WAVE_COUNT = "vibevoice_wave_count";
+    public static final String PREF_WAVE_ATTACK = "vibevoice_wave_attack";
+    public static final String PREF_WAVE_DAMPING = "vibevoice_wave_damping";
     public static final String PREF_HINT_FONT_SCALE = "hint_font_scale";
     public static final String PREF_EMOJI_FONT_SCALE = "emoji_font_scale";
     public static final String PREF_EMOJI_KEY_FIT = "emoji_key_fit";
@@ -189,7 +200,6 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_ABC_AFTER_SYMBOL_SPACE = "abc_after_symbol_space";
     public static final String PREF_ABC_AFTER_NUMPAD_SPACE = "abc_after_numpad_space";
     public static final String PREF_REMOVE_REDUNDANT_POPUPS = "remove_redundant_popups";
-    public static final String PREF_SPACE_BAR_TEXT = "space_bar_text";
     public static final String PREF_TIMESTAMP_FORMAT = "timestamp_format";
     public static final String PREF_TOOLBAR_MODE = "toolbar_mode";
     public static final String PREF_TOOLBAR_HIDING_GLOBAL = "toolbar_hiding_global";

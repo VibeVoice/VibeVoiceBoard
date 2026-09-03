@@ -15,3 +15,27 @@ tools/*.txt
 *.patch
 *.diff
 *.sh
+!tools/build-and-deploy.sh
+!tools/hooks/*.sh
+tools/make-emoji-keys/bin/
+tools/make-emoji-keys/build/
+
+# Local secrets
+.env
+.env.*
+tools/last-build.log
+
+# Local build SDK, crash logs, debug logs
+android-sdk/
+crash_reports/
+*.zip
+*.log
+tools/last-build.log
+tools/build-*.log
+tools/.build.lock
+
+# Release signing material - never commit
+keystore.properties
+*.jks
+*.keystore
+.wt/

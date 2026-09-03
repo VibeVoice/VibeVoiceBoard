@@ -34,7 +34,10 @@ import helium314.keyboard.latin.utils.InputTypeUtils
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.prefs
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -42,6 +45,7 @@ class ClipboardHistoryManager(
         private val latinIME: LatinIME
 ) : ClipboardManager.OnPrimaryClipChangedListener {
 
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var clipboardManager: ClipboardManager
     private var clipboardSuggestionView: View? = null
     private var clipboardDao: ClipboardDao? = null
@@ -57,6 +61,7 @@ class ClipboardHistoryManager(
 
     fun onDestroy() {
         clipboardManager.removePrimaryClipChangedListener(this)
+        scope.cancel()
     }
 
     override fun onPrimaryClipChanged() {
@@ -81,9 +86,18 @@ class ClipboardHistoryManager(
         if (description.hasMimeType("text/*")) {
             val content = clipItem.coerceToText(latinIME)
             if (TextUtils.isEmpty(content)) return
-            clipboardDao?.addClip(timeStamp, false, content.toString())
-        } else if (maySaveFromUri(clipItem.uri, latinIME)) {
-            clipboardDao?.addClipUri(timeStamp, false, clipItem.uri, description, latinIME)
+            scope.launch(Dispatchers.IO) {
+                clipboardDao?.addClip(timeStamp, false, content.toString())
+            }
+        } else {
+            val uri = clipItem.uri
+            if (uri != null) {
+                scope.launch(Dispatchers.IO) {
+                    if (maySaveFromUri(uri, latinIME)) {
+                        clipboardDao?.addClipUri(timeStamp, false, uri, description, latinIME)
+                    }
+                }
+            }
         }
     }
 
@@ -98,14 +112,28 @@ class ClipboardHistoryManager(
         clipboardManager.setPrimaryClip(tempClip)
         latinIME.onEvent(Event.createSoftwareKeypressEvent(KeyCode.CLIPBOARD_PASTE, 0,
             Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false))
-        tempPrimaryClip = false
-        if (primaryClip == null)
+        if (primaryClip == null) {
+            scope.launch {
+                delay(500)
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        clipboardManager.clearPrimaryClip()
+                    } else {
+                        clipboardManager.setPrimaryClip(ClipData.newPlainText("", ""))
+                    }
+                } catch (e: Exception) {
+                    Log.i(TAG, "could not clear temporary clip", e)
+                } finally {
+                    tempPrimaryClip = false
+                }
+            }
             return
+        }
         // we need to wait a little before switching back to the original primary clip
         // a. it can happen that we switch back before the pasting has started, in that case we only past the primary clip
         // b. if we switch while the clip is pasted, it might crash the app (tested with joplin and logseq)
         // todo: replacing the current primary clip is far from ideal, try finding a different way
-        GlobalScope.launch {
+        scope.launch {
             delay(500)
             try {
                 clipboardManager.setPrimaryClip(primaryClip)
@@ -124,6 +152,11 @@ class ClipboardHistoryManager(
                         ClipDescription("", arrayOf("text/*")),
                         ClipData.Item(clip.text)
                     ))
+                else {
+                    clipboardManager.setPrimaryClip(ClipData.newPlainText("", ""))
+                }
+            } finally {
+                tempPrimaryClip = false
             }
         }
     }
@@ -161,6 +194,28 @@ class ClipboardHistoryManager(
 
     fun setHistoryChangeListener(listener: ClipboardDao.Listener?) {
         clipboardDao?.listener = listener
+    }
+
+    fun addTextToHistory(text: String) {
+        if (text.isEmpty()) return
+        // This writes straight to the database, so it has to apply the same gates fetchPrimaryClip
+        // relies on: the user's history setting, and never persisting what was typed into a password
+        // or otherwise sensitive field.
+        if (!latinIME.mSettings.current.mClipboardHistoryEnabled) return
+        // Incognito covers this too. The flag is set both by the "always incognito" setting and by
+        // an editor asking for no personalized learning -- a private browsing tab, say. Suppressing
+        // dictionary learning there while writing the same words to a database the user can open
+        // from the clipboard drawer would be the wrong half of the promise.
+        if (latinIME.mSettings.current.mIncognitoModeEnabled) return
+        val inputType = latinIME.currentInputEditorInfo?.inputType ?: InputType.TYPE_NULL
+        // isAnyPasswordInputType, not isPasswordInputType: the latter misses
+        // TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, which is what a password field becomes the moment
+        // the user taps "show password". Dictating a password into one would have written it to
+        // the clipboard database in the clear.
+        if (InputTypeUtils.isAnyPasswordInputType(inputType)) return
+        scope.launch(Dispatchers.IO) {
+            clipboardDao?.addClip(System.currentTimeMillis(), false, text)
+        }
     }
 
     private fun isClipSensitive(inputType: Int): Boolean {
@@ -265,7 +320,9 @@ class ClipboardHistoryManager(
             try {
                 context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null).use {
                     if (it?.moveToFirst() != true) return false
-                    val size = it.getLong(0)
+                    val columnIndex = it.getColumnIndex(OpenableColumns.SIZE)
+                    if (columnIndex == -1) return false
+                    val size = it.getLong(columnIndex)
                     return size <= maxSize * 1000000 // maxSize is megabytes
                 }
             } catch (e: Exception) {

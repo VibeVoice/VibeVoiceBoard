@@ -33,8 +33,6 @@ public final class LanguageOnSpacebarUtils {
     }
 
     public static int getLanguageOnSpacebarFormatType(@NonNull final RichInputMethodSubtype subtype) {
-        if (!Settings.getValues().mSpaceBarText.isEmpty())
-            return FORMAT_TYPE_FULL_LOCALE;
         if (subtype.isNoLanguage()) {
             return FORMAT_TYPE_FULL_LOCALE;
         }

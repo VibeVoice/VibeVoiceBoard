@@ -1,16 +1,35 @@
 # Getting Started
 
-HeliBoard project is based on Gradle and Android Gradle Plugin. To get started, you can install [Android Studio](https://developer.android.com/studio), and import project 'from Version Control / Git / Github' by providing this git repository [URL](https://github.com/HeliBorg/HeliBoard) (or git SSH [URL](git@github.com:Helium314/heliboard.git)).
-Of course you can also use any other compatible IDE, or work with text editor and command line.
-Once everything is up correctly, you're ready to go!
+VibeVoiceBoard is built with Gradle and the Android Gradle Plugin. Clone this repository
+(`https://github.com/VibeVoice/VibeVoiceBoard`) and open it in [Android Studio](https://developer.android.com/studio),
+or work with a text editor and the command line — any compatible IDE will do.
+
+A few things that are specific to this repo:
+
+* **JDK.** The build runs on Java 17 or 21. Newer JDKs currently fail during Gradle script compilation
+  with a misleading `does not specify compileSdk` error, because the embedded Kotlin compiler cannot
+  parse their version string. Set `JAVA_HOME` accordingly if your default `java` is newer.
+* **Android SDK.** A vendored SDK lives in `./android-sdk` and is referenced from `local.properties`.
+* **Git hooks.** Version bumps are automated by hooks that a clone does not install. Run
+  `bash tools/hooks/install-hooks.sh` once, and let the hooks manage the `VERSION` file rather than
+  bumping it by hand.
+* **Building and testing.** `./gradlew assembleDebugNoMinify` for quick iteration,
+  `./gradlew testDebugUnitTest` for the full test suite, `./gradlew lint` before opening a PR.
 
 If you have difficulties implementing some functionality, you're welcome to ask for help. No one will write the code for you, but often other contributors can give you very useful hints.
 
 # About the Code
 
-HeliBoard is based on AOSP keyboard, and in many places still contains mostly the original code. There are some extensions, and some parts have been replaced completely.
-When working on this app, you will likely notice its rather large size, and quite different code styles and often ancient comments and _TODO_s, where the latter are typically untouched since AOSP times.
-Unfortunately a lot of the old code is hard to read or to fully understand with all of its intended (and unintended) consequences.
+This app is a fork of HeliBoard, which is itself based on AOSP keyboard, and in many places still
+contains mostly the original code. There are some extensions, and some parts have been replaced
+completely. When working on this app, you will likely notice its rather large size, and quite different
+code styles and often ancient comments and _TODO_s, where the latter are typically untouched since AOSP
+times. Unfortunately a lot of the old code is hard to read or to fully understand with all of its
+intended (and unintended) consequences.
+
+Everything outside the `vibevoice` packages is inherited code. Keep changes there minimal and local:
+this fork merges from upstream regularly, and every line touched in a shared file is a line that can
+conflict later.
 
 Some hints for finding what you're looking for:
 * Layouts: stored in `layouts` folder in assets, interpreted by `KeyboardParser` and `TextKeyData`
@@ -22,29 +41,13 @@ Some hints for finding what you're looking for:
 * Communication with the app / text field (inputs, reading current text): `RichInputConnection`
 * Receiving events and information from the app / text field: `LatinIME`
 * Settings are in `SettingsValues`, with some functionality in `Settings` and the default values in `Default`
+* Voice input: `helium314/keyboard/latin/vibevoice/`
+  * `VibeVoiceClient` owns audio capture, the WebSocket, and account linking
+  * session state lives in `LatinIME.handleVoiceInput()` and the `VibeVoiceListener` implementation next to it
+  * the wire protocol is documented in [docs/vibevoice_integration_guide.md](docs/vibevoice_integration_guide.md) — read it before touching the reconnect or buffering logic
 
 # Guidelines
 
-Note that the maintainer only has very limited time, and thus review might take a while.
-This especially applies to large PRs (hundreds of lines), which recently started to become more common. Sorry, but there is simply not enough time to review everything.  
-What's more likely to be reviewed soon:
-* Simple changes (but depends on what effect they have, as in some places it's easy to introduce unintended changes)
-* Wanted / accepted changes (labels [_PR_](https://github.com/HeliBorg/HeliBoard/labels/PR), [_contributor needed_](https://github.com/HeliBorg/HeliBoard/issues?q=label%3A%22contributor%20needed%22), [_help wanted_](https://github.com/HeliBorg/HeliBoard/labels/help%20wanted))
-* Changes where the hard work is mostly investigation / research rather than coding
-  * e.g. compiling text lists to dictionaries, customizable icons / key backgrounds, OnePlus disabling keyboard on reboot, ...
-
-What will likely take some time (depends very much on how much other stuff is coming in):
-* Large changes (especially when connected to rather niche functionality)
-* Changes in code that is prone to introducing unintended effects
-  * `InputLogic`, `Suggest`, `RichInputConnection` are especially dangerous here, and also hard to test (behavior may depend on app and possibly OS version)
-
-## Recommended
-
-If you want to contribute, it's a good idea to make sure your idea is actually wanted in HeliBoard.
-Best check related issues before you start working on a PR. If the issue has the [labels](https://github.com/HeliBorg/HeliBoard/labels) [_PR_](https://github.com/HeliBorg/HeliBoard/labels/PR) or [_contributor needed_](https://github.com/HeliBorg/HeliBoard/issues?q=label%3A%22contributor%20needed%22) (even closed ones), contributions are wanted. If you don't find a related issue, it's recommended to open one, but ultimately it's your choice.
-Asking before starting a PR may help you for getting pointers to potentially relevant code, and deciding how to implement your desired changes.
-
-HeliBoard is a complex application and used by users with a large variety of opinions on how things should be.
 When contributing to the app, please:
 * Be careful when modifying core components, as it's easy to trigger unintended consequences
 * When introducing a feature or change that might not be wanted by everyone, make it optional
@@ -56,7 +59,7 @@ When contributing to the app, please:
 * When you fix a bug without opening an issue, please provide a way to reproduce the bug (see [bug report template](.github/ISSUE_TEMPLATE/bug_report.md))
 * Noticeable adjustments (keyboard UI, default layouts, ...) should either provide a benefit for everyone, or be optional.
 * If your contribution contains code that is not your own, provide a link to the source
-  * This is especially relevant to be sure the code's license is compatible to HeliBoard's GPL3
+  * This is especially relevant to be sure the code's license is compatible to this project's GPL3
   * Note that with LLM generated PRs you might add code with an incompatible license. Better make sure the LLM you're using is trained only with GPL3 compatible code.
 
 Further things to consider (though irrelevant for most PRs):
@@ -64,7 +67,10 @@ Further things to consider (though irrelevant for most PRs):
   * Large increases should be discussed first, and will only be added when it's considered worth the increase for a majority of users. It might be possible to avoid size increase by importing optional parts, like it's done for dictionaries.
   * Small increases like when adding code or layouts are never an issue
 * Do not add proprietary code or binary blobs. If it turns out to be necessary for a feature you want to add, it might be acceptable when the user opts in and imports those parts, like it's done for glide typing.
-* Privacy: Only relevant when adding some form of communication with other apps. Internet permission will not be added.
+* Privacy: this keyboard holds the `INTERNET` and `RECORD_AUDIO` permissions for the sake of voice
+  input, and that is the only thing they may be used for. Audio and text must leave the device only
+  during an active transcription session that the user started. Any new network traffic, telemetry or
+  data collection needs to be discussed first.
 
 ## Necessary
 
@@ -72,7 +78,7 @@ Some parts of the guidelines are necessary to fulfill for facilitating code revi
 Your PR should:
 - **Be only about a single thing**. Mixing unrelated or semi-related contributions into a single PR is hard to review and can get messy. As a general rule: if one part doesn't need the other one(s), it should be separate PRs. If one feature builds on top of another one, but the base is usable on its own, do a PR for the base and then a follow-up once it's merged.
 - **Have a proper description**. A good description helps _a lot_ for understanding what you intend to achieve with the changes, and for understanding the code. This is relevant for separating wanted from unintended changes in behavior during review.
-- **Not contain translations**. Translations should be done using [Weblate](https://translate.codeberg.org/projects/heliboard/). Exception is when you add new resource strings, those can be added right away.
+- **Not contain translations**. See below — locale resources are synced from upstream. Exception is when you add new resource strings, those can be added right away in `app/src/main/res/values/strings.xml`.
 - **Not be LLM generated**. LLMs enable contributors to quickly generate code that often is bulky and contains parts that are hard to understand. When the you do not understand the code, it's not possible to discuss such parts. See also [AI_USAGE.md](AI_USAGE.md).
 - **Not contain LLM generated discussion / description**. LLMs typically generate verbose and useless descriptions. Please save us some time and write it yourself, otherwise actual discussion is impossible.
 
@@ -90,8 +96,11 @@ When editing existing layouts, please consider that people should should still g
 See make-emoji-keys tool [README](tools/make-emoji-keys/README.md).
 
 # Translations
-Translations can be added using [Weblate](https://translate.codeberg.org/projects/heliboard/). You will need an account to update translations and add languages. Add the language you want to translate to in Languages -> Manage translated languages in the top menu bar.
-Updating translations in a PR will not be accepted, as it may cause conflicts with Weblate translations.
+
+Everything under `app/src/main/res/values-*/` is inherited from upstream and arrives here through
+merges. Do not hand-edit those files and do not submit translations in a PR — the changes are
+overwritten on the next sync. Strings that are specific to this fork are added to
+`app/src/main/res/values/strings.xml` only, in English.
 
 # Dictionaries
 No new dictionaries will be added to this app. Please submit dictionaries and the wordlist to the [dictionaries repository](https://codeberg.org/Helium314/aosp-dictionaries)

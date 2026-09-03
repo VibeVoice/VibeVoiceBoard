@@ -217,9 +217,13 @@ fun BackgroundGatheringSettings() {
         )
     }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(packageInfos) {
-        if (packageInfos.isEmpty())
-            scope.launch(Dispatchers.IO) { packageInfos = AppsManager(ctx).getPackagesWithNameAndIcon() }
+    LaunchedEffect(Unit) {
+        if (packageInfos.isEmpty()) {
+            val apps = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                AppsManager(ctx).getPackagesWithNameAndIcon()
+            }
+            packageInfos = apps
+        }
     }
     if (showIncludedAppsDialog) {
         var defaultInclude by remember { mutableStateOf(getAppIncludeByDefault(ctx)) }

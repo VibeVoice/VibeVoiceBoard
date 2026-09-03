@@ -1,0 +1,29 @@
+#!/bin/bash
+# pre-push: automatically build APK and upload to Nextcloud after every push
+# Runs the build in the background so it never blocks the push.
+# Set SKIP_APK_BUILD=1 to suppress.
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if [[ "${SKIP_APK_BUILD}" == "1" ]]; then
+  echo "[pre-push] APK build skipped (SKIP_APK_BUILD=1)"
+  exit 0
+fi
+
+BUILD_LOCK="$REPO_ROOT/tools/.build.lock"
+if ! mkdir "$BUILD_LOCK" 2>/dev/null; then
+  echo "[pre-push] Build already in progress (lock held). Skipping."
+  exit 0
+fi
+
+BUILD_LOG="$REPO_ROOT/tools/build-$(date +%Y%m%d-%H%M%S).log"
+
+echo "[pre-push] Launching background APK build + Nextcloud upload..."
+(
+  bash "$REPO_ROOT/tools/build-and-deploy.sh" > "$BUILD_LOG" 2>&1
+  ln -sf "$BUILD_LOG" "$REPO_ROOT/tools/last-build.log"
+  rmdir "$BUILD_LOCK" 2>/dev/null
+) &
+
+echo "[pre-push] Build running in background (PID $!). Tail: tools/last-build.log"
+exit 0
