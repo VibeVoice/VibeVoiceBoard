@@ -7,7 +7,9 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import helium314.keyboard.latin.vibevoice.VoiceOverlay
 import android.net.Uri
+import android.provider.Settings as AndroidProviderSettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
@@ -91,6 +93,12 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
     var notificationsGranted by remember { mutableStateOf(notificationsAllowed()) }
+    // Re-read on every recomposition rather than remembered: the user grants this in the system
+    // settings, so we come back to this screen with it changed and no result to tell us.
+    var overlayAllowed by remember { mutableStateOf(VoiceOverlay.isAllowed(context)) }
+    val overlaySettings = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { overlayAllowed = VoiceOverlay.isAllowed(context) }
     val askForNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> notificationsGranted = granted }
@@ -405,6 +413,45 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                         }
                     }
                 )
+            }
+            if (backgroundDictation) {
+                Spacer(modifier = Modifier.size(16.dp))
+                Text(
+                    stringResource(R.string.vibevoice_overlay_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    stringResource(R.string.vibevoice_overlay_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                if (overlayAllowed) {
+                    Text(
+                        stringResource(R.string.vibevoice_overlay_granted),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    // A button and not a switch: this one really is a trip to the system settings,
+                    // the only permission here that cannot be granted from a dialog.
+                    Button(
+                        onClick = {
+                            val intent = Intent(
+                                AndroidProviderSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:" + context.packageName)
+                            )
+                            try {
+                                overlaySettings.launch(intent)
+                            } catch (_: android.content.ActivityNotFoundException) {
+                                errorMessage = context.getString(R.string.vibevoice_no_browser)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.vibevoice_overlay_grant))
+                    }
+                }
             }
             if (backgroundDictation && !notificationsGranted) {
                 Spacer(modifier = Modifier.size(4.dp))

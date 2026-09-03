@@ -23,6 +23,10 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Optional, and asked for nowhere: without it the floating mark simply does not appear and
+         the notification carries the job alone. It buys no capability of its own: the recording
+         survives a dismissal because of the foreground service, not because of this. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application android:label="@string/english_ime_name"
             android:name="helium314.keyboard.latin.App"

@@ -42,6 +42,7 @@ import helium314.keyboard.latin.vibevoice.PermissionActivity;
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient;
 import helium314.keyboard.latin.vibevoice.VibeVoiceDebugLogger;
 import helium314.keyboard.latin.vibevoice.VibeVoiceListener;
+import helium314.keyboard.latin.vibevoice.VoiceOverlay;
 import helium314.keyboard.latin.vibevoice.VoiceSessionService;
 import helium314.keyboard.latin.vibevoice.VoiceWaveView;
 import helium314.keyboard.event.HapticEvent;
@@ -727,6 +728,7 @@ public class LatinIME extends InputMethodService implements
         if (mVibeVoiceClient != null) {
             mVibeVoiceClient.cancel();
             mVibeVoiceClient = null;
+            VoiceOverlay.hide(this);
             VoiceSessionService.detach(this);
         }
         // onDestroy does not go through finishVoiceSession, so it is the one teardown path that
@@ -1085,6 +1087,9 @@ public class LatinIME extends InputMethodService implements
         if (hasSuggestionStripView() && mIsRecordingVoice) {
             mSuggestionStripView.updateVoiceKey();
         }
+        // The keyboard is back, so the stand-in is not needed. Removed here rather than only at the
+        // end of a session, or it would sit over the keyboard that replaced it.
+        VoiceOverlay.hide(this);
         syncVoiceWaves();
     }
 
@@ -1099,11 +1104,20 @@ public class LatinIME extends InputMethodService implements
         // With it off, this is where a session ends, and it ends gracefully rather than being
         // dropped: the input connection is still usable for the moment it takes the pending final
         // to arrive, so the words spoken before the keyboard went away still get committed.
-        if (mIsRecordingVoice && !mIsStoppingVoice && mVibeVoiceClient != null
-                && !mSettings.getCurrent().mVoiceBackgroundEnabled) {
-            VibeVoiceDebugLogger.log("Keyboard hidden and background dictation is off: stopping");
-            mIsStoppingVoice = true;
-            mVibeVoiceClient.stopStreaming();
+        if (mIsRecordingVoice && !mIsStoppingVoice && mVibeVoiceClient != null) {
+            if (mSettings.getCurrent().mVoiceBackgroundEnabled) {
+                // The keyboard is gone but the session is not, and nothing on screen would say so.
+                // The mark takes its place: same statement, a fraction of the room, and a tap on it
+                // ends the session through the same path as the space key.
+                final int sessionId = mVoiceSessionId;
+                VoiceOverlay.show(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
+                    if (sessionId == mVoiceSessionId) handleVoiceInput();
+                }));
+            } else {
+                VibeVoiceDebugLogger.log("Keyboard hidden and background dictation is off: stopping");
+                mIsStoppingVoice = true;
+                mVibeVoiceClient.stopStreaming();
+            }
         }
         final MainKeyboardView mainKeyboardView = mKeyboardSwitcher.getMainKeyboardView();
         if (mainKeyboardView != null) {
@@ -1590,6 +1604,7 @@ public class LatinIME extends InputMethodService implements
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
         if (client != null) client.cancel();
+        VoiceOverlay.hide(this);
         VoiceSessionService.detach(this);
         updateVoiceInputState(false);
     }
@@ -1657,7 +1672,6 @@ public class LatinIME extends InputMethodService implements
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
             VibeVoiceDebugLogger.log("Starting new session");
-            android.widget.Toast.makeText(this, R.string.vibevoice_listening, android.widget.Toast.LENGTH_SHORT).show();
             updateVoiceInputState(true);
 
             mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
@@ -1780,6 +1794,7 @@ public class LatinIME extends InputMethodService implements
             if (mVibeVoiceClient != null) {
                 mVibeVoiceClient.cancel();
                 mVibeVoiceClient = null;
+                VoiceOverlay.hide(this);
                 VoiceSessionService.detach(this);
             }
         }
@@ -1809,6 +1824,7 @@ public class LatinIME extends InputMethodService implements
         mVibeVoiceClient.stopStreaming();
         mVibeVoiceClient = null;
         mIsStoppingVoice = false;
+        VoiceOverlay.hide(this);
         VoiceSessionService.detach(this);
         updateVoiceInputState(false);
         mKeyboardSwitcher.requestUpdatingShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
