@@ -81,6 +81,7 @@ import helium314.keyboard.latin.utils.GestureDataGatheringKt;
 import helium314.keyboard.latin.utils.GestureDataGatheringSettings;
 import helium314.keyboard.latin.utils.InlineAutofillUtils;
 import helium314.keyboard.latin.utils.InputMethodPickerKt;
+import helium314.keyboard.latin.utils.InputTypeUtils;
 import helium314.keyboard.latin.utils.JniUtils;
 import helium314.keyboard.latin.utils.KtxKt;
 import helium314.keyboard.latin.utils.LeakGuardHandlerWrapper;
@@ -1018,10 +1019,15 @@ public class LatinIME extends InputMethodService implements
         }
 
         if (isDifferentTextField) {
-            // Whatever is still being said was said for the field the user just left. The
-            // connection now points at a new one, so a pending final would be typed into it --
-            // possibly a password field, which is how this stops being merely wrong.
-            abortVoiceSession("focus moved to a different text field");
+            // A session survives a move to another field: carrying on speaking and having the
+            // words land where the cursor now is, is the point. The exception is a field that must
+            // never receive them by accident -- a password field, or an editor asking for no
+            // personalized learning, which is what a private browsing tab does.
+            final EditorInfo newField = getCurrentInputEditorInfo();
+            if (newField != null && (InputTypeUtils.isAnyPasswordInputType(newField.inputType)
+                    || currentSettingsValues.mIncognitoModeEnabled)) {
+                abortVoiceSession("focus moved to a password or incognito field");
+            }
             mainKeyboardView.closing();
             suggest.setAutoCorrectionThreshold(currentSettingsValues.mAutoCorrectionThreshold);
             switcher.reloadMainKeyboard();
@@ -1084,12 +1090,13 @@ public class LatinIME extends InputMethodService implements
     public void onWindowHidden() {
         super.onWindowHidden();
         Log.i(TAG, "onWindowHidden");
-        // A dictation session has nowhere to put its text once the keyboard is gone, so leaving it
-        // running is pure cost: a microphone open behind another app, audio still going to the
-        // server, and a socket nobody is waiting on. Ended here rather than in onFinishInputView,
-        // which also fires for the view rebuild on an orientation change -- that must not end a
-        // session.
-        abortVoiceSession("keyboard window hidden");
+        // Deliberately does NOT end a dictation session. Hiding the keyboard is not the user
+        // saying they are done talking, and the intended behaviour is that a session survives it.
+        // What survives today is only the session object: with the input view gone this process has
+        // no visible window, so from Android 11 on the platform hands AudioRecord zeroed buffers
+        // instead of audio. The capture loop notices after two seconds and goes into recovery.
+        // Making this actually work needs a foreground service with a microphone type; see
+        // docs/background_dictation.md.
         final MainKeyboardView mainKeyboardView = mKeyboardSwitcher.getMainKeyboardView();
         if (mainKeyboardView != null) {
             mainKeyboardView.closing();
