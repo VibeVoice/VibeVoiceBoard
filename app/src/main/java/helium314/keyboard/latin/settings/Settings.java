@@ -110,6 +110,16 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_FLOATING_POS_X_PREFIX = "floating_pos_x";
     public static final String PREF_FLOATING_POS_Y_PREFIX = "floating_pos_y";
     public static final String PREF_FONT_SCALE = "font_scale";
+    // Voice wave background, tunable from the VibeVoice settings screen
+    public static final String PREF_WAVE_AMPLITUDE = "vibevoice_wave_amplitude";
+    public static final String PREF_WAVE_REACTION = "vibevoice_wave_reaction";
+    public static final String PREF_WAVE_CYCLES = "vibevoice_wave_cycles";
+    public static final String PREF_WAVE_SPEED = "vibevoice_wave_speed";
+    public static final String PREF_WAVE_SPREAD = "vibevoice_wave_spread";
+    public static final String PREF_WAVE_JITTER = "vibevoice_wave_jitter";
+    public static final String PREF_WAVE_COUNT = "vibevoice_wave_count";
+    public static final String PREF_WAVE_ATTACK = "vibevoice_wave_attack";
+    public static final String PREF_WAVE_DAMPING = "vibevoice_wave_damping";
     public static final String PREF_HINT_FONT_SCALE = "hint_font_scale";
     public static final String PREF_EMOJI_FONT_SCALE = "emoji_font_scale";
     public static final String PREF_EMOJI_KEY_FIT = "emoji_key_fit";

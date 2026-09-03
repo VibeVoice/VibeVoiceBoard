@@ -74,6 +74,18 @@
     <string name="vibevoice_mic_busy">Microphone is in use by another app. Transcription stopped.</string>
     <!-- Shown when the microphone stopped delivering audio and restarting it did not help -->
     <string name="vibevoice_mic_unavailable">Microphone stopped working. Transcription stopped.</string>
+    <!-- Section heading for the sliders that shape the sound waves drawn behind the keys -->
+    <string name="vibevoice_waves_title">Sound waves</string>
+    <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. Changes apply immediately \u2014 open a chat next to this screen and hold space to watch them.</string>
+    <string name="vibevoice_waves_amplitude">Size</string>
+    <string name="vibevoice_waves_reaction">Reaction to your voice</string>
+    <string name="vibevoice_waves_attack">Attack (how fast it rises)</string>
+    <string name="vibevoice_waves_damping">Damping (how fast it settles)</string>
+    <string name="vibevoice_waves_spread">Spread between waves</string>
+    <string name="vibevoice_waves_cycles">Periods across the width</string>
+    <string name="vibevoice_waves_count">Number of waves</string>
+    <string name="vibevoice_waves_speed">Speed</string>
+    <string name="vibevoice_waves_jitter">Roughness</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
     <string name="vibevoice_hold_to_transcribe">Hold to Transcribe</string>

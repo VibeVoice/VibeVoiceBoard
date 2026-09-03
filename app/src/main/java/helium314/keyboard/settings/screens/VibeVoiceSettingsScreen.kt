@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,7 +40,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.R
+import androidx.compose.material3.HorizontalDivider
+import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import helium314.keyboard.settings.preferences.SliderPreference
+import java.util.Locale
 import helium314.keyboard.settings.SearchSettingsScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -177,7 +185,9 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
         title = stringResource(R.string.vibevoice_integration_title),
         settings = emptyList() // Not a SearchSettingsScreen with list preferences
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        // SearchScreen only attaches verticalScroll to its settings-list path; a screen that
+        // supplies its own content gets a plain Column, so anything past the fold was unreachable.
+        Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text(
                 stringResource(R.string.vibevoice_account_linking_description),
                 style = MaterialTheme.typography.bodyMedium
@@ -334,6 +344,102 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
+            }
+
+            // Developer tuning, debug builds only. Deliberately not a preference: a toggle is
+            // something a Play Store user can find and switch on, and these ranges are for finding
+            // a look, not for shipping. BuildConfig.DEBUG is false in release and nouserlib, so the
+            // block cannot render there and R8 drops it; the debug APKs keep the sliders.
+            if (BuildConfig.DEBUG) {
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
+
+            Text(
+                stringResource(R.string.vibevoice_waves_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.size(4.dp))
+            Text(
+                stringResource(R.string.vibevoice_waves_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+
+            // VoiceWaveView reads these once per dictation session, in start(), so a change takes
+            // effect at the next session rather than under a moving slider -- reading them per frame
+            // meant eight synchronized SharedPreferences lookups thirty times a second on the UI
+            // thread, to feed an animation nobody can see from this screen. Ranges are deliberately
+            // wide: this is for finding the look, not for keeping anyone inside sensible values.
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_amplitude),
+                key = Settings.PREF_WAVE_AMPLITUDE,
+                default = Defaults.PREF_WAVE_AMPLITUDE,
+                range = 0.05f..1.2f,
+                // The three terms sum to at most 1.7, so what you see is 1.7x this value. The
+                // label reports the excursion, not the raw factor.
+                description = { "${(170 * it).toInt()}% of the gap between waves" }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_reaction),
+                key = Settings.PREF_WAVE_REACTION,
+                default = Defaults.PREF_WAVE_REACTION,
+                range = 0f..12f,
+                description = { "loud voice = ${String.format(Locale.US, "%.1f", 1f + it)}x the size" }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_attack),
+                key = Settings.PREF_WAVE_ATTACK,
+                default = Defaults.PREF_WAVE_ATTACK,
+                range = 0.05f..1f,
+                description = { if (it > 0.95f) "instant" else String.format(Locale.US, "%.2f", it) }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_damping),
+                key = Settings.PREF_WAVE_DAMPING,
+                default = Defaults.PREF_WAVE_DAMPING,
+                range = 0.02f..1f,
+                description = {
+                    if (it < 0.06f) "swings on for a while" else String.format(Locale.US, "%.2f", it)
+                }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_spread),
+                key = Settings.PREF_WAVE_SPREAD,
+                default = Defaults.PREF_WAVE_SPREAD,
+                range = 0f..1f,
+                description = {
+                    if (it < 0.05f) "parallel, never crossing" else "${(100 * it).toInt()}% apart"
+                }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_cycles),
+                key = Settings.PREF_WAVE_CYCLES,
+                default = Defaults.PREF_WAVE_CYCLES,
+                range = 0.3f..6f,
+                description = { String.format(Locale.US, "%.1f periods across the width", it) }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_count),
+                key = Settings.PREF_WAVE_COUNT,
+                default = Defaults.PREF_WAVE_COUNT,
+                range = 1f..12f,
+                description = { "${it.toInt()}" }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_speed),
+                key = Settings.PREF_WAVE_SPEED,
+                default = Defaults.PREF_WAVE_SPEED,
+                range = 0f..0.06f,
+                description = { String.format(Locale.US, "%.3f", it) }
+            ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_jitter),
+                key = Settings.PREF_WAVE_JITTER,
+                default = Defaults.PREF_WAVE_JITTER,
+                range = 0f..1f,
+                description = { if (it < 0.02f) "none" else "${(100 * it).toInt()}%" }
+            ) { }
             }
         }
 

@@ -53,6 +53,14 @@ class VibeVoiceClient(
     @Volatile private var audioJob: Job? = null
     @Volatile private var totalRead = 0L
     @Volatile private var lastFullText = ""
+    /**
+     * RMS of the most recent audio buffer, 0..1. Written by the capture coroutine roughly every
+     * 100 ms and read once per frame by [VoiceWaveView] — never delivered through a callback or a
+     * Handler, because the only consumer is an animation that paints itself and would gain nothing
+     * from being woken on the UI thread thirty times a second.
+     */
+    @Volatile var currentLevel = 0f
+        private set
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
     @Volatile private var closureJob: Job? = null
@@ -435,6 +443,7 @@ class VibeVoiceClient(
             return
         }
 
+        currentLevel = 0f
         totalRead = 0L // Reset for new session
         lastFullText = ""
         audioJob = scope.launch {
@@ -468,14 +477,42 @@ class VibeVoiceClient(
                     totalReadsInSession++
                     
                     val numSamples = read / 2
+                    var bufferSquares = 0L
                     for (i in 0 until numSamples) {
                         val b1 = buffer[2 * i].toInt() and 0xFF
                         val b2 = buffer[2 * i + 1].toInt() and 0xFF
                         val sample = ((b2 shl 8) or b1).toShort()
                         val sampleVal = sample.toLong()
-                        sumOfSquares += sampleVal * sampleVal
+                        bufferSquares += sampleVal * sampleVal
                     }
+                    sumOfSquares += bufferSquares
                     totalSamples += numSamples
+                    if (numSamples > 0) {
+                        // Measured over the tail of the buffer, not all of it. A read carries
+                        // 160-250 ms of audio, so averaging the whole thing centres the estimate
+                        // more than a tenth of a second in the past and the waves visibly trail the
+                        // voice. The last quarter is the freshest part we have; the animation reads
+                        // this thirty times a second and would happily take more.
+                        val tailStart = (numSamples * 3) / 4
+                        var tailSquares = 0L
+                        for (i in tailStart until numSamples) {
+                            val b1 = buffer[2 * i].toInt() and 0xFF
+                            val b2 = buffer[2 * i + 1].toInt() and 0xFF
+                            val sample = ((b2 shl 8) or b1).toShort().toLong()
+                            tailSquares += sample * sample
+                        }
+                        val tailCount = numSamples - tailStart
+                        val rms = if (tailCount > 0)
+                            Math.sqrt(tailSquares.toDouble() / tailCount) / 32768.0
+                        else Math.sqrt(bufferSquares.toDouble() / numSamples) / 32768.0
+                        // Raw RMS of speech sits around 0.02..0.06 and peaks near 0.17 -- the session
+                        // totals in the bug report logs bear that out -- so feeding it straight to the
+                        // animation moved the waves by a couple of percent and read as no reaction at
+                        // all. The square root against a 0.15 full scale spreads that range over most
+                        // of 0..1, which is where the web pipeline's FFT average already lands.
+                        currentLevel = Math.sqrt(rms / LEVEL_FULL_SCALE)
+                            .coerceIn(0.0, 1.0).toFloat()
+                    }
                     
                     var isAllZeros = true
                     for (i in 0 until read) {
@@ -646,6 +683,8 @@ class VibeVoiceClient(
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
         private const val TAG = "VibeVoiceClient"
         private const val MAX_RETRIES = 3
+        /** RMS that counts as a full-scale level for the waves; see where currentLevel is written. */
+        private const val LEVEL_FULL_SCALE = 0.15
 
         /** Another app won the concurrent-capture arbitration and the system is feeding us silence. */
         const val WARN_MIC_BUSY = "mic_busy"

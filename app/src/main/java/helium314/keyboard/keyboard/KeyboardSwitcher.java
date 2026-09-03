@@ -67,6 +67,7 @@ public final class KeyboardSwitcher implements KeyboardState.SwitchActions {
 
     private InputView mCurrentInputView;
     private KeyboardWrapperView mKeyboardViewWrapper;
+    private helium314.keyboard.latin.vibevoice.VoiceWaveView mVoiceWaveView;
     private View mMainKeyboardFrame;
     private MainKeyboardView mKeyboardView;
     private EmojiPalettesView mEmojiPalettesView;
@@ -716,6 +717,11 @@ public final class KeyboardSwitcher implements KeyboardState.SwitchActions {
         return mClipboardStripView;
     }
 
+    @Nullable
+    public helium314.keyboard.latin.vibevoice.VoiceWaveView getVoiceWaveView() {
+        return mVoiceWaveView;
+    }
+
     public MainKeyboardView getMainKeyboardView() {
         return mKeyboardView;
     }
@@ -769,6 +775,7 @@ public final class KeyboardSwitcher implements KeyboardState.SwitchActions {
 
         mKeyboardViewWrapper = mCurrentInputView.findViewById(R.id.keyboard_view_wrapper);
         mKeyboardViewWrapper.setKeyboardActionListener(mLatinIME.mKeyboardActionListener);
+        mVoiceWaveView = mCurrentInputView.findViewById(R.id.voice_wave_view);
         mKeyboardView = mCurrentInputView.findViewById(R.id.keyboard_view);
         mKeyboardView.setHardwareAcceleratedDrawingEnabled(isHardwareAcceleratedDrawingEnabled);
         mKeyboardView.setKeyboardActionListener(mLatinIME.mKeyboardActionListener);

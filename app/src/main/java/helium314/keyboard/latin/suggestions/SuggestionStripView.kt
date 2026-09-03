@@ -5,8 +5,6 @@
  */
 package helium314.keyboard.latin.suggestions
 
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
@@ -14,7 +12,6 @@ import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import java.util.WeakHashMap
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -91,7 +88,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val wordViews = ArrayList<TextView>()
     private val debugInfoViews = ArrayList<TextView>()
     private val dividerViews = ArrayList<View>()
-    private val voiceAnimators = WeakHashMap<View, ObjectAnimator>()
 
     init {
         val inflater = LayoutInflater.from(context)
@@ -314,8 +310,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         dismissMoreSuggestionsPanel()
-        voiceAnimators.values.forEach { it.cancel() }
-        voiceAnimators.clear()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -527,7 +521,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             button.background = null
             button.clearColorFilter()
             button.scaleType = ImageView.ScaleType.FIT_CENTER
-            startTiltingAnimation(button)
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"
@@ -540,23 +533,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 else defaultToolbarBackground.constantState?.newDrawable(resources)
             Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
             button.scaleType = ImageView.ScaleType.CENTER
-            stopTiltingAnimation(button)
+            view.rotation = 0f // an older build left the key tilted; clear it once
         }
-    }
-
-    private fun startTiltingAnimation(view: View) {
-        if (voiceAnimators.containsKey(view)) return
-        val animator = ObjectAnimator.ofFloat(view, "rotation", -8f, 8f)
-        animator.duration = 400
-        animator.repeatMode = ValueAnimator.REVERSE
-        animator.repeatCount = ValueAnimator.INFINITE
-        animator.start()
-        voiceAnimators[view] = animator
-    }
-
-    private fun stopTiltingAnimation(view: View) {
-        voiceAnimators.remove(view)?.cancel()
-        view.rotation = 0f
     }
 
     private fun updateKeys() {
