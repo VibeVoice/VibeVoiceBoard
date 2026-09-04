@@ -54,7 +54,10 @@ class VoiceOverlay(context: Context) : View(context) {
     // the launcher asset is the one that is kept in step with the brand.
     private val drawable = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var glowRadius = 0f
+    /** The mark's own silhouette, blurred. Built once per session, never per frame. */
+    private var glowBitmap: Bitmap? = null
+    private val glowOffset = IntArray(2)
+    private var glowBox = 0
 
     private var levelSource: WeakReference<VibeVoiceClient>? = null
     private var level = 0f
@@ -123,6 +126,9 @@ class VoiceOverlay(context: Context) : View(context) {
     }
 
     private fun stopAnimating() {
+        glowBitmap?.recycle()
+        glowBitmap = null
+        glowBox = 0
         running = false
         levelSource = null
         onDismiss = null
@@ -191,29 +197,7 @@ class VoiceOverlay(context: Context) : View(context) {
             canvas.drawLine(cx + ca * inner, cy + sa * inner, cx + ca * outer, cy + sa * outer, barPaint)
         }
 
-        // The glow is what says "active": the mark itself is the ordinary one, and this is the
-        // waveform's own colour bled out behind it, brightening as the voice does.
         drawable?.let { d ->
-            // Painted first, so the artwork goes on top of it and nothing of the mark is behind
-            // colour.
-            val wanted = discRadius * (0.78f + 0.5f * drive)
-            if (abs(wanted - glowRadius) > 0.5f) {
-                glowRadius = wanted
-                // Transparent where the mark is, brightest just outside it, gone by the rim. A
-                // glow that is solid in the middle sits behind the artwork and still washes it
-                // out; this one occupies only the space the artwork does not.
-                val clear = Color.argb(0, Color.red(barColor), Color.green(barColor), Color.blue(barColor))
-                val halo = Color.argb(190, Color.red(barColor), Color.green(barColor), Color.blue(barColor))
-                glowPaint.shader = RadialGradient(
-                    cx, cy, glowRadius.coerceAtLeast(1f),
-                    intArrayOf(clear, halo, clear),
-                    floatArrayOf(0f, 0.66f, 1f),
-                    Shader.TileMode.CLAMP
-                )
-            }
-            glowPaint.alpha = (110 + 145 * drive).toInt().coerceIn(0, 255)
-            canvas.drawCircle(cx, cy, glowRadius, glowPaint)
-
             // Placed by its ink, not by its viewport. A vector's drawing does not fill its
             // viewBox evenly -- this one sits up and to the left of centre -- so centring the
             // viewport put the artwork off centre, and it touched the disc at the top left first
@@ -224,6 +208,21 @@ class VoiceOverlay(context: Context) : View(context) {
             val box = iconPx / span
             val left = cx - box * (ink.left + ink.width() / 2f)
             val top = cy - box * (ink.top + ink.height() / 2f)
+
+            // The light has the mark's shape, so it shows in the few pixels around the strokes and
+            // nowhere else. Static: the ring of bars already carries the level, and two things
+            // pulsing at once compete instead of agreeing.
+            if (glowBitmap == null || glowBox != box.toInt()) {
+                glowBitmap?.recycle()
+                glowBox = box.toInt()
+                glowBitmap = VoiceGlow.silhouette(d, glowBox, glowOffset)
+                glowPaint.color = barColor
+                glowPaint.alpha = GLOW_ALPHA
+            }
+            glowBitmap?.let { glow ->
+                canvas.drawBitmap(glow, left + glowOffset[0], top + glowOffset[1], glowPaint)
+            }
+
             d.setBounds(left.toInt(), top.toInt(), (left + box).toInt(), (top + box).toInt())
             d.draw(canvas)
         }
@@ -339,6 +338,8 @@ class VoiceOverlay(context: Context) : View(context) {
         private const val FRAME_INTERVAL_MS = 33L
         /** How hard the measured level is pushed before it drives the bars. */
         private const val LEVEL_DRIVE = 1.35f
+        /** How brightly the mark glows. Fixed: this is a state, not a level. */
+        private const val GLOW_ALPHA = 200
 
         /** Measured once per process: the artwork does not change under us. */
         private var cachedInk: RectF? = null

@@ -50,6 +50,7 @@ import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.ToolbarMode
 import helium314.keyboard.latin.utils.addPinnedKey
@@ -509,31 +510,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
-    /**
-     * A soft disc of light behind the microphone key while a session runs.
-     *
-     * Static rather than driven by the level: this key is a few dp across and sits next to the text
-     * being read, and something pulsing there is a distraction. The waves behind the keys and the
-     * floating mark are where the level belongs.
-     */
-    private fun voiceActiveGlow(accent: Int): Drawable {
-        // Transparent at the middle, brightest around the mark, gone at the rim. A glow that is
-        // solid in the centre sits behind the glyph and still washes it out; this one only ever
-        // occupies the space the glyph does not.
-        val clear = Color.argb(0, Color.red(accent), Color.green(accent), Color.blue(accent))
-        val halo = Color.argb(165, Color.red(accent), Color.green(accent), Color.blue(accent))
-        val shape = ShapeDrawable(OvalShape())
-        // Built in resize() because the key's size is not known here, and a gradient written
-        // against the wrong one is a hard edge instead of a glow.
-        shape.shaderFactory = object : ShapeDrawable.ShaderFactory() {
-            override fun resize(width: Int, height: Int): Shader = RadialGradient(
-                width / 2f, height / 2f, (maxOf(width, height) / 2f).coerceAtLeast(1f),
-                intArrayOf(clear, halo, clear), floatArrayOf(0f, 0.62f, 1f), Shader.TileMode.CLAMP
-            )
-        }
-        return shape
-    }
-
     fun updateVoiceKey() {
         val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
         // VibeVoice key is always visible — it is not gated on system voice IME availability
@@ -549,13 +525,23 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // The ordinary mark with a glow behind it, not the purple asset. Recording is said by
             // the light around the key in the same colour as the waves behind the keys, so the
             // toolbar, the waves and the floating mark all say it the same way.
-            button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
-            button.background = voiceActiveGlow(Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL))
-            // The mark keeps the colour every other toolbar key has. Tinting it with the accent as
-            // well left a coloured glyph on a glow of the same colour, which reads as the glow
-            // having swallowed it.
-            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
-            button.scaleType = ImageView.ScaleType.CENTER
+            // The mark with its own silhouette glowing behind it, composited into one bitmap: an
+            // ImageButton can be handed a single image, and layering here would mean fighting its
+            // scale type and its background. The mark keeps TOOL_BAR_KEY, the colour every other
+            // key in the row has -- tinting the view instead would have coloured the glow with it.
+            val icon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
+            val colors = Settings.getValues().mColors
+            val glowing = if (icon == null) null else VoiceGlow.markWithGlow(
+                icon,
+                (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt(),
+                colors.get(ColorType.GESTURE_TRAIL),
+                colors.get(ColorType.TOOL_BAR_KEY),
+                VOICE_GLOW_ALPHA
+            )
+            button.clearColorFilter()
+            if (glowing != null) button.setImageBitmap(glowing) else button.setImageDrawable(icon)
+            button.background = null
+            button.scaleType = ImageView.ScaleType.FIT_CENTER
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"
@@ -619,5 +605,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         var DEBUG_SUGGESTIONS = false
         private const val DEBUG_INFO_TEXT_SIZE_IN_DIP = 6.5f
         private val TAG = SuggestionStripView::class.java.simpleName
+        /** The box the glowing mark is rendered at; FIT_CENTER scales it to whatever the key is. */
+        private const val VOICE_GLOW_BOX_DP = 40f
+        private const val VOICE_GLOW_ALPHA = 210
     }
 }
