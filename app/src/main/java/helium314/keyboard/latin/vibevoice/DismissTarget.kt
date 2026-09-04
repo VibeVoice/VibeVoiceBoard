@@ -14,7 +14,11 @@ import android.view.WindowManager
 /**
  * The X that a running session is dragged onto to end it.
  *
- * On screen only while [VoiceOverlay] is being dragged. Ending a session is the one action here that
+ * The window is added once, with the mark, and only made visible once a drag begins. Adding a window
+ * is a round trip to the window manager, and doing that in the middle of a gesture cost the first
+ * frames of the drag -- which is what made dropping onto it feel like it needed a second attempt.
+ *
+ * Visible only while [VoiceOverlay] is being dragged. Ending a session is the one action here that
  * cannot be taken back -- the words already spoken are committed, but nothing more is heard -- so
  * its target is absent at every moment when nobody is reaching for it, and it takes a deliberate
  * drag across the screen rather than a tap that a thumb can make by accident.
@@ -48,6 +52,22 @@ class DismissTarget(context: Context) : View(context) {
         if (armed == value) return
         armed = value
         invalidate()
+    }
+
+    /**
+     * Where the X actually is, in screen coordinates.
+     *
+     * Asked of the view rather than computed from DisplayMetrics. This window uses
+     * FLAG_LAYOUT_NO_LIMITS and is anchored to the true bottom of the screen, while
+     * `displayMetrics.heightPixels` stops above the navigation bar -- so a hit test built from the
+     * metrics sat a navigation bar's height above the X that was drawn. Close enough to look
+     * right, far enough that the drop missed.
+     */
+    fun centerOnScreen(out: FloatArray) {
+        val loc = IntArray(2)
+        getLocationOnScreen(loc)
+        out[0] = loc[0] + width / 2f
+        out[1] = loc[1] + (height - TARGET_BOTTOM_DP * density)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -88,12 +108,38 @@ class DismissTarget(context: Context) : View(context) {
         private fun windowManager(context: Context): WindowManager =
             context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
+        /** The X's centre in screen coordinates, or false when there is no target. */
         @JvmStatic
-        fun show(context: Context, discColor: Int, markColor: Int) {
+        fun centerOnScreen(out: FloatArray): Boolean {
+            val view = current ?: return false
+            if (view.width == 0 || view.height == 0) return false
+            view.centerOnScreen(out)
+            return true
+        }
+
+        /** Makes the already-added window visible. Cheap: no window is created here. */
+        @JvmStatic
+        fun reveal() {
+            current?.let { if (it.visibility != VISIBLE) it.visibility = VISIBLE }
+        }
+
+        @JvmStatic
+        fun conceal() {
+            current?.let {
+                it.arm(false)
+                if (it.visibility != INVISIBLE) it.visibility = INVISIBLE
+            }
+        }
+
+        @JvmStatic
+        fun attach(context: Context, discColor: Int, markColor: Int) {
             if (current != null) return
             val app = context.applicationContext
             val view = DismissTarget(app)
             view.setColors(discColor, markColor)
+            // Added now, shown later. The window exists for the whole session so that the drag
+            // never has to wait for one to be created.
+            view.visibility = INVISIBLE
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 (HEIGHT_DP * app.resources.displayMetrics.density).toInt(),
@@ -123,7 +169,7 @@ class DismissTarget(context: Context) : View(context) {
         }
 
         @JvmStatic
-        fun hide(context: Context) {
+        fun detach(context: Context) {
             val view = current ?: return
             current = null
             try {

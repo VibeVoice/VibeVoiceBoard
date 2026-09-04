@@ -54,8 +54,10 @@ class VoiceOverlay(context: Context) : View(context) {
     private val bars = FloatArray(BAR_COUNT / 2 + 1)
 
     /** Both from the keyboard's own theme, so the mark reads as part of it. */
-    private var discColor = Color.argb(235, 20, 20, 24)
-    private var barColor = Color.rgb(0x9F, 0x00, 0xA1)
+    var discColor = Color.argb(235, 20, 20, 24)
+        private set
+    var barColor = Color.rgb(0x9F, 0x00, 0xA1)
+        private set
 
     private fun readThemeColors() {
         try {
@@ -166,6 +168,7 @@ class VoiceOverlay(context: Context) : View(context) {
                 startX = params.x
                 startY = params.y
                 dragged = false
+                armedNow = false
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -173,26 +176,44 @@ class VoiceOverlay(context: Context) : View(context) {
                 val dy = event.rawY - downY
                 if (!dragged && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
                     dragged = true
-                    // The target appears only once a drag has actually begun. Ending a session is
-                    // the one thing here that cannot be undone, so its target is not on screen at
-                    // times when nobody is reaching for it.
-                    DismissTarget.show(context, discColor, barColor)
+                    // Only made visible here; the window itself was added with the mark. The target
+                    // is off screen at every moment when nobody is reaching for it, without a
+                    // window round trip landing in the middle of the gesture.
+                    DismissTarget.reveal()
                 }
                 if (dragged) {
-                    params.x = startX + dx.toInt()
-                    params.y = startY + dy.toInt()
-                    try {
-                        windowManager(context).updateViewLayout(this, params)
-                    } catch (e: Exception) {
-                        VibeVoiceDebugLogger.log("Could not move the overlay: ${e.message}")
+                    val armed = isOverTarget(startX + dx, startY + dy)
+                    if (armed && DismissTarget.centerOnScreen(targetCentre)) {
+                        // Held on the target once inside its radius. Letting go is the moment that
+                        // matters, and asking someone to keep a fingertip steady over a circle
+                        // while talking is what made this need two or three attempts.
+                        val size = SIZE_DP * density
+                        params.x = (targetCentre[0] - size / 2f).toInt()
+                        params.y = (targetCentre[1] - size / 2f).toInt()
+                    } else {
+                        params.x = startX + dx.toInt()
+                        params.y = startY + dy.toInt()
                     }
-                    DismissTarget.setArmed(isOverTarget(params))
+                    if (params.x != lastX || params.y != lastY) {
+                        lastX = params.x
+                        lastY = params.y
+                        try {
+                            windowManager(context).updateViewLayout(this, params)
+                        } catch (e: Exception) {
+                            VibeVoiceDebugLogger.log("Could not move the overlay: ${e.message}")
+                        }
+                    }
+                    DismissTarget.setArmed(armed)
+                    armedNow = armed
                 }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                val onTarget = dragged && event.actionMasked == MotionEvent.ACTION_UP && isOverTarget(params)
-                DismissTarget.hide(context)
+                // The armed state from the last move, not a fresh hit test: once the mark has
+                // snapped to the target its own position is the target's, and re-testing would be
+                // asking a question already answered.
+                val onTarget = dragged && event.actionMasked == MotionEvent.ACTION_UP && armedNow
+                DismissTarget.conceal()
                 // A tap does nothing on purpose. Getting the mark out of the way and ending the
                 // session are both done in a hurry, and a tap that ended it would keep costing
                 // transcripts to a slip of the thumb.
@@ -209,16 +230,23 @@ class VoiceOverlay(context: Context) : View(context) {
         return false
     }
 
-    /** Whether the mark's centre is inside the target's catch radius. */
-    private fun isOverTarget(params: WindowManager.LayoutParams): Boolean {
+    private val targetCentre = FloatArray(2)
+    private var lastX = Int.MIN_VALUE
+    private var lastY = Int.MIN_VALUE
+    private var armedNow = false
+
+    /**
+     * Whether the mark's centre is inside the target's catch radius.
+     *
+     * The target's position is asked of the target's own window. Deriving it from DisplayMetrics
+     * put the catch zone a navigation bar's height above the X that was on screen: near enough to
+     * look like the drop should have worked, far enough that it did not.
+     */
+    private fun isOverTarget(left: Float, top: Float): Boolean {
+        if (!DismissTarget.centerOnScreen(targetCentre)) return false
         val size = SIZE_DP * density
-        val cx = params.x + size / 2f
-        val cy = params.y + size / 2f
-        val metrics = context.resources.displayMetrics
-        val tx = metrics.widthPixels / 2f
-        val ty = metrics.heightPixels - TARGET_BOTTOM_DP * density
-        val dx = cx - tx
-        val dy = cy - ty
+        val dx = left + size / 2f - targetCentre[0]
+        val dy = top + size / 2f - targetCentre[1]
         return dx * dx + dy * dy <= (CATCH_RADIUS_DP * density) * (CATCH_RADIUS_DP * density)
     }
 
@@ -249,9 +277,7 @@ class VoiceOverlay(context: Context) : View(context) {
         private const val SECOND_RATIO = 1.92f
         private const val THIRD_RATIO = 0.75f
         private const val PROFILE_FLOOR = 0.45f
-        /** Distance of the target's centre from the bottom of the screen. */
-        private const val TARGET_BOTTOM_DP = 104f
-        private const val CATCH_RADIUS_DP = 76f
+        private const val CATCH_RADIUS_DP = 88f
 
         private var current: VoiceOverlay? = null
 
@@ -301,6 +327,7 @@ class VoiceOverlay(context: Context) : View(context) {
                 return
             }
             overlay.start(client, onDismiss)
+            DismissTarget.attach(app, overlay.discColor, overlay.barColor)
             current = overlay
             VibeVoiceDebugLogger.log("Overlay shown")
         }
@@ -308,7 +335,7 @@ class VoiceOverlay(context: Context) : View(context) {
         /** Takes it off screen. Safe to call when there is none. */
         @JvmStatic
         fun hide(context: Context) {
-            DismissTarget.hide(context)
+            DismissTarget.detach(context)
             val overlay = current ?: return
             current = null
             overlay.stopAnimating()
