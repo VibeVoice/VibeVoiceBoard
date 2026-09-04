@@ -16,7 +16,9 @@ import android.view.WindowManager
 import androidx.core.content.ContextCompat
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.ColorType
+import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.prefs
 import java.lang.ref.WeakReference
 import kotlin.math.abs
 import kotlin.math.cos
@@ -50,8 +52,37 @@ class VoiceOverlay(context: Context) : View(context) {
     private var pulse = 0f
     private var running = false
 
+    /**
+     * The geometry, read once per session. Expressed from the inside out: the V decides the size,
+     * the padding decides the disc around it, the bars grow outward from that. Changing one does
+     * not rescale the others, which is the point of tuning them separately.
+     */
+    private var iconPx = Defaults.PREF_OVERLAY_ICON * density
+    private var discRadiusPx = 0f
+    private var barLengthPx = 0f
+    private var barWidthPx = Defaults.PREF_OVERLAY_BAR_WIDTH * density
+    private var barCount = Defaults.PREF_OVERLAY_BAR_COUNT.toInt()
+    private var restHeight = Defaults.PREF_OVERLAY_REST
+
     /** Per-bar heights, smoothed between frames so a bar falls back rather than snapping. */
-    private val bars = FloatArray(BAR_COUNT / 2 + 1)
+    private var bars = FloatArray(Defaults.PREF_OVERLAY_BAR_COUNT.toInt() / 2 + 1)
+
+    private fun readGeometry(context: Context) {
+        val p = context.prefs()
+        iconPx = p.getFloat(Settings.PREF_OVERLAY_ICON, Defaults.PREF_OVERLAY_ICON) * density
+        val padding = p.getFloat(Settings.PREF_OVERLAY_PADDING, Defaults.PREF_OVERLAY_PADDING) * density
+        discRadiusPx = iconPx / 2f + padding
+        barLengthPx = p.getFloat(Settings.PREF_OVERLAY_BARS, Defaults.PREF_OVERLAY_BARS) * density
+        barWidthPx = p.getFloat(Settings.PREF_OVERLAY_BAR_WIDTH, Defaults.PREF_OVERLAY_BAR_WIDTH) * density
+        barCount = p.getFloat(Settings.PREF_OVERLAY_BAR_COUNT, Defaults.PREF_OVERLAY_BAR_COUNT)
+            .toInt().coerceIn(8, 96)
+        restHeight = p.getFloat(Settings.PREF_OVERLAY_REST, Defaults.PREF_OVERLAY_REST)
+        bars = FloatArray(barCount / 2 + 1)
+    }
+
+    /** The window this needs, given the geometry above. */
+    private fun requiredSizePx(): Int =
+        ((discRadiusPx + BAR_GAP_DP * density + barLengthPx) * 2f + barWidthPx).toInt()
 
     /** Both from the keyboard's own theme, so the mark reads as part of it. */
     var discColor = Color.argb(235, 20, 20, 24)
@@ -59,14 +90,23 @@ class VoiceOverlay(context: Context) : View(context) {
     var barColor = Color.rgb(0x9F, 0x00, 0xA1)
         private set
 
-    private fun readThemeColors() {
+    private fun readThemeColors(context: Context) {
+        val brand = try {
+            context.prefs().getBoolean(Settings.PREF_OVERLAY_BRAND_COLOR, Defaults.PREF_OVERLAY_BRAND_COLOR)
+        } catch (e: Exception) {
+            Defaults.PREF_OVERLAY_BRAND_COLOR
+        }
         try {
             val colors = Settings.getValues().mColors
             discColor = colors.get(ColorType.MAIN_BACKGROUND)
-            barColor = colors.get(ColorType.GESTURE_TRAIL)
+            // The keyboard's own gesture-trail colour by default, so the mark matches whatever
+            // theme is in use; the brand purple is the alternative, for when it should read as
+            // VibeVoice rather than as part of the keyboard.
+            barColor = if (brand) BRAND_PURPLE else colors.get(ColorType.GESTURE_TRAIL)
         } catch (e: Exception) {
             // Settings not loaded; the defaults above stand in for one session.
             VibeVoiceDebugLogger.log("Overlay could not read the theme: ${e.message}")
+            if (brand) barColor = BRAND_PURPLE
         }
     }
 
@@ -76,7 +116,7 @@ class VoiceOverlay(context: Context) : View(context) {
     private fun start(client: VibeVoiceClient, onDismiss: Runnable) {
         this.levelSource = WeakReference(client)
         this.onDismiss = onDismiss
-        readThemeColors()
+        readThemeColors(context)
         bars.fill(0f)
         running = true
         invalidate()
@@ -98,8 +138,8 @@ class VoiceOverlay(context: Context) : View(context) {
 
         val cx = width / 2f
         val cy = height / 2f
-        val base = SIZE_DP * density / 2f
-        val discRadius = base * DISC_FRACTION
+        val base = width / 2f
+        val discRadius = discRadiusPx
 
         // The disc first, in the keyboard's own background colour, so the bars stand on the same
         // ground the keys do.
@@ -111,6 +151,7 @@ class VoiceOverlay(context: Context) : View(context) {
         // thing. Only half are computed and the ring is mirrored, which is what stops it looking
         // like noise -- an asymmetric ring reads as random, a symmetric one reads as a waveform.
         val half = bars.size - 1
+        if (half <= 0) return
         for (i in bars.indices) {
             val t = i / half.toFloat()
             // The profile falls from the top of the ring towards the bottom, so the ring has a
@@ -119,20 +160,20 @@ class VoiceOverlay(context: Context) : View(context) {
             val wave = sin(t * SPAN + pulse) +
                     sin(t * SPAN * SECOND_RATIO - pulse * 0.7f) * 0.45f +
                     cos(t * SPAN * THIRD_RATIO + pulse * 0.6f) * 0.25f
-            val target = (profile * (REST_HEIGHT + level * (1f - REST_HEIGHT)) *
+            val target = (profile * (restHeight + level * (1f - restHeight)) *
                     (0.55f + 0.45f * abs(wave) / 1.7f)).coerceIn(0f, 1f)
             // Asymmetric smoothing, as everywhere else here: rise with the syllable, fall behind it.
             bars[i] += (target - bars[i]) * (if (target > bars[i]) BAR_ATTACK else BAR_RELEASE)
         }
 
-        barPaint.strokeWidth = BAR_WIDTH_DP * density
+        barPaint.strokeWidth = barWidthPx
         val inner = discRadius + BAR_GAP_DP * density
-        val maxOut = base - BAR_WIDTH_DP * density * 0.5f
-        for (b in 0 until BAR_COUNT) {
+        val maxOut = base - barWidthPx * 0.5f
+        for (b in 0 until barCount) {
             // Mirrored: index 0 at the top, walking down both sides.
-            val idx = if (b <= half) b else BAR_COUNT - b
+            val idx = if (b <= half) b else barCount - b
             val h = bars[idx.coerceIn(0, half)]
-            val angle = (-Math.PI / 2 + b * 2.0 * Math.PI / BAR_COUNT).toFloat()
+            val angle = (-Math.PI / 2 + b * 2.0 * Math.PI / barCount).toFloat()
             val ca = cos(angle)
             val sa = sin(angle)
             val outer = inner + (maxOut - inner) * h
@@ -144,7 +185,7 @@ class VoiceOverlay(context: Context) : View(context) {
         }
 
         drawable?.let {
-            val iconHalf = (discRadius * 0.62f).toInt()
+            val iconHalf = (iconPx / 2f).toInt()
             it.setBounds(cx.toInt() - iconHalf, cy.toInt() - iconHalf, cx.toInt() + iconHalf, cy.toInt() + iconHalf)
             it.draw(canvas)
         }
@@ -187,9 +228,8 @@ class VoiceOverlay(context: Context) : View(context) {
                         // Held on the target once inside its radius. Letting go is the moment that
                         // matters, and asking someone to keep a fingertip steady over a circle
                         // while talking is what made this need two or three attempts.
-                        val size = SIZE_DP * density
-                        params.x = (targetCentre[0] - size / 2f).toInt()
-                        params.y = (targetCentre[1] - size / 2f).toInt()
+                        params.x = (targetCentre[0] - width / 2f).toInt()
+                        params.y = (targetCentre[1] - height / 2f).toInt()
                     } else {
                         params.x = startX + dx.toInt()
                         params.y = startY + dy.toInt()
@@ -244,7 +284,7 @@ class VoiceOverlay(context: Context) : View(context) {
      */
     private fun isOverTarget(left: Float, top: Float): Boolean {
         if (!DismissTarget.centerOnScreen(targetCentre)) return false
-        val size = SIZE_DP * density
+        val size = width.toFloat()
         val dx = left + size / 2f - targetCentre[0]
         val dy = top + size / 2f - targetCentre[1]
         return dx * dx + dy * dy <= (CATCH_RADIUS_DP * density) * (CATCH_RADIUS_DP * density)
@@ -258,18 +298,14 @@ class VoiceOverlay(context: Context) : View(context) {
     private val touchSlop = android.view.ViewConfiguration.get(context).scaledTouchSlop
 
     companion object {
-        private const val SIZE_DP = 72f
         private const val FRAME_INTERVAL_MS = 33L
+        /** The VibeVoice mark's own colour, the alternative to the keyboard's. */
+        private val BRAND_PURPLE = Color.rgb(0x9F, 0x00, 0xA1)
         private const val ATTACK = 0.6f
         private const val RELEASE = 0.18f
         private const val PULSE_STEP = 0.12f
 
-        private const val BAR_COUNT = 36
-        private const val DISC_FRACTION = 0.52f
-        private const val BAR_WIDTH_DP = 2.2f
         private const val BAR_GAP_DP = 3f
-        /** What a bar shows in silence, so the ring is a ring and not a bare disc. */
-        private const val REST_HEIGHT = 0.16f
         private const val BAR_ATTACK = 0.55f
         private const val BAR_RELEASE = 0.16f
         /** Radians across half the ring. Under two periods, the same choice as the keyboard waves. */
@@ -302,7 +338,8 @@ class VoiceOverlay(context: Context) : View(context) {
             }
             val app = context.applicationContext
             val overlay = VoiceOverlay(app)
-            val size = (SIZE_DP * app.resources.displayMetrics.density).toInt()
+            overlay.readGeometry(app)
+            val size = overlay.requiredSizePx()
             val params = WindowManager.LayoutParams(
                 size, size,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)

@@ -1109,10 +1109,12 @@ public class LatinIME extends InputMethodService implements
                 // The keyboard is gone but the session is not, and nothing on screen would say so.
                 // The mark takes its place: same statement, a fraction of the room, and a tap on it
                 // ends the session through the same path as the space key.
-                final int sessionId = mVoiceSessionId;
-                VoiceOverlay.show(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
-                    if (sessionId == mVoiceSessionId) handleVoiceInput();
-                }));
+                if (mSettings.getCurrent().mVoiceOverlayEnabled) {
+                    final int sessionId = mVoiceSessionId;
+                    VoiceOverlay.show(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
+                        if (sessionId == mVoiceSessionId) handleVoiceInput();
+                    }));
+                }
             } else {
                 VibeVoiceDebugLogger.log("Keyboard hidden and background dictation is off: stopping");
                 mIsStoppingVoice = true;

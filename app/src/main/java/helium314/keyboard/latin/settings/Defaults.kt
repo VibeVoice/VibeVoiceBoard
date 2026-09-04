@@ -101,6 +101,19 @@ object Defaults {
     // Off by default: a keyboard that keeps the microphone open after it is dismissed is not what
     // anyone expects of a keyboard, so it is something the user turns on rather than discovers.
     const val PREF_VOICE_BACKGROUND = false
+    // On by default: a session running without the keyboard needs something on screen saying so,
+    // and this is the part of that a user can actually see without pulling the shade down.
+    const val PREF_OVERLAY_ENABLED = true
+    // The geometry is expressed from the inside out -- the V decides the size, the padding decides
+    // the disc, the bars grow outward from it -- so changing one does not silently rescale the rest.
+    const val PREF_OVERLAY_ICON = 26f
+    const val PREF_OVERLAY_PADDING = 11f
+    const val PREF_OVERLAY_BARS = 12f
+    const val PREF_OVERLAY_BAR_WIDTH = 2.2f
+    const val PREF_OVERLAY_BAR_COUNT = 36f
+    const val PREF_OVERLAY_REST = 0.16f
+    /** false = the keyboard's own gesture-trail colour, true = the VibeVoice purple. */
+    const val PREF_OVERLAY_BRAND_COLOR = false
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f

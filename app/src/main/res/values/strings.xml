@@ -84,6 +84,16 @@
     <string name="vibevoice_session_listening">Waiting for speech\u2026</string>
     <string name="vibevoice_session_stop">Stop</string>
     <string name="vibevoice_overlay_title">Floating mark</string>
+    <string name="vibevoice_overlay_show">Show the floating mark</string>
+    <string name="vibevoice_overlay_tuning_title">Floating mark</string>
+    <string name="vibevoice_overlay_tuning_desc">Size and shape of the mark. It is built from the inside out, so each of these moves one thing: a change applies the next time the mark appears.</string>
+    <string name="vibevoice_overlay_icon">Mark size</string>
+    <string name="vibevoice_overlay_padding">Padding</string>
+    <string name="vibevoice_overlay_bars">Waveform length</string>
+    <string name="vibevoice_overlay_bar_width">Bar width</string>
+    <string name="vibevoice_overlay_bar_count">Bar count</string>
+    <string name="vibevoice_overlay_rest">Resting height</string>
+    <string name="vibevoice_overlay_brand_color">VibeVoice purple instead of the keyboard colour</string>
     <string name="vibevoice_overlay_desc">While a session runs without the keyboard, show the VibeVoice mark on screen. It pulses with what is being heard, drags out of the way, and a tap ends the session.</string>
     <string name="vibevoice_overlay_grant">Allow drawing over other apps</string>
     <string name="vibevoice_overlay_granted">Allowed</string>

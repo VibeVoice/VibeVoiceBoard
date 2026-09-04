@@ -112,6 +112,14 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_FONT_SCALE = "font_scale";
     // Voice wave background, tunable from the VibeVoice settings screen
     public static final String PREF_VOICE_BACKGROUND = "vibevoice_background_dictation";
+    public static final String PREF_OVERLAY_ENABLED = "vibevoice_overlay_enabled";
+    public static final String PREF_OVERLAY_ICON = "vibevoice_overlay_icon";
+    public static final String PREF_OVERLAY_PADDING = "vibevoice_overlay_padding";
+    public static final String PREF_OVERLAY_BARS = "vibevoice_overlay_bars";
+    public static final String PREF_OVERLAY_BAR_WIDTH = "vibevoice_overlay_bar_width";
+    public static final String PREF_OVERLAY_BAR_COUNT = "vibevoice_overlay_bar_count";
+    public static final String PREF_OVERLAY_REST = "vibevoice_overlay_rest";
+    public static final String PREF_OVERLAY_BRAND_COLOR = "vibevoice_overlay_brand_color";
     public static final String PREF_WAVE_AMPLITUDE = "vibevoice_wave_amplitude";
     public static final String PREF_WAVE_REACTION = "vibevoice_wave_reaction";
     public static final String PREF_WAVE_CYCLES = "vibevoice_wave_cycles";

@@ -12,6 +12,7 @@ import android.net.Uri
 import android.provider.Settings as AndroidProviderSettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +72,46 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import helium314.keyboard.latin.vibevoice.VibeVoiceBugReporter
 
+/**
+ * A heading that folds its contents away. The screen has grown a tuning block per feature and they
+ * are all things one goes looking for deliberately, so they start closed rather than pushing
+ * everything else off the bottom.
+ */
+@Composable
+private fun CollapsibleSection(
+    title: String,
+    subtitle: String? = null,
+    initiallyOpen: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var open by rememberSaveable(title) { mutableStateOf(initiallyOpen) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (open) "\u2013" else "+",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        if (subtitle != null) {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        if (open) {
+            Spacer(modifier = Modifier.size(8.dp))
+            content()
+        }
+    }
+}
+
 @Composable
 fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     val context = LocalContext.current
@@ -90,6 +132,12 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     val appPrefs = remember(context) { context.prefs() }
     var backgroundDictation by remember {
         mutableStateOf(appPrefs.getBoolean(Settings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
+    }
+    var overlayEnabled by remember {
+        mutableStateOf(appPrefs.getBoolean(Settings.PREF_OVERLAY_ENABLED, Defaults.PREF_OVERLAY_ENABLED))
+    }
+    var overlayBrandColor by remember {
+        mutableStateOf(appPrefs.getBoolean(Settings.PREF_OVERLAY_BRAND_COLOR, Defaults.PREF_OVERLAY_BRAND_COLOR))
     }
     // Only this screen can ask: an input method has no way to request a runtime permission itself,
     // which is why the keyboard sends the user here for the microphone too.
@@ -432,6 +480,21 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
             }
             if (backgroundDictation) {
                 Spacer(modifier = Modifier.size(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.vibevoice_overlay_show))
+                    Switch(
+                        checked = overlayEnabled,
+                        onCheckedChange = {
+                            overlayEnabled = it
+                            appPrefs.edit().putBoolean(Settings.PREF_OVERLAY_ENABLED, it).apply()
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.size(12.dp))
                 Text(
                     stringResource(R.string.vibevoice_overlay_title),
                     style = MaterialTheme.typography.titleSmall
@@ -486,18 +549,76 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
 
-            Text(
-                stringResource(R.string.vibevoice_waves_title),
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.size(4.dp))
-            Text(
-                stringResource(R.string.vibevoice_waves_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-            Spacer(modifier = Modifier.size(8.dp))
+            CollapsibleSection(
+                title = stringResource(R.string.vibevoice_overlay_tuning_title),
+                subtitle = stringResource(R.string.vibevoice_overlay_tuning_desc)
+            ) {
+                // Read once per session in VoiceOverlay.show, like the wave tuning: a change takes
+                // effect the next time the mark appears.
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_icon),
+                    key = Settings.PREF_OVERLAY_ICON,
+                    default = Defaults.PREF_OVERLAY_ICON,
+                    range = 12f..64f,
+                    description = { "${it.toInt()} dp" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_padding),
+                    key = Settings.PREF_OVERLAY_PADDING,
+                    default = Defaults.PREF_OVERLAY_PADDING,
+                    range = 0f..40f,
+                    description = { "${it.toInt()} dp around the mark" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_bars),
+                    key = Settings.PREF_OVERLAY_BARS,
+                    default = Defaults.PREF_OVERLAY_BARS,
+                    range = 2f..48f,
+                    description = { "${it.toInt()} dp at full excursion" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_bar_width),
+                    key = Settings.PREF_OVERLAY_BAR_WIDTH,
+                    default = Defaults.PREF_OVERLAY_BAR_WIDTH,
+                    range = 0.8f..8f,
+                    description = { String.format("%.1f dp", it) }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_bar_count),
+                    key = Settings.PREF_OVERLAY_BAR_COUNT,
+                    default = Defaults.PREF_OVERLAY_BAR_COUNT,
+                    range = 8f..96f,
+                    description = { "${it.toInt()} bars" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_rest),
+                    key = Settings.PREF_OVERLAY_REST,
+                    default = Defaults.PREF_OVERLAY_REST,
+                    range = 0f..0.6f,
+                    description = { "${(100 * it).toInt()}% in silence" }
+                ) { }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Text(stringResource(R.string.vibevoice_overlay_brand_color))
+                    Switch(
+                        checked = overlayBrandColor,
+                        onCheckedChange = {
+                            overlayBrandColor = it
+                            appPrefs.edit().putBoolean(Settings.PREF_OVERLAY_BRAND_COLOR, it).apply()
+                        }
+                    )
+                }
+            }
 
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            CollapsibleSection(
+                title = stringResource(R.string.vibevoice_waves_title),
+                subtitle = stringResource(R.string.vibevoice_waves_desc)
+            ) {
             // VoiceWaveView reads these once per dictation session, in start(), so a change takes
             // effect at the next session rather than under a moving slider -- reading them per frame
             // meant eight synchronized SharedPreferences lookups thirty times a second on the UI
@@ -572,6 +693,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 range = 0f..1f,
                 description = { if (it < 0.02f) "none" else "${(100 * it).toInt()}%" }
             ) { }
+            }
             }
         }
 
