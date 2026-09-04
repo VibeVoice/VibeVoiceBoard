@@ -12,6 +12,7 @@ import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.graphics.Color
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.ShapeDrawable
@@ -19,6 +20,7 @@ import android.graphics.drawable.shapes.OvalShape
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.LayoutInflater
@@ -510,6 +512,21 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
+    /**
+     * The glow drawable that sits behind the active microphone key.
+     *
+     * Centred and not stretched: a BitmapDrawable used as a background is scaled to the view by
+     * default, which would pull the light out of shape as the key's size changes.
+     */
+    private fun voiceActiveGlow(icon: Drawable): Drawable? {
+        val box = icon.intrinsicWidth.takeIf { it > 0 }
+            ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
+        val margin = IntArray(1)
+        val bitmap = VoiceGlow.render(icon, box, Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL), margin)
+            ?: return null
+        return BitmapDrawable(resources, bitmap).apply { gravity = Gravity.CENTER }
+    }
+
     fun updateVoiceKey() {
         val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
         // VibeVoice key is always visible — it is not gated on system voice IME availability
@@ -522,31 +539,17 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         button.isVisible = show
         button.isActivated = isActivated
         if (isActivated) {
-            // The ordinary mark with a glow behind it, not the purple asset. Recording is said by
-            // the light around the key in the same colour as the waves behind the keys, so the
-            // toolbar, the waves and the floating mark all say it the same way.
-            // The mark with its own silhouette glowing behind it, composited into one bitmap: an
-            // ImageButton can be handed a single image, and layering here would mean fighting its
-            // scale type and its background. The mark keeps TOOL_BAR_KEY, the colour every other
-            // key in the row has -- tinting the view instead would have coloured the glow with it.
+            // The ordinary drawable, drawn exactly as it is when no session is running: same
+            // object, same intrinsic size, same TOOL_BAR_KEY tint, same scale type. Nothing about
+            // the mark is rebuilt, because every attempt to rebuild it changed it.
             val icon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
-            val colors = Settings.getValues().mColors
-            // At the icon's own intrinsic size, and drawn with ScaleType.CENTER, so the white mark
-            // is pixel for pixel the size it is when no session is running. The bitmap is larger
-            // than the mark -- the blur needs the room -- and scaling it to fit the key would have
-            // shrunk the mark by exactly that margin, which is what happened.
-            val box = icon?.intrinsicWidth?.takeIf { it > 0 }
-                ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
-            val glowing = if (icon == null) null else VoiceGlow.markWithGlow(
-                icon, box,
-                colors.get(ColorType.GESTURE_TRAIL),
-                colors.get(ColorType.TOOL_BAR_KEY),
-                VOICE_GLOW_ALPHA
-            )
-            button.clearColorFilter()
-            if (glowing != null) button.setImageBitmap(glowing) else button.setImageDrawable(icon)
-            button.background = null
+            button.setImageDrawable(icon)
+            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
             button.scaleType = ImageView.ScaleType.CENTER
+            // The glow goes on the layer underneath as the view's background. That is also what
+            // keeps it out of the tint above: a colour filter on an ImageView applies to its image
+            // and not to its background, so the mark can be white while the light is not.
+            button.background = icon?.let { voiceActiveGlow(it) }
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"
@@ -612,6 +615,5 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         private val TAG = SuggestionStripView::class.java.simpleName
         /** The box the glowing mark is rendered at; FIT_CENTER scales it to whatever the key is. */
         private const val VOICE_GLOW_BOX_DP = 40f
-        private const val VOICE_GLOW_ALPHA = 210
     }
 }

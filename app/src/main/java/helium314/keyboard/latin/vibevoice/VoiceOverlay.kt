@@ -53,10 +53,9 @@ class VoiceOverlay(context: Context) : View(context) {
     // The ordinary mark, not the purple one. Its colour comes from the glow behind it now, and
     // the launcher asset is the one that is kept in step with the brand.
     private val drawable = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
-    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     /** The mark's own silhouette, blurred. Built once per session, never per frame. */
     private var glowBitmap: Bitmap? = null
-    private val glowOffset = IntArray(2)
+    private val glowMargin = IntArray(1)
     private var glowBox = 0
 
     private var levelSource: WeakReference<VibeVoiceClient>? = null
@@ -215,16 +214,13 @@ class VoiceOverlay(context: Context) : View(context) {
             if (glowBitmap == null || glowBox != box.toInt()) {
                 glowBitmap?.recycle()
                 glowBox = box.toInt()
-                glowBitmap = VoiceGlow.silhouette(d, glowBox, glowOffset)
-                glowPaint.color = barColor
-                glowPaint.alpha = GLOW_ALPHA
+                glowBitmap = VoiceGlow.render(d, glowBox, barColor, glowMargin)
             }
             glowBitmap?.let { glow ->
-                // Laid over itself: a blur thins the coverage out over a bigger area, so a single
-                // pass is faint no matter how high the alpha goes.
-                repeat(VoiceGlow.PASSES) {
-                    canvas.drawBitmap(glow, left + glowOffset[0], top + glowOffset[1], glowPaint)
-                }
+                // The bitmap already carries the colour and the density, so it is drawn plainly.
+                // Offset by the margin the blur needed, which puts the mark's own box back where
+                // the drawable is about to go.
+                canvas.drawBitmap(glow, left - glowMargin[0], top - glowMargin[0], null)
             }
 
             d.setBounds(left.toInt(), top.toInt(), (left + box).toInt(), (top + box).toInt())
@@ -342,8 +338,6 @@ class VoiceOverlay(context: Context) : View(context) {
         private const val FRAME_INTERVAL_MS = 33L
         /** How hard the measured level is pushed before it drives the bars. */
         private const val LEVEL_DRIVE = 1.35f
-        /** How brightly the mark glows. Fixed: this is a state, not a level. */
-        private const val GLOW_ALPHA = 200
 
         /** Measured once per process: the artwork does not change under us. */
         private var cachedInk: RectF? = null
