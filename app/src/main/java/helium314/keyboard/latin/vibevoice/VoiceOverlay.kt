@@ -194,16 +194,20 @@ class VoiceOverlay(context: Context) : View(context) {
         // The glow is what says "active": the mark itself is the ordinary one, and this is the
         // waveform's own colour bled out behind it, brightening as the voice does.
         drawable?.let { d ->
-            val wanted = discRadius * (0.62f + 0.42f * drive)
+            // Painted first, so the artwork goes on top of it and nothing of the mark is behind
+            // colour.
+            val wanted = discRadius * (0.78f + 0.5f * drive)
             if (abs(wanted - glowRadius) > 0.5f) {
                 glowRadius = wanted
+                // Transparent where the mark is, brightest just outside it, gone by the rim. A
+                // glow that is solid in the middle sits behind the artwork and still washes it
+                // out; this one occupies only the space the artwork does not.
+                val clear = Color.argb(0, Color.red(barColor), Color.green(barColor), Color.blue(barColor))
+                val halo = Color.argb(190, Color.red(barColor), Color.green(barColor), Color.blue(barColor))
                 glowPaint.shader = RadialGradient(
                     cx, cy, glowRadius.coerceAtLeast(1f),
-                    intArrayOf(
-                        Color.argb(190, Color.red(barColor), Color.green(barColor), Color.blue(barColor)),
-                        Color.argb(0, Color.red(barColor), Color.green(barColor), Color.blue(barColor))
-                    ),
-                    floatArrayOf(0.25f, 1f),
+                    intArrayOf(clear, halo, clear),
+                    floatArrayOf(0f, 0.66f, 1f),
                     Shader.TileMode.CLAMP
                 )
             }

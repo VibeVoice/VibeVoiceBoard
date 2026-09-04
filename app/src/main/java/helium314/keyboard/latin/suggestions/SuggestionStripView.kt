@@ -517,15 +517,18 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      * floating mark are where the level belongs.
      */
     private fun voiceActiveGlow(accent: Int): Drawable {
-        val centre = Color.argb(150, Color.red(accent), Color.green(accent), Color.blue(accent))
-        val edge = Color.argb(0, Color.red(accent), Color.green(accent), Color.blue(accent))
+        // Transparent at the middle, brightest around the mark, gone at the rim. A glow that is
+        // solid in the centre sits behind the glyph and still washes it out; this one only ever
+        // occupies the space the glyph does not.
+        val clear = Color.argb(0, Color.red(accent), Color.green(accent), Color.blue(accent))
+        val halo = Color.argb(165, Color.red(accent), Color.green(accent), Color.blue(accent))
         val shape = ShapeDrawable(OvalShape())
         // Built in resize() because the key's size is not known here, and a gradient written
         // against the wrong one is a hard edge instead of a glow.
         shape.shaderFactory = object : ShapeDrawable.ShaderFactory() {
             override fun resize(width: Int, height: Int): Shader = RadialGradient(
                 width / 2f, height / 2f, (maxOf(width, height) / 2f).coerceAtLeast(1f),
-                intArrayOf(centre, edge), floatArrayOf(0.15f, 1f), Shader.TileMode.CLAMP
+                intArrayOf(clear, halo, clear), floatArrayOf(0f, 0.62f, 1f), Shader.TileMode.CLAMP
             )
         }
         return shape
@@ -547,9 +550,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // the light around the key in the same colour as the waves behind the keys, so the
             // toolbar, the waves and the floating mark all say it the same way.
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
-            val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
-            button.setColorFilter(accent)
-            button.background = voiceActiveGlow(accent)
+            button.background = voiceActiveGlow(Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL))
+            // The mark keeps the colour every other toolbar key has. Tinting it with the accent as
+            // well left a coloured glyph on a glow of the same colour, which reads as the glow
+            // having swallowed it.
+            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
             button.scaleType = ImageView.ScaleType.CENTER
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
