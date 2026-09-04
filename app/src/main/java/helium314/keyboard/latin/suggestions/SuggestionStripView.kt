@@ -531,9 +531,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // key in the row has -- tinting the view instead would have coloured the glow with it.
             val icon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
             val colors = Settings.getValues().mColors
+            // At the icon's own intrinsic size, and drawn with ScaleType.CENTER, so the white mark
+            // is pixel for pixel the size it is when no session is running. The bitmap is larger
+            // than the mark -- the blur needs the room -- and scaling it to fit the key would have
+            // shrunk the mark by exactly that margin, which is what happened.
+            val box = icon?.intrinsicWidth?.takeIf { it > 0 }
+                ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
             val glowing = if (icon == null) null else VoiceGlow.markWithGlow(
-                icon,
-                (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt(),
+                icon, box,
                 colors.get(ColorType.GESTURE_TRAIL),
                 colors.get(ColorType.TOOL_BAR_KEY),
                 VOICE_GLOW_ALPHA
@@ -541,7 +546,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             button.clearColorFilter()
             if (glowing != null) button.setImageBitmap(glowing) else button.setImageDrawable(icon)
             button.background = null
-            button.scaleType = ImageView.ScaleType.FIT_CENTER
+            button.scaleType = ImageView.ScaleType.CENTER
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"

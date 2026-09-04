@@ -220,7 +220,11 @@ class VoiceOverlay(context: Context) : View(context) {
                 glowPaint.alpha = GLOW_ALPHA
             }
             glowBitmap?.let { glow ->
-                canvas.drawBitmap(glow, left + glowOffset[0], top + glowOffset[1], glowPaint)
+                // Laid over itself: a blur thins the coverage out over a bigger area, so a single
+                // pass is faint no matter how high the alpha goes.
+                repeat(VoiceGlow.PASSES) {
+                    canvas.drawBitmap(glow, left + glowOffset[0], top + glowOffset[1], glowPaint)
+                }
             }
 
             d.setBounds(left.toInt(), top.toInt(), (left + box).toInt(), (top + box).toInt())

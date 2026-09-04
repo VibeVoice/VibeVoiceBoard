@@ -30,6 +30,15 @@ object VoiceGlow {
     /** Blur as a fraction of the mark's box. Enough to read as light, not so much as to be fog. */
     private const val BLUR_FRACTION = 0.16f
     private const val MIN_BLUR_PX = 2f
+    /**
+     * How many times the blurred silhouette is laid over itself.
+     *
+     * A blur spreads a fixed amount of coverage over a larger area, so one pass of it is faint
+     * however high the alpha goes -- there is simply not much alpha in any one pixel. Stacking the
+     * same bitmap builds the density back up where the shape is dense and leaves the thin outer
+     * edge thin, which is what a glow looks like.
+     */
+    const val PASSES = 3
 
     /**
      * The blurred silhouette of [drawable] at [box] pixels square.
@@ -68,6 +77,10 @@ object VoiceGlow {
      */
     fun markWithGlow(drawable: Drawable, box: Int, glowColor: Int, markColor: Int, glowAlpha: Int): Bitmap? {
         if (box <= 0) return null
+        // The mark is rendered at exactly [box] and the bitmap grows around it, so whatever draws
+        // this must not scale it -- at ScaleType.CENTER the mark comes out the size it would have
+        // been with no glow at all. FIT_CENTER would shrink it by the width of the padding, which
+        // is the whole point of returning the size in the bitmap rather than a scale factor.
         val offset = IntArray(2)
         val glow = silhouette(drawable, box, offset) ?: return null
         return try {
@@ -81,7 +94,9 @@ object VoiceGlow {
                 color = glowColor
                 alpha = glowAlpha
             }
-            canvas.drawBitmap(glow, (pad + offset[0]).toFloat(), (pad + offset[1]).toFloat(), glowPaint)
+            repeat(PASSES) {
+                canvas.drawBitmap(glow, (pad + offset[0]).toFloat(), (pad + offset[1]).toFloat(), glowPaint)
+            }
             glow.recycle()
 
             val saved = Rect(drawable.bounds)
