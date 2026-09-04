@@ -522,7 +522,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         val box = icon.intrinsicWidth.takeIf { it > 0 }
             ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
         val margin = IntArray(1)
-        val bitmap = VoiceGlow.render(icon, box, Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL), margin)
+        val bitmap = VoiceGlow.render(context, icon, box, Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL), margin)
             ?: return null
         return BitmapDrawable(resources, bitmap).apply { gravity = Gravity.CENTER }
     }

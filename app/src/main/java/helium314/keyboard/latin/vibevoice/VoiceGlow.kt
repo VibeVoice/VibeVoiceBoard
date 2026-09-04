@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.latin.vibevoice
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
@@ -9,6 +10,9 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.prefs
 
 /**
  * The light behind the VibeVoice mark while a session is running.
@@ -29,8 +33,6 @@ import android.graphics.drawable.Drawable
  */
 object VoiceGlow {
 
-    /** Blur radius as a fraction of the mark's box. */
-    private const val BLUR_FRACTION = 0.08f
     private const val MIN_BLUR_PX = 1.5f
 
     /**
@@ -41,7 +43,7 @@ object VoiceGlow {
      * raise. This raises the coverage itself, which makes the light denser near the mark without
      * moving the radius, keeping density and size as separate knobs.
      */
-    private const val GAIN = 1.4f
+
 
     /**
      * The blurred silhouette of [drawable], rendered at [box] pixels square in [color].
@@ -51,10 +53,13 @@ object VoiceGlow {
      * inside the mark's own bounds clips the light at its edge, and a clipped glow looks exactly
      * like what it is, a hard rectangle.
      */
-    fun render(drawable: Drawable, box: Int, color: Int, outMargin: IntArray): Bitmap? {
+    fun render(context: Context, drawable: Drawable, box: Int, color: Int, outMargin: IntArray): Bitmap? {
         if (box <= 0) return null
         return try {
-            val radius = (box * BLUR_FRACTION).coerceAtLeast(MIN_BLUR_PX)
+            val prefs = context.prefs()
+            val fraction = prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE)
+            val gain = prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN)
+            val radius = (box * fraction).coerceAtLeast(MIN_BLUR_PX)
             // Three sigma out, a Gaussian has nothing left worth drawing.
             val margin = Math.ceil((radius * 3f).toDouble()).toInt()
             val size = box + margin * 2
@@ -78,7 +83,7 @@ object VoiceGlow {
                 this.color = color
                 // Scaling alpha past 1 in a colour matrix clamps rather than wraps, which is the
                 // multiply-and-clip this wants.
-                colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(1f, 1f, 1f, GAIN) })
+                colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(1f, 1f, 1f, gain) })
             }
             out.drawBitmap(alpha, offset[0].toFloat(), offset[1].toFloat(), paint)
             alpha.recycle()

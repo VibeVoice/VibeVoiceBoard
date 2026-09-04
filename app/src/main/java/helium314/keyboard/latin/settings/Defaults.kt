@@ -112,6 +112,12 @@ object Defaults {
     const val PREF_OVERLAY_BAR_WIDTH = 2.2f
     const val PREF_OVERLAY_BAR_COUNT = 36f
     const val PREF_OVERLAY_REST = 0.06f
+    // The glow behind the mark, in the toolbar and on the floating mark alike. Size is the blur
+    // radius as a fraction of the mark; gain is how far the blurred coverage is multiplied before
+    // it is painted. They are separate because one moves how far the light reaches and the other
+    // how solid it is, and tuning either through the other never worked.
+    const val PREF_GLOW_SIZE = 0.16f
+    const val PREF_GLOW_GAIN = 1.4f
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f

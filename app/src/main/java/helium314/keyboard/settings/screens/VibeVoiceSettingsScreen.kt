@@ -587,6 +587,21 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     range = 8f..96f,
                     description = { "${it.toInt()} bars" }
                 ) { }
+                // Applies to the toolbar key as well as the floating mark: one glow, two places.
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_glow_size),
+                    key = Settings.PREF_GLOW_SIZE,
+                    default = Defaults.PREF_GLOW_SIZE,
+                    range = 0.02f..0.45f,
+                    description = { "${(100 * it).toInt()}% of the mark" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_glow_gain),
+                    key = Settings.PREF_GLOW_GAIN,
+                    default = Defaults.PREF_GLOW_GAIN,
+                    range = 1f..5f,
+                    description = { String.format("%.1fx", it) }
+                ) { }
                 SliderPreference(
                     name = stringResource(R.string.vibevoice_overlay_rest),
                     key = Settings.PREF_OVERLAY_REST,

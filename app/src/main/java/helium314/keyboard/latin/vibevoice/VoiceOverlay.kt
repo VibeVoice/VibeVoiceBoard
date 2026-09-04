@@ -214,7 +214,7 @@ class VoiceOverlay(context: Context) : View(context) {
             if (glowBitmap == null || glowBox != box.toInt()) {
                 glowBitmap?.recycle()
                 glowBox = box.toInt()
-                glowBitmap = VoiceGlow.render(d, glowBox, barColor, glowMargin)
+                glowBitmap = VoiceGlow.render(context, d, glowBox, barColor, glowMargin)
             }
             glowBitmap?.let { glow ->
                 // The bitmap already carries the colour and the density, so it is drawn plainly.
