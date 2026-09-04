@@ -9,7 +9,6 @@ import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RadialGradient
-import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -202,7 +201,7 @@ class VoiceOverlay(context: Context) : View(context) {
             // viewport put the artwork off centre, and it touched the disc at the top left first
             // as the padding came down. The ink's own box is measured once and centred instead,
             // which also makes "mark size" mean the size of what is actually visible.
-            val ink = inkBounds(d)
+            val ink = VoiceGlow.inkBounds(d)
             val span = maxOf(ink.width(), ink.height()).coerceAtLeast(0.01f)
             val box = iconPx / span
             val left = cx - box * (ink.left + ink.width() / 2f)
@@ -339,53 +338,6 @@ class VoiceOverlay(context: Context) : View(context) {
         /** How hard the measured level is pushed before it drives the bars. */
         private const val LEVEL_DRIVE = 1.35f
 
-        /** Measured once per process: the artwork does not change under us. */
-        private var cachedInk: RectF? = null
-
-        /**
-         * The fraction of a drawable's viewport that it actually paints, as a 0..1 rectangle.
-         *
-         * Rasterised and scanned rather than derived from the vector's path data: path data is
-         * relative, control points lie outside the curve they describe, and both make a computed
-         * bounding box wrong in exactly the direction that matters here. One 96x96 bitmap, once.
-         */
-        private fun inkBounds(d: Drawable): RectF {
-            cachedInk?.let { return it }
-            val n = 96
-            val result = RectF(0f, 0f, 1f, 1f)
-            try {
-                val bitmap = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(bitmap)
-                val saved = android.graphics.Rect(d.bounds)
-                d.setBounds(0, 0, n, n)
-                d.draw(canvas)
-                d.bounds = saved
-                var minX = n; var minY = n; var maxX = -1; var maxY = -1
-                val row = IntArray(n)
-                for (y in 0 until n) {
-                    bitmap.getPixels(row, 0, n, 0, y, n, 1)
-                    for (x in 0 until n) {
-                        if ((row[x] ushr 24) > 8) {
-                            if (x < minX) minX = x
-                            if (x > maxX) maxX = x
-                            if (y < minY) minY = y
-                            if (y > maxY) maxY = y
-                        }
-                    }
-                }
-                bitmap.recycle()
-                if (maxX >= minX && maxY >= minY) {
-                    result.set(
-                        minX / n.toFloat(), minY / n.toFloat(),
-                        (maxX + 1) / n.toFloat(), (maxY + 1) / n.toFloat()
-                    )
-                }
-            } catch (e: Exception) {
-                VibeVoiceDebugLogger.log("Could not measure the mark: ${e.message}")
-            }
-            cachedInk = result
-            return result
-        }
         private const val ATTACK = 0.6f
         private const val RELEASE = 0.18f
         private const val PULSE_STEP = 0.12f

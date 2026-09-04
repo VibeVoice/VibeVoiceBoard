@@ -21,6 +21,7 @@ import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
+import androidx.core.content.ContextCompat
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.LayoutInflater
@@ -518,11 +519,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      * Centred and not stretched: a BitmapDrawable used as a background is scaled to the view by
      * default, which would pull the light out of shape as the key's size changes.
      */
-    private fun voiceActiveGlow(icon: Drawable): Drawable? {
-        val box = icon.intrinsicWidth.takeIf { it > 0 }
-            ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
+    private fun voiceActiveGlow(mark: Drawable, box: Int): Drawable? {
         val margin = IntArray(1)
-        val bitmap = VoiceGlow.render(context, icon, box, Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL), margin)
+        val bitmap = VoiceGlow.render(context, mark, box, Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL), margin)
             ?: return null
         return BitmapDrawable(resources, bitmap).apply { gravity = Gravity.CENTER }
     }
@@ -539,17 +538,25 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         button.isVisible = show
         button.isActivated = isActivated
         if (isActivated) {
-            // The ordinary drawable, drawn exactly as it is when no session is running: same
-            // object, same intrinsic size, same TOOL_BAR_KEY tint, same scale type. Nothing about
-            // the mark is rebuilt, because every attempt to rebuild it changed it.
-            val icon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
-            button.setImageDrawable(icon)
-            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
+            // The full VibeVoice logo while recording -- the two-tone one with the dark backing
+            // shape, the same artwork the floating mark uses. Not tinted: TOOL_BAR_KEY would
+            // flatten both tones into one and throw away the thing that makes it read as the logo
+            // rather than as a glyph.
+            val plain = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
+            val inkPx = plain?.intrinsicWidth?.takeIf { it > 0 }
+                ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
+            val logo = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+            // Sized by its ink, not its viewport: the launcher artwork carries an adaptive icon's
+            // padding, so drawn at its own bounds it would sit a third smaller than the key it
+            // replaces.
+            val mark = logo?.let { VoiceGlow.renderMark(it, inkPx) }
+            button.clearColorFilter()
+            if (mark != null) button.setImageBitmap(mark) else button.setImageDrawable(plain)
             button.scaleType = ImageView.ScaleType.CENTER
-            // The glow goes on the layer underneath as the view's background. That is also what
-            // keeps it out of the tint above: a colour filter on an ImageView applies to its image
-            // and not to its background, so the mark can be white while the light is not.
-            button.background = icon?.let { voiceActiveGlow(it) }
+            // The glow goes on the layer underneath as the view's background, which is also what
+            // keeps it out of any tint: a colour filter on an ImageView applies to its image and
+            // not to its background.
+            button.background = mark?.let { voiceActiveGlow(BitmapDrawable(resources, it), inkPx) }
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"

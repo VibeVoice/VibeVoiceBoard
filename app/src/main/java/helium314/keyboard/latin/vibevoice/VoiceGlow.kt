@@ -9,6 +9,7 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
@@ -91,6 +92,85 @@ object VoiceGlow {
             result
         } catch (e: Exception) {
             VibeVoiceDebugLogger.log("Could not render the glow: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Measured once per artwork. Keyed rather than a single slot: two drawables go through here,
+     * and a shared slot would hand one of them the other's bounds.
+     */
+    private val inkCache = HashMap<Any, RectF>()
+
+    /**
+     * The fraction of a drawable's viewport that it actually paints, as a 0..1 rectangle.
+     *
+     * Rasterised and scanned rather than derived from the vector's path data: path data is
+     * relative, control points lie outside the curve they describe, and both make a computed
+     * bounding box wrong in exactly the direction that matters. One 96x96 bitmap, once.
+     */
+    fun inkBounds(drawable: Drawable): RectF {
+        val key: Any = drawable.constantState ?: drawable.javaClass
+        inkCache[key]?.let { return it }
+        val n = 96
+        val result = RectF(0f, 0f, 1f, 1f)
+        try {
+            val bitmap = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            val saved = Rect(drawable.bounds)
+            drawable.setBounds(0, 0, n, n)
+            drawable.draw(canvas)
+            drawable.bounds = saved
+            var minX = n; var minY = n; var maxX = -1; var maxY = -1
+            val row = IntArray(n)
+            for (y in 0 until n) {
+                bitmap.getPixels(row, 0, n, 0, y, n, 1)
+                for (x in 0 until n) {
+                    if ((row[x] ushr 24) > 8) {
+                        if (x < minX) minX = x
+                        if (x > maxX) maxX = x
+                        if (y < minY) minY = y
+                        if (y > maxY) maxY = y
+                    }
+                }
+            }
+            bitmap.recycle()
+            if (maxX >= minX && maxY >= minY) {
+                result.set(minX / n.toFloat(), minY / n.toFloat(), (maxX + 1) / n.toFloat(), (maxY + 1) / n.toFloat())
+            }
+        } catch (e: Exception) {
+            VibeVoiceDebugLogger.log("Could not measure the mark: ${e.message}")
+        }
+        inkCache[key] = result
+        return result
+    }
+
+    /**
+     * [drawable] rendered so that what it actually paints spans [inkPx], centred on a transparent
+     * square of that size.
+     *
+     * The launcher artwork carries the padding an adaptive icon needs, so drawn at its own bounds
+     * it comes out about a third smaller than it looks. Sizing by the ink instead makes it match
+     * whatever it stands next to, and keeps "how big is the mark" a question about the visible
+     * shape rather than about a viewBox.
+     */
+    fun renderMark(drawable: Drawable, inkPx: Int): Bitmap? {
+        if (inkPx <= 0) return null
+        return try {
+            val ink = inkBounds(drawable)
+            val span = maxOf(ink.width(), ink.height()).coerceAtLeast(0.01f)
+            val box = (inkPx / span).toInt().coerceAtLeast(1)
+            val bitmap = Bitmap.createBitmap(inkPx, inkPx, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            val saved = Rect(drawable.bounds)
+            val left = (inkPx / 2f - box * (ink.left + ink.width() / 2f)).toInt()
+            val top = (inkPx / 2f - box * (ink.top + ink.height() / 2f)).toInt()
+            drawable.setBounds(left, top, left + box, top + box)
+            drawable.draw(canvas)
+            drawable.bounds = saved
+            bitmap
+        } catch (e: Exception) {
+            VibeVoiceDebugLogger.log("Could not render the mark: ${e.message}")
             null
         }
     }

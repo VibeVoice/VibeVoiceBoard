@@ -116,8 +116,10 @@ object Defaults {
     // radius as a fraction of the mark; gain is how far the blurred coverage is multiplied before
     // it is painted. They are separate because one moves how far the light reaches and the other
     // how solid it is, and tuning either through the other never worked.
-    const val PREF_GLOW_SIZE = 0.16f
-    const val PREF_GLOW_GAIN = 1.4f
+    // These are also what ships: in a release build the sliders are gone, so the defaults are the
+    // whole of it.
+    const val PREF_GLOW_SIZE = 0.20f
+    const val PREF_GLOW_GAIN = 1.0f
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f
