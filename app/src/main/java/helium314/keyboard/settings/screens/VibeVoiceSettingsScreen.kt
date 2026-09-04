@@ -136,9 +136,6 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     var overlayEnabled by remember {
         mutableStateOf(appPrefs.getBoolean(Settings.PREF_OVERLAY_ENABLED, Defaults.PREF_OVERLAY_ENABLED))
     }
-    var overlayBrandColor by remember {
-        mutableStateOf(appPrefs.getBoolean(Settings.PREF_OVERLAY_BRAND_COLOR, Defaults.PREF_OVERLAY_BRAND_COLOR))
-    }
     // Only this screen can ask: an input method has no way to request a runtime permission itself,
     // which is why the keyboard sends the user here for the microphone too.
     fun notificationsAllowed() = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -597,20 +594,6 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     range = 0f..0.6f,
                     description = { "${(100 * it).toInt()}% in silence" }
                 ) { }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                ) {
-                    Text(stringResource(R.string.vibevoice_overlay_brand_color))
-                    Switch(
-                        checked = overlayBrandColor,
-                        onCheckedChange = {
-                            overlayBrandColor = it
-                            appPrefs.edit().putBoolean(Settings.PREF_OVERLAY_BRAND_COLOR, it).apply()
-                        }
-                    )
-                }
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))

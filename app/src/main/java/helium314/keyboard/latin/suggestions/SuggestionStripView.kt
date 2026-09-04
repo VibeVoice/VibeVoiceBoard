@@ -10,8 +10,12 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.graphics.Color
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.OvalShape
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -505,6 +509,28 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
+    /**
+     * A soft disc of light behind the microphone key while a session runs.
+     *
+     * Static rather than driven by the level: this key is a few dp across and sits next to the text
+     * being read, and something pulsing there is a distraction. The waves behind the keys and the
+     * floating mark are where the level belongs.
+     */
+    private fun voiceActiveGlow(accent: Int): Drawable {
+        val centre = Color.argb(150, Color.red(accent), Color.green(accent), Color.blue(accent))
+        val edge = Color.argb(0, Color.red(accent), Color.green(accent), Color.blue(accent))
+        val shape = ShapeDrawable(OvalShape())
+        // Built in resize() because the key's size is not known here, and a gradient written
+        // against the wrong one is a hard edge instead of a glow.
+        shape.shaderFactory = object : ShapeDrawable.ShaderFactory() {
+            override fun resize(width: Int, height: Int): Shader = RadialGradient(
+                width / 2f, height / 2f, (maxOf(width, height) / 2f).coerceAtLeast(1f),
+                intArrayOf(centre, edge), floatArrayOf(0.15f, 1f), Shader.TileMode.CLAMP
+            )
+        }
+        return shape
+    }
+
     fun updateVoiceKey() {
         val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
         // VibeVoice key is always visible — it is not gated on system voice IME availability
@@ -517,10 +543,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         button.isVisible = show
         button.isActivated = isActivated
         if (isActivated) {
-            button.setImageResource(R.drawable.ic_vibevoice_active)
-            button.background = null
-            button.clearColorFilter()
-            button.scaleType = ImageView.ScaleType.FIT_CENTER
+            // The ordinary mark with a glow behind it, not the purple asset. Recording is said by
+            // the light around the key in the same colour as the waves behind the keys, so the
+            // toolbar, the waves and the floating mark all say it the same way.
+            button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
+            val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
+            button.setColorFilter(accent)
+            button.background = voiceActiveGlow(accent)
+            button.scaleType = ImageView.ScaleType.CENTER
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"

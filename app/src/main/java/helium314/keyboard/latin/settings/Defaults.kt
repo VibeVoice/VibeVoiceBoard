@@ -106,14 +106,12 @@ object Defaults {
     const val PREF_OVERLAY_ENABLED = true
     // The geometry is expressed from the inside out -- the V decides the size, the padding decides
     // the disc, the bars grow outward from it -- so changing one does not silently rescale the rest.
-    const val PREF_OVERLAY_ICON = 26f
-    const val PREF_OVERLAY_PADDING = 11f
-    const val PREF_OVERLAY_BARS = 12f
+    const val PREF_OVERLAY_ICON = 30f
+    const val PREF_OVERLAY_PADDING = 6f
+    const val PREF_OVERLAY_BARS = 14f
     const val PREF_OVERLAY_BAR_WIDTH = 2.2f
     const val PREF_OVERLAY_BAR_COUNT = 36f
-    const val PREF_OVERLAY_REST = 0.16f
-    /** false = the keyboard's own gesture-trail colour, true = the VibeVoice purple. */
-    const val PREF_OVERLAY_BRAND_COLOR = false
+    const val PREF_OVERLAY_REST = 0.06f
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f

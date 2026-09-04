@@ -93,8 +93,7 @@
     <string name="vibevoice_overlay_bar_width">Bar width</string>
     <string name="vibevoice_overlay_bar_count">Bar count</string>
     <string name="vibevoice_overlay_rest">Resting height</string>
-    <string name="vibevoice_overlay_brand_color">VibeVoice purple instead of the keyboard colour</string>
-    <string name="vibevoice_overlay_desc">While a session runs without the keyboard, show the VibeVoice mark on screen. It pulses with what is being heard, drags out of the way, and a tap ends the session.</string>
+    <string name="vibevoice_overlay_desc">While a session runs without the keyboard, show the VibeVoice mark on screen. It pulses with what is being heard, and it is dragged onto the X at the bottom to end the session.</string>
     <string name="vibevoice_overlay_grant">Allow drawing over other apps</string>
     <string name="vibevoice_overlay_granted">Allowed</string>
     <string name="vibevoice_session_finishing">Finishing the last sentence\u2026</string>

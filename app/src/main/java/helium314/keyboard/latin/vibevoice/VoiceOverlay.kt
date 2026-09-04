@@ -5,8 +5,13 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.provider.Settings as AndroidSettings
 import android.view.Gravity
@@ -45,7 +50,11 @@ class VoiceOverlay(context: Context) : View(context) {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
-    private val drawable = ContextCompat.getDrawable(context, R.drawable.ic_vibevoice_active)
+    // The ordinary mark, not the purple one. Its colour comes from the glow behind it now, and
+    // the launcher asset is the one that is kept in step with the brand.
+    private val drawable = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var glowRadius = 0f
 
     private var levelSource: WeakReference<VibeVoiceClient>? = null
     private var level = 0f
@@ -87,26 +96,17 @@ class VoiceOverlay(context: Context) : View(context) {
     /** Both from the keyboard's own theme, so the mark reads as part of it. */
     var discColor = Color.argb(235, 20, 20, 24)
         private set
-    var barColor = Color.rgb(0x9F, 0x00, 0xA1)
+    var barColor = Color.rgb(0x62, 0x9D, 0xF6)
         private set
 
-    private fun readThemeColors(context: Context) {
-        val brand = try {
-            context.prefs().getBoolean(Settings.PREF_OVERLAY_BRAND_COLOR, Defaults.PREF_OVERLAY_BRAND_COLOR)
-        } catch (e: Exception) {
-            Defaults.PREF_OVERLAY_BRAND_COLOR
-        }
+    private fun readThemeColors() {
         try {
             val colors = Settings.getValues().mColors
             discColor = colors.get(ColorType.MAIN_BACKGROUND)
-            // The keyboard's own gesture-trail colour by default, so the mark matches whatever
-            // theme is in use; the brand purple is the alternative, for when it should read as
-            // VibeVoice rather than as part of the keyboard.
-            barColor = if (brand) BRAND_PURPLE else colors.get(ColorType.GESTURE_TRAIL)
+            barColor = colors.get(ColorType.GESTURE_TRAIL)
         } catch (e: Exception) {
             // Settings not loaded; the defaults above stand in for one session.
             VibeVoiceDebugLogger.log("Overlay could not read the theme: ${e.message}")
-            if (brand) barColor = BRAND_PURPLE
         }
     }
 
@@ -116,7 +116,7 @@ class VoiceOverlay(context: Context) : View(context) {
     private fun start(client: VibeVoiceClient, onDismiss: Runnable) {
         this.levelSource = WeakReference(client)
         this.onDismiss = onDismiss
-        readThemeColors(context)
+        readThemeColors()
         bars.fill(0f)
         running = true
         invalidate()
@@ -135,6 +135,9 @@ class VoiceOverlay(context: Context) : View(context) {
         // tracked the level exactly would look like it was flickering rather than listening.
         level += (raw - level) * (if (raw > level) ATTACK else RELEASE)
         pulse += PULSE_STEP
+        // Speech reaches full excursion sooner, so the top of the range is used rather than being
+        // somewhere the voice only theoretically gets to.
+        val drive = (level * LEVEL_DRIVE).coerceIn(0f, 1f)
 
         val cx = width / 2f
         val cy = height / 2f
@@ -160,8 +163,12 @@ class VoiceOverlay(context: Context) : View(context) {
             val wave = sin(t * SPAN + pulse) +
                     sin(t * SPAN * SECOND_RATIO - pulse * 0.7f) * 0.45f +
                     cos(t * SPAN * THIRD_RATIO + pulse * 0.6f) * 0.25f
-            val target = (profile * (restHeight + level * (1f - restHeight)) *
-                    (0.55f + 0.45f * abs(wave) / 1.7f)).coerceIn(0f, 1f)
+            // The per-bar term used to keep every bar above 55% of the envelope, which is why the
+            // ring moved as one piece rather than as a waveform. At 18% a quiet bar is genuinely
+            // short next to a loud one, which is the whole difference between a level meter and a
+            // spectrum.
+            val target = (profile * (restHeight + drive * (1f - restHeight)) *
+                    (0.18f + 0.82f * abs(wave) / 1.7f)).coerceIn(0f, 1f)
             // Asymmetric smoothing, as everywhere else here: rise with the syllable, fall behind it.
             bars[i] += (target - bars[i]) * (if (target > bars[i]) BAR_ATTACK else BAR_RELEASE)
         }
@@ -184,10 +191,37 @@ class VoiceOverlay(context: Context) : View(context) {
             canvas.drawLine(cx + ca * inner, cy + sa * inner, cx + ca * outer, cy + sa * outer, barPaint)
         }
 
-        drawable?.let {
-            val iconHalf = (iconPx / 2f).toInt()
-            it.setBounds(cx.toInt() - iconHalf, cy.toInt() - iconHalf, cx.toInt() + iconHalf, cy.toInt() + iconHalf)
-            it.draw(canvas)
+        // The glow is what says "active": the mark itself is the ordinary one, and this is the
+        // waveform's own colour bled out behind it, brightening as the voice does.
+        drawable?.let { d ->
+            val wanted = discRadius * (0.62f + 0.42f * drive)
+            if (abs(wanted - glowRadius) > 0.5f) {
+                glowRadius = wanted
+                glowPaint.shader = RadialGradient(
+                    cx, cy, glowRadius.coerceAtLeast(1f),
+                    intArrayOf(
+                        Color.argb(190, Color.red(barColor), Color.green(barColor), Color.blue(barColor)),
+                        Color.argb(0, Color.red(barColor), Color.green(barColor), Color.blue(barColor))
+                    ),
+                    floatArrayOf(0.25f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            }
+            glowPaint.alpha = (110 + 145 * drive).toInt().coerceIn(0, 255)
+            canvas.drawCircle(cx, cy, glowRadius, glowPaint)
+
+            // Placed by its ink, not by its viewport. A vector's drawing does not fill its
+            // viewBox evenly -- this one sits up and to the left of centre -- so centring the
+            // viewport put the artwork off centre, and it touched the disc at the top left first
+            // as the padding came down. The ink's own box is measured once and centred instead,
+            // which also makes "mark size" mean the size of what is actually visible.
+            val ink = inkBounds(d)
+            val span = maxOf(ink.width(), ink.height()).coerceAtLeast(0.01f)
+            val box = iconPx / span
+            val left = cx - box * (ink.left + ink.width() / 2f)
+            val top = cy - box * (ink.top + ink.height() / 2f)
+            d.setBounds(left.toInt(), top.toInt(), (left + box).toInt(), (top + box).toInt())
+            d.draw(canvas)
         }
 
         postInvalidateDelayed(FRAME_INTERVAL_MS)
@@ -299,8 +333,56 @@ class VoiceOverlay(context: Context) : View(context) {
 
     companion object {
         private const val FRAME_INTERVAL_MS = 33L
-        /** The VibeVoice mark's own colour, the alternative to the keyboard's. */
-        private val BRAND_PURPLE = Color.rgb(0x9F, 0x00, 0xA1)
+        /** How hard the measured level is pushed before it drives the bars. */
+        private const val LEVEL_DRIVE = 1.35f
+
+        /** Measured once per process: the artwork does not change under us. */
+        private var cachedInk: RectF? = null
+
+        /**
+         * The fraction of a drawable's viewport that it actually paints, as a 0..1 rectangle.
+         *
+         * Rasterised and scanned rather than derived from the vector's path data: path data is
+         * relative, control points lie outside the curve they describe, and both make a computed
+         * bounding box wrong in exactly the direction that matters here. One 96x96 bitmap, once.
+         */
+        private fun inkBounds(d: Drawable): RectF {
+            cachedInk?.let { return it }
+            val n = 96
+            val result = RectF(0f, 0f, 1f, 1f)
+            try {
+                val bitmap = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bitmap)
+                val saved = android.graphics.Rect(d.bounds)
+                d.setBounds(0, 0, n, n)
+                d.draw(canvas)
+                d.bounds = saved
+                var minX = n; var minY = n; var maxX = -1; var maxY = -1
+                val row = IntArray(n)
+                for (y in 0 until n) {
+                    bitmap.getPixels(row, 0, n, 0, y, n, 1)
+                    for (x in 0 until n) {
+                        if ((row[x] ushr 24) > 8) {
+                            if (x < minX) minX = x
+                            if (x > maxX) maxX = x
+                            if (y < minY) minY = y
+                            if (y > maxY) maxY = y
+                        }
+                    }
+                }
+                bitmap.recycle()
+                if (maxX >= minX && maxY >= minY) {
+                    result.set(
+                        minX / n.toFloat(), minY / n.toFloat(),
+                        (maxX + 1) / n.toFloat(), (maxY + 1) / n.toFloat()
+                    )
+                }
+            } catch (e: Exception) {
+                VibeVoiceDebugLogger.log("Could not measure the mark: ${e.message}")
+            }
+            cachedInk = result
+            return result
+        }
         private const val ATTACK = 0.6f
         private const val RELEASE = 0.18f
         private const val PULSE_STEP = 0.12f
