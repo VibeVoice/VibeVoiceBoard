@@ -520,7 +520,10 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                             try {
                                 overlaySettings.launch(intent)
                             } catch (_: android.content.ActivityNotFoundException) {
-                                errorMessage = context.getString(R.string.vibevoice_no_browser)
+                                // Its own message: this opens the system settings, not a browser,
+                                // and telling someone no browser was found sends them looking for
+                                // the wrong thing.
+                                errorMessage = context.getString(R.string.vibevoice_no_overlay_settings)
                             }
                         },
                         modifier = Modifier.fillMaxWidth()

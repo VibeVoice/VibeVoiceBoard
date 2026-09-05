@@ -101,6 +101,7 @@
     <string name="vibevoice_glow_gain">Glow strength</string>
     <string name="vibevoice_overlay_desc">While a session runs without the keyboard, show the VibeVoice mark on screen. It pulses with what is being heard, and it is dragged onto the X at the bottom to end the session.</string>
     <string name="vibevoice_overlay_grant">Allow drawing over other apps</string>
+    <string name="vibevoice_no_overlay_settings">This device has no screen for the permission. Look for \"Display over other apps\" in the system settings under VibeVoiceBoard.</string>
     <string name="vibevoice_overlay_granted">Allowed</string>
     <string name="vibevoice_session_finishing">Finishing the last sentence\u2026</string>
     <string name="vibevoice_background_needs_notifications">Allow notifications, or a session running in the background has no visible indicator and no way to stop it.</string>
