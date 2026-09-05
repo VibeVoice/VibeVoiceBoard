@@ -46,7 +46,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.Settings as KeySettings
+import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.latin.vibevoice.VoiceOverlay
 import helium314.keyboard.latin.utils.JniUtils
 import helium314.keyboard.latin.utils.Theme
 import helium314.keyboard.latin.utils.UncachedInputMethodManagerUtils
@@ -109,6 +118,7 @@ fun WelcomeWizard(
             Text("1", color = if (step == 1) titleColor else textColorDim)
             Text("2", color = if (step == 2) titleColor else textColorDim)
             Text("3", color = if (step == 3) titleColor else textColorDim)
+            Text("4", color = if (step == 4) titleColor else textColorDim)
         }
         Column(Modifier
             .background(color = stepBackgroundColor)
@@ -134,7 +144,9 @@ fun WelcomeWizard(
         else
             Column {
                 val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-                    step = determineStep()
+                    // Step 4 is chosen, not derived: determineStep only knows about the input method
+                    // and would send anyone who opened the overlay settings back to "all set".
+                    if (step < 4) step = determineStep()
                 }
                 if (step == 1) {
                     Step(
@@ -173,7 +185,7 @@ fun WelcomeWizard(
                         )
                         Text(stringResource(R.string.setup_step3_action), Modifier.weight(1f))
                     }
-                } else { // step 3
+                } else if (step == 3) {
                     Step(
                         step,
                         stringResource(R.string.setup_step3_title),
@@ -182,6 +194,91 @@ fun WelcomeWizard(
                         painterResource(R.drawable.sym_keyboard_language_switch),
                         close
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        Modifier.clickable { step = 4 }
+                            .background(color = stepBackgroundColor)
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ic_vibevoice_active),
+                            null,
+                            Modifier.padding(end = 6.dp).size(32.dp),
+                            tint = textColor
+                        )
+                        Text(stringResource(R.string.setup_step4_action), Modifier.weight(1f))
+                    }
+                } else { // step 4: voice typing, all of it optional
+                    val prefs = ctx.prefs()
+                    var background by rememberSaveable {
+                        mutableStateOf(prefs.getBoolean(KeySettings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
+                    }
+                    var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
+                    // Granted in the system settings, so there is no result to wait for -- the only
+                    // reliable moment to look again is when this screen comes back to the front.
+                    val owner = LocalLifecycleOwner.current
+                    DisposableEffect(owner) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            if (event == Lifecycle.Event.ON_RESUME) overlay = VoiceOverlay.isAllowed(ctx)
+                        }
+                        owner.lifecycle.addObserver(observer)
+                        onDispose { owner.lifecycle.removeObserver(observer) }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("1", color = textColorDim)
+                        Text("2", color = textColorDim)
+                        Text("3", color = textColorDim)
+                        Text("4", color = titleColor)
+                    }
+                    Column(Modifier.background(color = stepBackgroundColor).padding(16.dp)) {
+                        Text(stringResource(R.string.setup_step4_title))
+                        Text(
+                            stringResource(R.string.setup_step4_instruction),
+                            style = MaterialTheme.typography.bodyLarge.merge(color = textColor)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        Modifier.clickable {
+                            background = !background
+                            prefs.edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, background).apply()
+                        }.background(color = stepBackgroundColor).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painterResource(if (background) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active),
+                            null,
+                            Modifier.padding(end = 6.dp).size(32.dp),
+                            tint = if (background) textColor else textColorDim
+                        )
+                        Text(stringResource(R.string.setup_step4_background), Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        Modifier.clickable {
+                            if (!overlay) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    android.net.Uri.parse("package:" + ctx.packageName)
+                                )
+                                try {
+                                    launcher.launch(intent)
+                                } catch (_: android.content.ActivityNotFoundException) {
+                                    // Some builds have no such screen. Nothing else breaks.
+                                }
+                            }
+                        }.background(color = stepBackgroundColor).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painterResource(if (overlay) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
+                            null,
+                            Modifier.padding(end = 6.dp).size(32.dp),
+                            tint = if (overlay) textColor else textColorDim
+                        )
+                        Text(stringResource(R.string.setup_step4_overlay), Modifier.weight(1f))
+                    }
                     Spacer(Modifier.height(4.dp))
                     Row(
                         Modifier.clickable { finish() }
