@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+German translations for the VibeVoice layer.
+
+Kept in their own file, apart from strings.xml, because that one is Weblate's: it carries the
+upstream HeliBoard translations and is overwritten from there. These keys are the fork's own and
+Weblate has never heard of them, so a merge would either drop them or leave them stranded in a file
+nobody owns. Here they are ours, and an upstream sync cannot touch them.
+
+The English originals live in values/strings.xml. Add a key there first; this file only translates.
+
+SPDX-License-Identifier: GPL-3.0-only
+-->
+<resources>
+    <!-- Account and linking -->
+    <string name="vibevoice_integration_title">VibeVoice-Integration</string>
+    <string name="vibevoice_account_linking_description">Mit einem verknüpften VibeVoice-Konto kannst du direkt in der Tastatur diktieren.</string>
+    <string name="vibevoice_status_linked">Status: verknüpft</string>
+    <string name="vibevoice_unlink_device">Verknüpfung aufheben</string>
+    <string name="vibevoice_waiting_for_approval">Warte auf Bestätigung…</string>
+    <string name="vibevoice_enter_code_in_browser">Gib diesen Code im Browser ein:</string>
+    <string name="vibevoice_polling_for_token">Warte auf Freigabe…</string>
+    <string name="vibevoice_link_account">VibeVoice-Konto verknüpfen</string>
+    <string name="vibevoice_linking_failed">Verknüpfen fehlgeschlagen: %s</string>
+    <string name="vibevoice_failed_request_device_code">Gerätecode konnte nicht angefordert werden</string>
+    <string name="vibevoice_no_browser">Kein Browser gefunden, um den Link zu öffnen</string>
+    <string name="vibevoice_not_linked">Bitte VibeVoice in den Einstellungen verknüpfen</string>
+
+    <!-- While dictating -->
+    <string name="vibevoice_listening">Höre zu…</string>
+    <string name="vibevoice_error">Fehler beim Diktat: %s</string>
+    <string name="vibevoice_mic_busy">Das Mikrofon wird von einer anderen App benutzt. Diktat beendet.</string>
+    <string name="vibevoice_mic_unavailable">Das Mikrofon liefert nichts mehr. Diktat beendet.</string>
+    <string name="vibevoice_transcribing">Transkribiere…</string>
+    <string name="vibevoice_transcribing_timer">Transkribiere… %s</string>
+    <string name="vibevoice_hold_to_transcribe">Diktat: lang drücken</string>
+
+    <!-- Background dictation -->
+    <string name="vibevoice_background_hint">Das Diktat wurde beendet, weil die Tastatur zuging. Es kann stattdessen weiterlaufen – siehe „Im Hintergrund weiter zuhören“ in den VibeVoice-Einstellungen.</string>
+    <string name="vibevoice_background_title">Im Hintergrund weiter zuhören</string>
+    <string name="vibevoice_background_desc">Aus: Das Diktat endet, wenn die Tastatur zugeht, und das bis dahin Gesagte wird eingefügt. An: Es läuft weiter, während du die App wechselst, und eine Benachrichtigung zeigt das Gehörte mit einem Knopf zum Beenden.</string>
+    <string name="vibevoice_background_switch">Weiterlaufen, wenn die Tastatur zugeht</string>
+    <string name="vibevoice_background_needs_notifications">Erlaube Benachrichtigungen – sonst läuft ein Diktat im Hintergrund ohne sichtbaren Hinweis und ohne Möglichkeit, es zu beenden.</string>
+
+    <!-- The session notification -->
+    <string name="vibevoice_session_channel">Diktatsitzung</string>
+    <string name="vibevoice_session_title">VibeVoice hört zu</string>
+    <string name="vibevoice_session_listening">Warte auf Sprache…</string>
+    <string name="vibevoice_session_stop">Beenden</string>
+    <string name="vibevoice_session_finishing">Beende den letzten Satz…</string>
+
+    <!-- The floating mark -->
+    <string name="vibevoice_overlay_title">Schwebende Marke</string>
+    <string name="vibevoice_overlay_show">Schwebende Marke anzeigen</string>
+    <string name="vibevoice_overlay_desc">Zeigt die VibeVoice-Marke auf dem Bildschirm, solange ein Diktat ohne Tastatur läuft. Sie pulsiert mit dem Gehörten und wird auf das X unten gezogen, um das Diktat zu beenden.</string>
+    <string name="vibevoice_overlay_grant">Anzeige über anderen Apps erlauben</string>
+    <string name="vibevoice_overlay_granted">Erlaubt</string>
+    <string name="vibevoice_no_overlay_settings">Dieses Gerät hat keinen Bildschirm für diese Berechtigung. Suche in den Systemeinstellungen unter VibeVoiceBoard nach „Über anderen Apps anzeigen“.</string>
+
+    <!-- Developer tuning: the mark -->
+    <string name="vibevoice_overlay_tuning_title">Schwebende Marke</string>
+    <string name="vibevoice_overlay_tuning_desc">Größe und Form der Marke. Sie ist von innen nach außen aufgebaut, jeder Regler bewegt also genau eine Sache. Eine Änderung greift, wenn die Marke das nächste Mal erscheint.</string>
+    <string name="vibevoice_overlay_icon">Größe der Marke</string>
+    <string name="vibevoice_overlay_padding">Abstand</string>
+    <string name="vibevoice_overlay_bars">Länge der Wellenform</string>
+    <string name="vibevoice_overlay_bar_width">Balkenbreite</string>
+    <string name="vibevoice_overlay_bar_count">Anzahl der Balken</string>
+    <string name="vibevoice_overlay_rest">Höhe in Stille</string>
+    <string name="vibevoice_overlay_glow_size">Größe des Scheins (Marke)</string>
+    <string name="vibevoice_overlay_glow_gain">Stärke des Scheins (Marke)</string>
+
+    <!-- Developer tuning: the microphone key -->
+    <string name="vibevoice_glow_title">Schein der Mikrofontaste</string>
+    <string name="vibevoice_glow_desc">Das Licht hinter der Mikrofontaste in der obersten Reihe, während ein Diktat läuft. Die schwebende Marke hat ihren eigenen Schein, der getrennt eingestellt wird.</string>
+    <string name="vibevoice_glow_size">Größe des Scheins</string>
+    <string name="vibevoice_glow_gain">Stärke des Scheins</string>
+
+    <!-- Developer tuning: the waves behind the keys -->
+    <string name="vibevoice_waves_title">Schallwellen</string>
+    <string name="vibevoice_waves_desc">Form der Wellen hinter den Tasten während des Diktats. Eine Änderung greift beim nächsten Diktat.</string>
+    <string name="vibevoice_waves_amplitude">Größe</string>
+    <string name="vibevoice_waves_reaction">Reaktion auf deine Stimme</string>
+    <string name="vibevoice_waves_attack">Anstieg (wie schnell sie steigen)</string>
+    <string name="vibevoice_waves_damping">Dämpfung (wie schnell sie sich legen)</string>
+    <string name="vibevoice_waves_spread">Versatz zwischen den Wellen</string>
+    <string name="vibevoice_waves_cycles">Perioden über die Breite</string>
+    <string name="vibevoice_waves_count">Anzahl der Wellen</string>
+    <string name="vibevoice_waves_speed">Geschwindigkeit</string>
+    <string name="vibevoice_waves_jitter">Rauheit</string>
+
+    <!-- Bug reports -->
+    <string name="vibevoice_report_bug_title">Fehler melden</string>
+    <string name="vibevoice_report_bug_desc">Sendet Diagnoseprotokolle und deine Beschreibung direkt an den Server</string>
+    <string name="vibevoice_report_bug_dialog_title">Fehlerbericht senden</string>
+    <string name="vibevoice_report_bug_placeholder">Beschreibe, was passiert ist oder welcher Fehler auftrat…</string>
+    <string name="vibevoice_report_bug_submitting">Bericht wird gesendet…</string>
+    <string name="vibevoice_report_bug_success">Fehlerbericht gesendet. (ID: #%d)</string>
+    <string name="vibevoice_report_bug_submit">Bericht senden</string>
+
+    <!-- Plan and quota -->
+    <string name="vibevoice_plan_label">Dein Tarif: %1$s</string>
+    <string name="vibevoice_quota_used">%1$.1f / %2$.0f Min. verbraucht</string>
+    <string name="vibevoice_quota_unlimited">%1$.1f Min. verbraucht</string>
+    <string name="vibevoice_fetching_quota">Lade Tarifdaten…</string>
+    <string name="vibevoice_quota_error">Tarifdaten konnten nicht geladen werden</string>
+
+    <!-- Setup wizard, steps 4 and 5 -->
+    <string name="setup_step4_action">Diktat einrichten</string>
+    <string name="setup_step4_title">"VibeVoice-Konto verbinden"</string>
+    <string name="setup_step4_instruction">Diktiertes wird von VibeVoice transkribiert, die Tastatur braucht dafür also ein Konto. Es ist kostenlos, und das Verknüpfen dauert einen Browser-Tab.</string>
+    <string name="setup_step4_link">Konto verknüpfen</string>
+    <string name="setup_step4_linked">Konto verknüpft</string>
+    <string name="setup_next_action">Weiter</string>
+    <string name="setup_step5_title">"Lass es dich hören"</string>
+    <string name="setup_step5_instruction">Tippe oben rechts auf das V. Es leuchtet, solange die Tastatur zuhört, und ein weiterer Tipp beendet es. Ein langer Druck auf die Leertaste tut dasselbe, ohne die Tasten zu verlassen – einmal drücken, loslassen, weiterreden.</string>
+    <string name="setup_step5_mic">Mikrofon erlauben</string>
+    <string name="setup_step5_mic_granted">Mikrofon erlaubt</string>
+</resources>
