@@ -123,6 +123,8 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_GLOW_GAIN = "vibevoice_glow_gain";
     public static final String PREF_OVERLAY_GLOW_SIZE = "vibevoice_overlay_glow_size";
     public static final String PREF_OVERLAY_GLOW_GAIN = "vibevoice_overlay_glow_gain";
+    public static final String PREF_OVERLAY_X = "vibevoice_overlay_x";
+    public static final String PREF_OVERLAY_Y = "vibevoice_overlay_y";
     public static final String PREF_WAVE_AMPLITUDE = "vibevoice_wave_amplitude";
     public static final String PREF_WAVE_REACTION = "vibevoice_wave_reaction";
     public static final String PREF_WAVE_CYCLES = "vibevoice_wave_cycles";

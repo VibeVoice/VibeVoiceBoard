@@ -15,7 +15,6 @@ import android.os.Build
 import android.provider.Settings as AndroidSettings
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.VelocityTracker
 import android.view.View
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
@@ -126,8 +125,7 @@ class VoiceOverlay(context: Context) : View(context) {
 
     private fun stopAnimating() {
         stopFling()
-        velocity?.recycle()
-        velocity = null
+        sampleSize = 0
         glowBitmap?.recycle()
         glowBitmap = null
         glowBox = 0
@@ -244,7 +242,19 @@ class VoiceOverlay(context: Context) : View(context) {
     private var startX = 0
     private var startY = 0
     private var dragged = false
-    private var velocity: VelocityTracker? = null
+    /**
+     * The tail of the drag, as (time, x, y) triples in a ring.
+     *
+     * Kept instead of a VelocityTracker because that one weights the very end of the gesture: a
+     * thumb that wobbles as it lifts can hand back a velocity pointing the other way from the
+     * movement it just made. Reading across a window instead averages the wobble out, and the
+     * direction that survives is the one the hand was actually going.
+     */
+    private val sampleT = LongArray(SAMPLE_COUNT)
+    private val sampleX = FloatArray(SAMPLE_COUNT)
+    private val sampleY = FloatArray(SAMPLE_COUNT)
+    private var sampleHead = 0
+    private var sampleSize = 0
 
     /** Pixels per millisecond, carried after the finger lets go. */
     private var flingVx = 0f
@@ -259,9 +269,9 @@ class VoiceOverlay(context: Context) : View(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 stopFling()
-                velocity?.recycle()
-                velocity = VelocityTracker.obtain()
-                velocity?.addMovement(event)
+                sampleSize = 0
+                sampleHead = 0
+                addSample(event)
                 downX = event.rawX
                 downY = event.rawY
                 startX = params.x
@@ -271,7 +281,7 @@ class VoiceOverlay(context: Context) : View(context) {
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                velocity?.addMovement(event)
+                addSample(event)
                 val dx = event.rawX - downX
                 val dy = event.rawY - downY
                 if (!dragged && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
@@ -312,12 +322,10 @@ class VoiceOverlay(context: Context) : View(context) {
                 // snapped to the target its own position is the target's, and re-testing would be
                 // asking a question already answered.
                 val onTarget = dragged && event.actionMasked == MotionEvent.ACTION_UP && armedNow
-                velocity?.addMovement(event)
-                velocity?.computeCurrentVelocity(1000)
-                val vx = (velocity?.xVelocity ?: 0f) / 1000f
-                val vy = (velocity?.yVelocity ?: 0f) / 1000f
-                velocity?.recycle()
-                velocity = null
+                addSample(event)
+                val v = windowVelocity()
+                val vx = v[0]
+                val vy = v[1]
                 // A tap does nothing on purpose. Getting the mark out of the way and ending the
                 // session are both done in a hurry, and a tap that ended it would keep costing
                 // transcripts to a slip of the thumb.
@@ -337,6 +345,7 @@ class VoiceOverlay(context: Context) : View(context) {
                     flingHandler.post(flingStep)
                 } else {
                     DismissTarget.conceal()
+                    rememberPosition()
                 }
                 dragged = false
                 armedNow = false
@@ -371,6 +380,57 @@ class VoiceOverlay(context: Context) : View(context) {
         flinging = false
         flingHandler.removeCallbacks(flingStep)
     }
+
+    /** Keeps where it was left, so the next session finds it in the same corner. */
+    private fun rememberPosition() {
+        val params = layoutParams as? WindowManager.LayoutParams ?: return
+        try {
+            context.prefs().edit()
+                .putInt(Settings.PREF_OVERLAY_X, params.x)
+                .putInt(Settings.PREF_OVERLAY_Y, params.y)
+                .apply()
+        } catch (e: Exception) {
+            VibeVoiceDebugLogger.log("Could not store the overlay position: ${e.message}")
+        }
+    }
+
+    private fun addSample(event: MotionEvent) {
+        sampleT[sampleHead] = event.eventTime
+        sampleX[sampleHead] = event.rawX
+        sampleY[sampleHead] = event.rawY
+        sampleHead = (sampleHead + 1) % SAMPLE_COUNT
+        if (sampleSize < SAMPLE_COUNT) sampleSize++
+    }
+
+    /**
+     * Velocity in pixels per millisecond, measured across the whole window rather than between the
+     * last two points.
+     *
+     * Straight across: the oldest sample still inside the window against the newest. A least
+     * squares fit would weight the middle of the window more, which is the opposite of what is
+     * wanted here -- the point is that no single sample, least of all the last one, can decide the
+     * direction on its own.
+     */
+    private fun windowVelocity(): FloatArray {
+        result[0] = 0f
+        result[1] = 0f
+        if (sampleSize < 2) return result
+        val newest = (sampleHead - 1 + SAMPLE_COUNT) % SAMPLE_COUNT
+        val tNewest = sampleT[newest]
+        var oldest = newest
+        for (i in 1 until sampleSize) {
+            val idx = (newest - i + SAMPLE_COUNT) % SAMPLE_COUNT
+            if (tNewest - sampleT[idx] > VELOCITY_WINDOW_MS) break
+            oldest = idx
+        }
+        val dt = (tNewest - sampleT[oldest]).toFloat()
+        if (dt <= 0f) return result
+        result[0] = (sampleX[newest] - sampleX[oldest]) / dt
+        result[1] = (sampleY[newest] - sampleY[oldest]) / dt
+        return result
+    }
+
+    private val result = FloatArray(2)
 
     /**
      * One frame of the glide. Friction per frame at a fixed 16ms step, which keeps it predictable
@@ -410,6 +470,7 @@ class VoiceOverlay(context: Context) : View(context) {
         if (abs(flingVx) < MIN_FLING_PX_MS && abs(flingVy) < MIN_FLING_PX_MS) {
             stopFling()
             DismissTarget.conceal()
+            rememberPosition()
             return
         }
         flingHandler.postDelayed(flingStep, FLING_STEP_MS.toLong())
@@ -462,8 +523,11 @@ class VoiceOverlay(context: Context) : View(context) {
         private const val CATCH_RADIUS_DP = 88f
         private const val FLING_STEP_MS = 16f
         /** Per 16ms step. Enough travel to feel thrown, little enough not to wander off. */
-        private const val FLING_FRICTION = 0.94f
+        private const val FLING_FRICTION = 0.922f
         private const val MIN_FLING_PX_MS = 0.06f
+        /** How far back the release velocity is read. Long enough to outvote a wobble. */
+        private const val VELOCITY_WINDOW_MS = 110L
+        private const val SAMPLE_COUNT = 16
 
         private var current: VoiceOverlay? = null
 
@@ -503,8 +567,19 @@ class VoiceOverlay(context: Context) : View(context) {
                 PixelFormat.TRANSLUCENT
             )
             params.gravity = Gravity.TOP or Gravity.START
-            params.x = (app.resources.displayMetrics.widthPixels - size * 1.4f).toInt()
-            params.y = (app.resources.displayMetrics.heightPixels * 0.62f).toInt()
+            // Where it was left. Dragging it into a corner and having it come back somewhere else
+            // is the sort of thing that makes a floating control feel like it is not yours.
+            val metrics = app.resources.displayMetrics
+            val prefs = app.prefs()
+            val storedX = prefs.getInt(Settings.PREF_OVERLAY_X, Defaults.PREF_OVERLAY_X)
+            val storedY = prefs.getInt(Settings.PREF_OVERLAY_Y, Defaults.PREF_OVERLAY_Y)
+            // Clamped rather than trusted: the screen it was parked on may have been the other way
+            // round, and a corner remembered off the side of a rotated screen is a mark nobody can
+            // reach.
+            params.x = if (storedX >= 0) storedX.coerceIn(0, (metrics.widthPixels - size).coerceAtLeast(0))
+                else (metrics.widthPixels - size * 1.4f).toInt()
+            params.y = if (storedY >= 0) storedY.coerceIn(0, (metrics.heightPixels - size).coerceAtLeast(0))
+                else (metrics.heightPixels * 0.62f).toInt()
             try {
                 windowManager(app).addView(overlay, params)
             } catch (e: Exception) {

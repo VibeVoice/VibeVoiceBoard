@@ -125,6 +125,9 @@ object Defaults {
     // because the toolbar's are settled and must not move when this is tuned.
     const val PREF_OVERLAY_GLOW_SIZE = 0.16f
     const val PREF_OVERLAY_GLOW_GAIN = 0.65f
+    /** Where the mark was left. Negative means it has never been moved. */
+    const val PREF_OVERLAY_X = -1
+    const val PREF_OVERLAY_Y = -1
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f
