@@ -54,12 +54,9 @@ object VoiceGlow {
      * inside the mark's own bounds clips the light at its edge, and a clipped glow looks exactly
      * like what it is, a hard rectangle.
      */
-    fun render(context: Context, drawable: Drawable, box: Int, color: Int, outMargin: IntArray): Bitmap? {
+    fun render(drawable: Drawable, box: Int, color: Int, fraction: Float, gain: Float, outMargin: IntArray): Bitmap? {
         if (box <= 0) return null
         return try {
-            val prefs = context.prefs()
-            val fraction = prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE)
-            val gain = prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN)
             val radius = (box * fraction).coerceAtLeast(MIN_BLUR_PX)
             // Three sigma out, a Gaussian has nothing left worth drawing.
             val margin = Math.ceil((radius * 3f).toDouble()).toInt()

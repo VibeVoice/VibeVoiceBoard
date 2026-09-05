@@ -612,6 +612,20 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     description = { "${it.toInt()} bars" }
                 ) { }
                 SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_glow_size),
+                    key = Settings.PREF_OVERLAY_GLOW_SIZE,
+                    default = Defaults.PREF_OVERLAY_GLOW_SIZE,
+                    range = 0.02f..0.45f,
+                    description = { "${(100 * it).toInt()}% of the mark" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_glow_gain),
+                    key = Settings.PREF_OVERLAY_GLOW_GAIN,
+                    default = Defaults.PREF_OVERLAY_GLOW_GAIN,
+                    range = 0.1f..3f,
+                    description = { String.format("%.2fx", it) }
+                ) { }
+                SliderPreference(
                     name = stringResource(R.string.vibevoice_overlay_rest),
                     key = Settings.PREF_OVERLAY_REST,
                     default = Defaults.PREF_OVERLAY_REST,

@@ -521,7 +521,13 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      */
     private fun voiceActiveGlow(mark: Drawable, box: Int): Drawable? {
         val margin = IntArray(1)
-        val bitmap = VoiceGlow.render(context, mark, box, Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL), margin)
+        val prefs = context.prefs()
+        val bitmap = VoiceGlow.render(
+            mark, box, Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL),
+            prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE),
+            prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN),
+            margin
+        )
             ?: return null
         return BitmapDrawable(resources, bitmap).apply { gravity = Gravity.CENTER }
     }

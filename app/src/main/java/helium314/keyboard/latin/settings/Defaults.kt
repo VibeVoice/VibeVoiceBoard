@@ -120,6 +120,11 @@ object Defaults {
     // whole of it.
     const val PREF_GLOW_SIZE = 0.20f
     const val PREF_GLOW_GAIN = 1.0f
+    // The floating mark's own pair. Separate from the toolbar's because the mark sits on a dark
+    // disc with nothing else competing, where the same numbers read considerably stronger -- and
+    // because the toolbar's are settled and must not move when this is tuned.
+    const val PREF_OVERLAY_GLOW_SIZE = 0.16f
+    const val PREF_OVERLAY_GLOW_GAIN = 0.65f
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f

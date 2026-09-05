@@ -15,6 +15,7 @@ import android.os.Build
 import android.provider.Settings as AndroidSettings
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
@@ -124,6 +125,9 @@ class VoiceOverlay(context: Context) : View(context) {
     }
 
     private fun stopAnimating() {
+        stopFling()
+        velocity?.recycle()
+        velocity = null
         glowBitmap?.recycle()
         glowBitmap = null
         glowBox = 0
@@ -213,7 +217,13 @@ class VoiceOverlay(context: Context) : View(context) {
             if (glowBitmap == null || glowBox != box.toInt()) {
                 glowBitmap?.recycle()
                 glowBox = box.toInt()
-                glowBitmap = VoiceGlow.render(context, d, glowBox, barColor, glowMargin)
+                val p = context.prefs()
+                glowBitmap = VoiceGlow.render(
+                    d, glowBox, barColor,
+                    p.getFloat(Settings.PREF_OVERLAY_GLOW_SIZE, Defaults.PREF_OVERLAY_GLOW_SIZE),
+                    p.getFloat(Settings.PREF_OVERLAY_GLOW_GAIN, Defaults.PREF_OVERLAY_GLOW_GAIN),
+                    glowMargin
+                )
             }
             glowBitmap?.let { glow ->
                 // The bitmap already carries the colour and the density, so it is drawn plainly.
@@ -234,12 +244,24 @@ class VoiceOverlay(context: Context) : View(context) {
     private var startX = 0
     private var startY = 0
     private var dragged = false
+    private var velocity: VelocityTracker? = null
+
+    /** Pixels per millisecond, carried after the finger lets go. */
+    private var flingVx = 0f
+    private var flingVy = 0f
+    private var flinging = false
+    private val flingHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val flingStep = Runnable { stepFling() }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val params = layoutParams as? WindowManager.LayoutParams ?: return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                stopFling()
+                velocity?.recycle()
+                velocity = VelocityTracker.obtain()
+                velocity?.addMovement(event)
                 downX = event.rawX
                 downY = event.rawY
                 startX = params.x
@@ -249,6 +271,7 @@ class VoiceOverlay(context: Context) : View(context) {
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
+                velocity?.addMovement(event)
                 val dx = event.rawX - downX
                 val dy = event.rawY - downY
                 if (!dragged && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
@@ -289,21 +312,107 @@ class VoiceOverlay(context: Context) : View(context) {
                 // snapped to the target its own position is the target's, and re-testing would be
                 // asking a question already answered.
                 val onTarget = dragged && event.actionMasked == MotionEvent.ACTION_UP && armedNow
-                DismissTarget.conceal()
+                velocity?.addMovement(event)
+                velocity?.computeCurrentVelocity(1000)
+                val vx = (velocity?.xVelocity ?: 0f) / 1000f
+                val vy = (velocity?.yVelocity ?: 0f) / 1000f
+                velocity?.recycle()
+                velocity = null
                 // A tap does nothing on purpose. Getting the mark out of the way and ending the
                 // session are both done in a hurry, and a tap that ended it would keep costing
                 // transcripts to a slip of the thumb.
                 if (onTarget) {
-                    VibeVoiceDebugLogger.log("Overlay dropped on the dismiss target")
-                    onDismiss?.run()
+                    dismiss()
                 } else if (!dragged) {
+                    DismissTarget.conceal()
                     performClick()
+                } else if (event.actionMasked == MotionEvent.ACTION_UP &&
+                        (abs(vx) > MIN_FLING_PX_MS || abs(vy) > MIN_FLING_PX_MS)) {
+                    // Thrown rather than placed: it carries on and slows down, the way anything
+                    // dragged across a screen is expected to. The target stays up for the ride, so
+                    // a throw aimed at it can land on it.
+                    flingVx = vx
+                    flingVy = vy
+                    flinging = true
+                    flingHandler.post(flingStep)
+                } else {
+                    DismissTarget.conceal()
                 }
                 dragged = false
+                armedNow = false
                 return true
             }
         }
         return false
+    }
+
+    /**
+     * Ends the session, and takes the mark off screen first.
+     *
+     * The order is the whole of this. Stopping waits for the last result from the server, a second
+     * or so, and hiding at the end of that made a drop feel like it had not registered. Nothing
+     * about ending the session needs the mark to still be on screen.
+     */
+    private fun dismiss() {
+        val run = onDismiss
+        visibility = GONE
+        DismissTarget.conceal()
+        stopFling()
+        VibeVoiceDebugLogger.log("Overlay dismissed")
+        // Posted: this runs inside the view's own touch dispatch, and taking it out of the window
+        // from in there is asking for trouble.
+        flingHandler.post {
+            hide(context)
+            run?.run()
+        }
+    }
+
+    private fun stopFling() {
+        flinging = false
+        flingHandler.removeCallbacks(flingStep)
+    }
+
+    /**
+     * One frame of the glide. Friction per frame at a fixed 16ms step, which keeps it predictable
+     * and is the same thing as per-second friction at that rate.
+     */
+    private fun stepFling() {
+        if (!flinging || !running) return
+        val params = layoutParams as? WindowManager.LayoutParams ?: return
+        val metrics = context.resources.displayMetrics
+        var x = params.x + flingVx * FLING_STEP_MS
+        var y = params.y + flingVy * FLING_STEP_MS
+        // Clamped at the edges, and whichever component hit the edge is spent. A bounce would be
+        // playful; this is a thing you park somewhere.
+        val maxX = (metrics.widthPixels - width).toFloat()
+        val maxY = (metrics.heightPixels - height).toFloat()
+        if (x < 0f) { x = 0f; flingVx = 0f }
+        if (x > maxX) { x = maxX; flingVx = 0f }
+        if (y < 0f) { y = 0f; flingVy = 0f }
+        if (y > maxY) { y = maxY; flingVy = 0f }
+        params.x = x.toInt()
+        params.y = y.toInt()
+        try {
+            windowManager(context).updateViewLayout(this, params)
+        } catch (e: Exception) {
+            stopFling()
+            return
+        }
+        val armed = isOverTarget(x, y)
+        DismissTarget.setArmed(armed)
+        if (armed) {
+            // Thrown onto the target counts as dropped on it.
+            dismiss()
+            return
+        }
+        flingVx *= FLING_FRICTION
+        flingVy *= FLING_FRICTION
+        if (abs(flingVx) < MIN_FLING_PX_MS && abs(flingVy) < MIN_FLING_PX_MS) {
+            stopFling()
+            DismissTarget.conceal()
+            return
+        }
+        flingHandler.postDelayed(flingStep, FLING_STEP_MS.toLong())
     }
 
     private val targetCentre = FloatArray(2)
@@ -351,6 +460,10 @@ class VoiceOverlay(context: Context) : View(context) {
         private const val THIRD_RATIO = 0.75f
         private const val PROFILE_FLOOR = 0.45f
         private const val CATCH_RADIUS_DP = 88f
+        private const val FLING_STEP_MS = 16f
+        /** Per 16ms step. Enough travel to feel thrown, little enough not to wander off. */
+        private const val FLING_FRICTION = 0.94f
+        private const val MIN_FLING_PX_MS = 0.06f
 
         private var current: VoiceOverlay? = null
 
