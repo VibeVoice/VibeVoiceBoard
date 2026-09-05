@@ -1118,6 +1118,7 @@ public class LatinIME extends InputMethodService implements
             } else {
                 VibeVoiceDebugLogger.log("Keyboard hidden and background dictation is off: stopping");
                 mIsStoppingVoice = true;
+                VoiceSessionService.showFinishing();
                 mVibeVoiceClient.stopStreaming();
             }
         }
@@ -1658,6 +1659,7 @@ public class LatinIME extends InputMethodService implements
                     return;
                 }
                 mIsStoppingVoice = true;
+                VoiceSessionService.showFinishing();
                 mVibeVoiceClient.stopStreaming();
                 return;
             }

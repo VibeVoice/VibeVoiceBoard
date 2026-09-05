@@ -58,6 +58,16 @@ class VoiceSessionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             VibeVoiceDebugLogger.log("Stop requested from the notification")
+            val stop = onStopRequested
+            if (stop == null) {
+                // Nothing left to stop: the session ended without this service hearing about it, or
+                // the process was rebuilt and the notification outlived what it was about. Without
+                // this the service would sit in the foreground for good, showing a session that
+                // does not exist and a button that does nothing.
+                VibeVoiceDebugLogger.log("Stop requested with no session attached; stopping the service")
+                stopSelf()
+                return START_NOT_STICKY
+            }
             // Say so before asking, and drop the button. Stopping waits for the last result, which
             // can take a second or two; an unchanged notification reads as a tap that did nothing,
             // and the second tap forces the session to finish and throws that result away.
@@ -67,7 +77,7 @@ class VoiceSessionService : Service() {
             // state transition (mIsStoppingVoice, the pending final, the composing text) and that
             // state lives there. Reaching around it would leave the keyboard believing it is still
             // recording.
-            onStopRequested?.run()
+            stop.run()
             return START_NOT_STICKY
         }
         // Whatever attach() left behind is claimed here rather than in onCreate, because this runs
@@ -266,6 +276,20 @@ class VoiceSessionService : Service() {
             } catch (e: Exception) {
                 VibeVoiceDebugLogger.log("Could not stop the session service: ${e.message}")
             }
+        }
+
+        /**
+         * Says the session is winding down, whoever asked for it.
+         *
+         * The notification used to change only when the stop came from its own button, so stopping
+         * from the space key or the floating mark left it claiming to be listening until the last
+         * result arrived and it vanished -- reporting a microphone that was no longer open.
+         */
+        @JvmStatic
+        fun showFinishing() {
+            if (finishing) return
+            finishing = true
+            instance?.refreshNotification()
         }
 
         /** Puts the latest transcript in the notification, so it shows what is being heard. */
