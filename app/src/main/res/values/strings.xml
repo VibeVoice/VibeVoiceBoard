@@ -96,7 +96,7 @@
     <string name="vibevoice_overlay_glow_size">Glow size (mark)</string>
     <string name="vibevoice_overlay_glow_gain">Glow strength (mark)</string>
     <string name="vibevoice_glow_title">Microphone key glow</string>
-    <string name="vibevoice_glow_desc">The light behind the microphone key in the keyboard\'s top row while a session is running. The floating mark uses the same glow.</string>
+    <string name="vibevoice_glow_desc">The light behind the microphone key in the keyboard\'s top row while a session is running. The floating mark has its own glow, tuned separately.</string>
     <string name="vibevoice_glow_size">Glow size</string>
     <string name="vibevoice_glow_gain">Glow strength</string>
     <string name="vibevoice_overlay_desc">While a session runs without the keyboard, show the VibeVoice mark on screen. It pulses with what is being heard, and it is dragged onto the X at the bottom to end the session.</string>

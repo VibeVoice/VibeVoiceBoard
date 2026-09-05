@@ -106,10 +106,10 @@ object Defaults {
     const val PREF_OVERLAY_ENABLED = true
     // The geometry is expressed from the inside out -- the V decides the size, the padding decides
     // the disc, the bars grow outward from it -- so changing one does not silently rescale the rest.
-    const val PREF_OVERLAY_ICON = 30f
+    const val PREF_OVERLAY_ICON = 32f
     const val PREF_OVERLAY_PADDING = 6f
     const val PREF_OVERLAY_BARS = 14f
-    const val PREF_OVERLAY_BAR_WIDTH = 2.2f
+    const val PREF_OVERLAY_BAR_WIDTH = 3.0f
     const val PREF_OVERLAY_BAR_COUNT = 36f
     const val PREF_OVERLAY_REST = 0.06f
     // The glow behind the mark, in the toolbar and on the floating mark alike. Size is the blur
@@ -123,8 +123,8 @@ object Defaults {
     // The floating mark's own pair. Separate from the toolbar's because the mark sits on a dark
     // disc with nothing else competing, where the same numbers read considerably stronger -- and
     // because the toolbar's are settled and must not move when this is tuned.
-    const val PREF_OVERLAY_GLOW_SIZE = 0.16f
-    const val PREF_OVERLAY_GLOW_GAIN = 0.65f
+    const val PREF_OVERLAY_GLOW_SIZE = 0.08f
+    const val PREF_OVERLAY_GLOW_GAIN = 1.0f
     /** Where the mark was left. Negative means it has never been moved. */
     const val PREF_OVERLAY_X = -1
     const val PREF_OVERLAY_Y = -1
