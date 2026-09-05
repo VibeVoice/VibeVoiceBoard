@@ -52,10 +52,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import helium314.keyboard.latin.R
-import helium314.keyboard.latin.settings.Defaults
-import helium314.keyboard.latin.settings.Settings as KeySettings
-import helium314.keyboard.latin.utils.prefs
-import helium314.keyboard.latin.vibevoice.VoiceOverlay
+import helium314.keyboard.latin.vibevoice.VibeVoiceClient
 import helium314.keyboard.latin.utils.JniUtils
 import helium314.keyboard.latin.utils.Theme
 import helium314.keyboard.latin.utils.UncachedInputMethodManagerUtils
@@ -115,10 +112,7 @@ fun WelcomeWizard(
     @Composable
     fun ColumnScope.Step(step: Int, title: String, instruction: String, actionText: String, icon: Painter, action: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("1", color = if (step == 1) titleColor else textColorDim)
-            Text("2", color = if (step == 2) titleColor else textColorDim)
-            Text("3", color = if (step == 3) titleColor else textColorDim)
-            Text("4", color = if (step == 4) titleColor else textColorDim)
+            (1..5).forEach { Text("$it", color = if (it == step) titleColor else textColorDim) }
         }
         Column(Modifier
             .background(color = stepBackgroundColor)
@@ -136,6 +130,42 @@ fun WelcomeWizard(
         ) {
             Icon(icon, null, Modifier.padding(end = 6.dp).size(32.dp), tint = textColor)
             Text(actionText, Modifier.weight(1f))
+        }
+    }
+    @Composable fun OnResume(block: () -> Unit) {
+        val owner = LocalLifecycleOwner.current
+        DisposableEffect(owner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) block()
+            }
+            owner.lifecycle.addObserver(observer)
+            onDispose { owner.lifecycle.removeObserver(observer) }
+        }
+    }
+    @Composable fun StepHeader(
+        current: Int, titleC: Color, dimC: Color, bg: Color, textC: Color, title: String, instruction: String
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            (1..5).forEach { Text("$it", color = if (it == current) titleC else dimC) }
+        }
+        Column(Modifier.background(color = bg).padding(16.dp)) {
+            Text(title)
+            Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = textC))
+        }
+    }
+    @Composable fun ActionRow(icon: Int, text: String, active: Boolean, onClick: () -> Unit) {
+        Row(
+            Modifier.clickable { onClick() }
+                .background(color = stepBackgroundColor)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painterResource(icon), null,
+                Modifier.padding(end = 6.dp).size(32.dp),
+                tint = if (active) textColor else textColorDim
+            )
+            Text(text, Modifier.weight(1f))
         }
     }
     @Composable fun steps() {
@@ -195,104 +225,59 @@ fun WelcomeWizard(
                         close
                     )
                     Spacer(Modifier.height(4.dp))
-                    Row(
-                        Modifier.clickable { step = 4 }
-                            .background(color = stepBackgroundColor)
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    ActionRow(R.drawable.ic_vibevoice_active, stringResource(R.string.setup_step4_action), true) {
+                        step = 4
+                    }
+                } else if (step == 4) {
+                    // The account first, because nothing else here does anything without it. Sent
+                    // to the VibeVoice screen rather than reimplemented: the device flow there
+                    // handles an expired code, a missing browser and a body that is not the JSON it
+                    // expected, and a second copy of that would be a second copy to get wrong.
+                    var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.getApiKey(ctx) != null) }
+                    OnResume { linked = VibeVoiceClient.getApiKey(ctx) != null }
+                    StepHeader(4, titleColor, textColorDim, stepBackgroundColor, textColor,
+                        stringResource(R.string.setup_step4_title),
+                        stringResource(R.string.setup_step4_instruction))
+                    Spacer(Modifier.height(4.dp))
+                    ActionRow(
+                        if (linked) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
+                        stringResource(if (linked) R.string.setup_step4_linked else R.string.setup_step4_link),
+                        linked
                     ) {
-                        Icon(
-                            painterResource(R.drawable.ic_vibevoice_active),
-                            null,
-                            Modifier.padding(end = 6.dp).size(32.dp),
-                            tint = textColor
-                        )
-                        Text(stringResource(R.string.setup_step4_action), Modifier.weight(1f))
-                    }
-                } else { // step 4: voice typing, all of it optional
-                    val prefs = ctx.prefs()
-                    var background by rememberSaveable {
-                        mutableStateOf(prefs.getBoolean(KeySettings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
-                    }
-                    var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
-                    // Granted in the system settings, so there is no result to wait for -- the only
-                    // reliable moment to look again is when this screen comes back to the front.
-                    val owner = LocalLifecycleOwner.current
-                    DisposableEffect(owner) {
-                        val observer = LifecycleEventObserver { _, event ->
-                            if (event == Lifecycle.Event.ON_RESUME) overlay = VoiceOverlay.isAllowed(ctx)
+                        if (!linked) {
+                            val intent = Intent(ctx, SettingsActivity2::class.java)
+                                .putExtra("startDestination", "vibevoice")
+                            launcher.launch(intent)
                         }
-                        owner.lifecycle.addObserver(observer)
-                        onDispose { owner.lifecycle.removeObserver(observer) }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("1", color = textColorDim)
-                        Text("2", color = textColorDim)
-                        Text("3", color = textColorDim)
-                        Text("4", color = titleColor)
-                    }
-                    Column(Modifier.background(color = stepBackgroundColor).padding(16.dp)) {
-                        Text(stringResource(R.string.setup_step4_title))
-                        Text(
-                            stringResource(R.string.setup_step4_instruction),
-                            style = MaterialTheme.typography.bodyLarge.merge(color = textColor)
-                        )
                     }
                     Spacer(Modifier.height(4.dp))
-                    Row(
-                        Modifier.clickable {
-                            background = !background
-                            prefs.edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, background).apply()
-                        }.background(color = stepBackgroundColor).padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
+                        step = 5
+                    }
+                } else { // step 5: the microphone, and how dictation is actually started
+                    var mic by rememberSaveable {
+                        mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
+                                == android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    }
+                    // Asked for directly. PermissionActivity exists because an input method cannot
+                    // request a runtime permission; here we are in an activity and can.
+                    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+                        mic = it
+                    }
+                    StepHeader(5, titleColor, textColorDim, stepBackgroundColor, textColor,
+                        stringResource(R.string.setup_step5_title),
+                        stringResource(R.string.setup_step5_instruction))
+                    Spacer(Modifier.height(4.dp))
+                    ActionRow(
+                        if (mic) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
+                        stringResource(if (mic) R.string.setup_step5_mic_granted else R.string.setup_step5_mic),
+                        mic
                     ) {
-                        Icon(
-                            painterResource(if (background) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active),
-                            null,
-                            Modifier.padding(end = 6.dp).size(32.dp),
-                            tint = if (background) textColor else textColorDim
-                        )
-                        Text(stringResource(R.string.setup_step4_background), Modifier.weight(1f))
+                        if (!mic) micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                     }
                     Spacer(Modifier.height(4.dp))
-                    Row(
-                        Modifier.clickable {
-                            if (!overlay) {
-                                val intent = Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    android.net.Uri.parse("package:" + ctx.packageName)
-                                )
-                                try {
-                                    launcher.launch(intent)
-                                } catch (_: android.content.ActivityNotFoundException) {
-                                    // Some builds have no such screen. Nothing else breaks.
-                                }
-                            }
-                        }.background(color = stepBackgroundColor).padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            painterResource(if (overlay) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
-                            null,
-                            Modifier.padding(end = 6.dp).size(32.dp),
-                            tint = if (overlay) textColor else textColorDim
-                        )
-                        Text(stringResource(R.string.setup_step4_overlay), Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        Modifier.clickable { finish() }
-                            .background(color = stepBackgroundColor)
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.ic_setup_check),
-                            null,
-                            Modifier.padding(end = 6.dp).size(32.dp),
-                            tint = textColor
-                        )
-                        Text(stringResource(R.string.setup_finish_action), Modifier.weight(1f))
+                    ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_finish_action), true) {
+                        finish()
                     }
                 }
             }

@@ -76,6 +76,7 @@
     <string name="vibevoice_mic_unavailable">Microphone stopped working. Transcription stopped.</string>
     <!-- Section heading for the sliders that shape the sound waves drawn behind the keys -->
     <!-- Background dictation -->
+    <string name="vibevoice_background_hint">Dictation stopped because the keyboard closed. It can keep running instead \u2014 see \"Keep listening in the background\" in VibeVoice settings.</string>
     <string name="vibevoice_background_title">Keep listening in the background</string>
     <string name="vibevoice_background_desc">Off, dictation ends when the keyboard closes and whatever was said until then is committed. On, it carries on while you switch apps, and a notification shows what is being heard with a button to stop it.</string>
     <string name="vibevoice_background_switch">Carry on after the keyboard closes</string>
@@ -714,11 +715,16 @@ language, hence "No language". -->
     <!-- The label of the button that triggers the settings screen for the keyboard. -->
     <string name="setup_step3_action">Configure the keyboard</string>
     <!-- The label of the button that finishes the setup wizard. -->
-    <string name="setup_step4_action">Set up voice typing</string>
-    <string name="setup_step4_title">"Voice typing, if you want it"</string>
-    <string name="setup_step4_instruction">Hold the space bar to dictate. Both of these are optional \u2014 turn them on and dictation keeps running after the keyboard closes, so you can start talking in one app and finish in another.</string>
-    <string name="setup_step4_background">Keep listening when the keyboard closes</string>
-    <string name="setup_step4_overlay">Show the mark over other apps</string>
+    <string name="setup_step4_action">Set up dictation</string>
+    <string name="setup_step4_title">"Connect your VibeVoice account"</string>
+    <string name="setup_step4_instruction">Dictation is transcribed by VibeVoice, so the keyboard needs an account to talk to. It is free, and linking takes a browser tab.</string>
+    <string name="setup_step4_link">Link an account</string>
+    <string name="setup_step4_linked">Account linked</string>
+    <string name="setup_next_action">Next</string>
+    <string name="setup_step5_title">"Let it hear you"</string>
+    <string name="setup_step5_instruction">Tap the V in the top row to start. It glows while the keyboard is listening, and tapping it again stops. A long press on the space bar does the same without leaving the keys \u2014 press once, let go, keep talking.</string>
+    <string name="setup_step5_mic">Allow the microphone</string>
+    <string name="setup_step5_mic_granted">Microphone allowed</string>
     <string name="setup_finish_action">Finished</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>

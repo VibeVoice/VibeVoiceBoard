@@ -1123,6 +1123,19 @@ public class LatinIME extends InputMethodService implements
                 mIsStoppingVoice = true;
                 VoiceSessionService.showFinishing();
                 mVibeVoiceClient.stopStreaming();
+                // Said once, here, and not in the setup wizard: nobody understands what background
+                // dictation is for until the first time a session ends because they closed the
+                // keyboard. A wizard is read once and never again -- this is the moment the
+                // question actually occurs to someone.
+                final android.content.SharedPreferences prefs =
+                        helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this);
+                if (!prefs.getBoolean(Settings.PREF_BG_HINT_SHOWN,
+                        helium314.keyboard.latin.settings.Defaults.PREF_BG_HINT_SHOWN)) {
+                    prefs.edit().putBoolean(Settings.PREF_BG_HINT_SHOWN, true).apply();
+                    android.widget.Toast
+                            .makeText(this, R.string.vibevoice_background_hint, android.widget.Toast.LENGTH_LONG)
+                            .show();
+                }
             }
         }
         final MainKeyboardView mainKeyboardView = mKeyboardSwitcher.getMainKeyboardView();

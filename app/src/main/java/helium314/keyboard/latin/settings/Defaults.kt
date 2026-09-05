@@ -103,6 +103,8 @@ object Defaults {
     const val PREF_VOICE_BACKGROUND = false
     // On by default: a session running without the keyboard needs something on screen saying so,
     // and this is the part of that a user can actually see without pulling the shade down.
+    /** Whether the one-off "this could have kept running" notice has been shown. */
+    const val PREF_BG_HINT_SHOWN = false
     const val PREF_OVERLAY_ENABLED = true
     // The geometry is expressed from the inside out -- the V decides the size, the padding decides
     // the disc, the bars grow outward from it -- so changing one does not silently rescale the rest.
