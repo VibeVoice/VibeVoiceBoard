@@ -212,7 +212,12 @@ class VoiceOverlay(context: Context) : View(context) {
             // The light has the mark's shape, so it shows in the few pixels around the strokes and
             // nowhere else. Static: the ring of bars already carries the level, and two things
             // pulsing at once compete instead of agreeing.
-            if (glowBitmap == null || glowBox != box.toInt()) {
+            // Keyed on the size alone, not on the bitmap being null. Rendering can fail -- it
+            // allocates several bitmaps and blurs one -- and a null result used to mean "try
+            // again", which at thirty frames a second is a failing allocation retried thirty times
+            // a second for as long as the session lasts. One attempt per size; a failure means no
+            // glow, which is a mark without a halo rather than a burning battery.
+            if (glowBox != box.toInt()) {
                 glowBitmap?.recycle()
                 glowBox = box.toInt()
                 val p = context.prefs()

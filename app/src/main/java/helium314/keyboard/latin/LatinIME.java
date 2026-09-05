@@ -1107,8 +1107,11 @@ public class LatinIME extends InputMethodService implements
         if (mIsRecordingVoice && !mIsStoppingVoice && mVibeVoiceClient != null) {
             if (mSettings.getCurrent().mVoiceBackgroundEnabled) {
                 // The keyboard is gone but the session is not, and nothing on screen would say so.
-                // The mark takes its place: same statement, a fraction of the room, and a tap on it
-                // ends the session through the same path as the space key.
+                // The mark takes its place: same statement, a fraction of the room. It is ended by
+                // dragging it onto the X rather than by tapping it -- getting it out of the way and
+                // ending the session are both done in a hurry, and a tap that ended it kept costing
+                // transcripts to a slip of the thumb. This callback is that drop, and it goes
+                // through the same path as the space key.
                 if (mSettings.getCurrent().mVoiceOverlayEnabled) {
                     final int sessionId = mVoiceSessionId;
                     VoiceOverlay.show(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
