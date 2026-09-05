@@ -1590,9 +1590,39 @@ public class LatinIME extends InputMethodService implements
      *  one -- a null check on mVibeVoiceClient does not catch that, because by the time a stale
      *  callback runs the field may already hold a newly started session. */
     private int mVoiceSessionId = 0;
+    private long mVoiceStartedAt = 0L;
+
+    /** Seconds since this dictation session started, for the count on the space bar. */
+    public long getVoiceElapsedSeconds() {
+        if (mVoiceStartedAt == 0L) return 0L;
+        return (android.os.SystemClock.elapsedRealtime() - mVoiceStartedAt) / 1000L;
+    }
+
+    /**
+     * Redraws the space bar once a second while recording, which is what makes the count move.
+     * Only that key: invalidateAllKeys redraws every one of them, and a clock is no reason for
+     * that.
+     */
+    private final Runnable mVoiceTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!mIsRecordingVoice) return;
+            final MainKeyboardView view = mKeyboardSwitcher == null ? null : mKeyboardSwitcher.getMainKeyboardView();
+            if (view != null) view.invalidateSpaceKey();
+            mUiHandler.postDelayed(this, 1000L);
+        }
+    };
 
     private void updateVoiceInputState(boolean isRecording) {
         mIsRecordingVoice = isRecording;
+        if (isRecording) {
+            if (mVoiceStartedAt == 0L) mVoiceStartedAt = android.os.SystemClock.elapsedRealtime();
+            mUiHandler.removeCallbacks(mVoiceTick);
+            mUiHandler.postDelayed(mVoiceTick, 1000L);
+        } else {
+            mVoiceStartedAt = 0L;
+            mUiHandler.removeCallbacks(mVoiceTick);
+        }
         mUiHandler.post(() -> {
             if (mSuggestionStripView != null) {
                 mSuggestionStripView.updateVoiceKey();

@@ -119,7 +119,9 @@
     <string name="vibevoice_waves_jitter">Roughness</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
-    <string name="vibevoice_hold_to_transcribe">Hold to Transcribe</string>
+    <!-- On the space bar while a session runs. %s is the elapsed time, m:ss. -->
+    <string name="vibevoice_transcribing_timer">Transcribing… %s</string>
+    <string name="vibevoice_hold_to_transcribe">Long-press to dictate</string>
     <string name="privacy_policy">Privacy Policy</string>
     <!-- Bug reporting strings -->
     <string name="vibevoice_report_bug_title">Report a Bug</string>
