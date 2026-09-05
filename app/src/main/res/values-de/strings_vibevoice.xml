@@ -105,6 +105,7 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_quota_error">Tarifdaten konnten nicht geladen werden</string>
 
     <!-- Setup wizard, steps 4 and 5 -->
+    <string name="setup_step3_typing_ready">"Tippen funktioniert"</string>
     <string name="setup_step4_action">Diktat einrichten</string>
     <string name="setup_step4_title">"VibeVoice-Konto verbinden"</string>
     <string name="setup_step4_instruction">Diktiertes wird von VibeVoice transkribiert, die Tastatur braucht dafür also ein Konto. Es ist kostenlos, und das Verknüpfen dauert einen Browser-Tab.</string>

@@ -216,18 +216,18 @@ fun WelcomeWizard(
                         Text(stringResource(R.string.setup_step3_action), Modifier.weight(1f))
                     }
                 } else if (step == 3) {
+                    // One way on, and it is forward. The settings used to be offered here, which
+                    // closed the wizard for good -- there is no way back into it -- two steps
+                    // before dictation was set up, and dropped the user into a settings tree they
+                    // have no reason to understand yet. That exit belongs at the end, once there
+                    // is something to configure.
                     Step(
                         step,
-                        stringResource(R.string.setup_step3_title),
+                        stringResource(R.string.setup_step3_typing_ready),
                         stringResource(R.string.setup_step3_instruction, appName),
-                        stringResource(R.string.setup_step3_action),
-                        painterResource(R.drawable.sym_keyboard_language_switch),
-                        close
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    ActionRow(R.drawable.ic_vibevoice_active, stringResource(R.string.setup_step4_action), true) {
-                        step = 4
-                    }
+                        stringResource(R.string.setup_step4_action),
+                        painterResource(R.drawable.ic_vibevoice_active)
+                    ) { step = 4 }
                 } else if (step == 4) {
                     // The account first, because nothing else here does anything without it. Sent
                     // to the VibeVoice screen rather than reimplemented: the device flow there
@@ -278,6 +278,11 @@ fun WelcomeWizard(
                     Spacer(Modifier.height(4.dp))
                     ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_finish_action), true) {
                         finish()
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    // The settings, at the end, where leaving the wizard costs nothing.
+                    ActionRow(R.drawable.sym_keyboard_language_switch, stringResource(R.string.setup_step3_action), false) {
+                        close()
                     }
                 }
             }
