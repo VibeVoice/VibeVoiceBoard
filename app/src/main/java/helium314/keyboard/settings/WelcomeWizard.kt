@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -98,10 +101,16 @@ fun WelcomeWizard(
             }
     }
     val useWideLayout = isWideScreen()
-    val stepBackgroundColor = Color(ContextCompat.getColor(ctx, R.color.setup_step_background))
-    val textColor = Color(ContextCompat.getColor(ctx, R.color.setup_text_action))
-    val textColorDim = textColor.copy(alpha = 0.5f)
-    val titleColor = Color(ContextCompat.getColor(ctx, R.color.setup_text_title))
+    // The brand's palette, not res/values*/colors.xml. Those resolve to Material You on Android 12
+    // and up, so the wizard wore the user's wallpaper accent -- the loudest thing on a screen whose
+    // job is to be recognised as VibeVoice. See the note on Brand.
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val stepBackgroundColor = Brand.card(dark)
+    val stepBorderColor = Brand.cardBorder(dark)
+    val cardShape = RoundedCornerShape(Brand.corner.dp)
+    val textColor = Brand.text(dark)
+    val textColorDim = Brand.textFaint(dark)
+    val titleColor = Brand.text(dark)
     val appName = stringResource(ctx.applicationInfo.labelRes)
     @Composable fun bigText() {
         // Nothing above the hero. It carries the wordmark and the slogan itself, and a second
@@ -109,11 +118,15 @@ fun WelcomeWizard(
         if (step == 0) return
         val resource = R.string.setup_steps_title
         Column(Modifier.padding(bottom = 36.dp)) {
+            // Set the way the site sets its headline: uppercase and light, not a Material display
+            // face. It is the same voice two pages apart, which is the whole point of the exercise.
             Text(
-                stringResource(resource, appName),
-                style = MaterialTheme.typography.displayMedium,
+                stringResource(resource, appName).uppercase(),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Light,
                 textAlign = TextAlign.Center,
                 color = titleColor,
+                modifier = Modifier.fillMaxWidth()
             )
             if (JniUtils.sHaveGestureLib)
                 Text(
@@ -128,23 +141,27 @@ fun WelcomeWizard(
     @Composable
     fun ColumnScope.Step(step: Int, title: String, instruction: String, actionText: String, icon: Painter, action: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            (1..6).forEach { Text("$it", color = if (it == step) titleColor else textColorDim) }
+            (1..6).forEach { Text("$it", color = if (it == step) Brand.accent else textColorDim) }
         }
         Column(Modifier
+            .clip(cardShape)
             .background(color = stepBackgroundColor)
+            .border(1.dp, stepBorderColor, cardShape)
             .padding(16.dp)
         ) {
             Text(title)
-            Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = textColor))
+            Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = Brand.textDim(dark)))
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(8.dp))
         Row(
-            Modifier.clickable { action() }
+            Modifier.clip(cardShape)
+                .clickable { action() }
                 .background(color = stepBackgroundColor)
+                .border(1.dp, stepBorderColor, cardShape)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, null, Modifier.padding(end = 6.dp).size(32.dp), tint = textColor)
+            Icon(icon, null, Modifier.padding(end = 10.dp).size(28.dp), tint = Brand.accent)
             Text(actionText, Modifier.weight(1f))
         }
     }
@@ -162,24 +179,31 @@ fun WelcomeWizard(
         current: Int, titleC: Color, dimC: Color, bg: Color, textC: Color, title: String, instruction: String
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            (1..6).forEach { Text("$it", color = if (it == current) titleC else dimC) }
+            (1..6).forEach { Text("$it", color = if (it == current) Brand.accent else dimC) }
         }
-        Column(Modifier.background(color = bg).padding(16.dp)) {
+        Column(Modifier
+            .clip(cardShape)
+            .background(color = bg)
+            .border(1.dp, stepBorderColor, cardShape)
+            .padding(16.dp)
+        ) {
             Text(title)
             Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = textC))
         }
     }
     @Composable fun ActionRow(icon: Int, text: String, active: Boolean, onClick: () -> Unit) {
         Row(
-            Modifier.clickable { onClick() }
+            Modifier.clip(cardShape)
+                .clickable { onClick() }
                 .background(color = stepBackgroundColor)
+                .border(1.dp, stepBorderColor, cardShape)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 painterResource(icon), null,
-                Modifier.padding(end = 6.dp).size(32.dp),
-                tint = if (active) textColor else textColorDim
+                Modifier.padding(end = 10.dp).size(28.dp),
+                tint = if (active) Brand.accent else textColorDim
             )
             Text(text, Modifier.weight(1f))
         }
@@ -216,18 +240,20 @@ fun WelcomeWizard(
                         painterResource(R.drawable.ic_setup_select),
                         imm::showInputMethodPicker
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     Row(
-                        Modifier.clickable { close() }
+                        Modifier.clip(cardShape)
+                            .clickable { close() }
                             .background(color = stepBackgroundColor)
+                            .border(1.dp, stepBorderColor, cardShape)
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             painterResource(R.drawable.sym_keyboard_language_switch),
                             null,
-                            Modifier.padding(end = 6.dp).size(32.dp),
-                            tint = textColor
+                            Modifier.padding(end = 10.dp).size(28.dp),
+                            tint = Brand.accent
                         )
                         Text(stringResource(R.string.setup_step3_action), Modifier.weight(1f))
                     }
@@ -254,10 +280,10 @@ fun WelcomeWizard(
                     StepHeader(4, titleColor, textColorDim, stepBackgroundColor, textColor,
                         stringResource(R.string.setup_step4_title),
                         stringResource(R.string.setup_step4_instruction))
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     if (linked) {
                         ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_step4_linked), true) { }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(8.dp))
                         ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
                             step = 5
                         }
@@ -266,7 +292,12 @@ fun WelcomeWizard(
                         // which carries the account, the quota, bug reports and three tuning blocks
                         // -- everything except the one thing they came for. The panel is the same
                         // implementation that screen uses.
-                        Column(Modifier.background(color = stepBackgroundColor).padding(16.dp)) {
+                        Column(Modifier
+                            .clip(cardShape)
+                            .background(color = stepBackgroundColor)
+                            .border(1.dp, stepBorderColor, cardShape)
+                            .padding(16.dp)
+                        ) {
                             VibeVoiceLinkPanel { linked = true; step = 5 }
                         }
                     }
@@ -283,7 +314,7 @@ fun WelcomeWizard(
                     StepHeader(5, titleColor, textColorDim, stepBackgroundColor, textColor,
                         stringResource(R.string.setup_step5_title),
                         stringResource(R.string.setup_step5_instruction))
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     ActionRow(
                         if (mic) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
                         stringResource(if (mic) R.string.setup_step5_mic_granted else R.string.setup_step5_mic),
@@ -298,8 +329,13 @@ fun WelcomeWizard(
                         // any of that needs the server-side trial, which is P-058 in the VibeVoice
                         // repository.
                         var practice by rememberSaveable { mutableStateOf("") }
-                        Spacer(Modifier.height(4.dp))
-                        Column(Modifier.background(color = stepBackgroundColor).padding(16.dp)) {
+                        Spacer(Modifier.height(8.dp))
+                        Column(Modifier
+                            .clip(cardShape)
+                            .background(color = stepBackgroundColor)
+                            .border(1.dp, stepBorderColor, cardShape)
+                            .padding(16.dp)
+                        ) {
                             Text(
                                 stringResource(R.string.setup_step5_try_label),
                                 style = MaterialTheme.typography.bodyLarge.merge(color = textColor)
@@ -314,7 +350,7 @@ fun WelcomeWizard(
                             )
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
                         step = 6
                     }
@@ -329,7 +365,7 @@ fun WelcomeWizard(
                     StepHeader(6, titleColor, textColorDim, stepBackgroundColor, textColor,
                         stringResource(R.string.setup_step6_title),
                         stringResource(R.string.setup_step6_instruction))
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     ActionRow(
                         if (background) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
                         stringResource(R.string.setup_step6_background),
@@ -341,7 +377,7 @@ fun WelcomeWizard(
                     if (background) {
                         // Only now: allowing an overlay for a mark that can never appear is a
                         // permission asked for nothing.
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(8.dp))
                         ActionRow(
                             if (overlay) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
                             stringResource(if (overlay) R.string.setup_step6_overlay_granted
@@ -361,11 +397,11 @@ fun WelcomeWizard(
                             }
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_finish_action), true) {
                         finish()
                     }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     // The settings, at the end, where leaving the wizard costs nothing.
                     ActionRow(R.drawable.sym_keyboard_language_switch, stringResource(R.string.setup_step3_action), false) {
                         close()
@@ -373,12 +409,8 @@ fun WelcomeWizard(
                 }
             }
     }
-    val ground = MaterialTheme.colorScheme.surface
-    // Which palette the blobs take. The CSS has two, and they are not each other's inverse: the
-    // light one multiplies at 0.12 and the dark one screens at 0.165.
-    val dark = ground.luminance() < 0.5f
     Box(Modifier.fillMaxSize()) {
-        BrandBackground(ground, dark)
+        BrandBackground(dark)
         // The waves only on the hero. They are the keyboard's signature -- what a running session
         // looks like -- and putting them behind every page would spend that.
         if (step == 0) HeroWaves()

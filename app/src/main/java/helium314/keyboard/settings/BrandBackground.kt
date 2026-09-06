@@ -57,7 +57,8 @@ import kotlin.math.min
  * would then paint solid black. So this draws [background] first and blends over its own paint.
  */
 @Composable
-fun BrandBackground(background: Color, dark: Boolean, modifier: Modifier = Modifier) {
+fun BrandBackground(dark: Boolean, modifier: Modifier = Modifier) {
+    val background = if (dark) Brand.ground(true) else Brand.ground(false)
     val ctx = LocalContext.current
     // The Android equivalent of prefers-reduced-motion, checked the same way VoiceWaveView checks
     // it. Off means the blobs are drawn once, at their resting keyframe, and never move.
@@ -190,6 +191,54 @@ private const val ALPHA_DARK = 0.165f
 private const val PURPLE_PERIOD_MS = 25_000
 private const val GREEN_PERIOD_MS = 30_000
 private const val BLUE_PERIOD_MS = 35_000
+
+/**
+ * The brand's own palette, for surfaces that are meant to look like vibevoice.net.
+ *
+ * WHY THESE ARE NOT THE SETUP COLOURS THE WIZARD USED
+ *
+ * `res/values-night-v31/colors.xml` resolves setup_step_background to
+ * `@android:color/system_accent1_500` -- Material You, which is to say the user's wallpaper. On a
+ * green wallpaper the setup wizard is green, on a red one red, and on no device is it VibeVoice.
+ * That is a reasonable default for a keyboard that has no brand of its own; it is the wrong one for
+ * the two screens whose entire job is to be recognised.
+ *
+ * The ground is the load-bearing value here. `css/index.css` defines the site's dark ground as
+ * `--bg-color: #000000` and its hero fade as `--hero-gradient: #000`, and the blobs are calibrated
+ * against exactly that: at 0.165 screen they read on black and wash out on the dark grey that
+ * MaterialTheme calls a surface. Painting the ground grey was the difference between the landing
+ * page and a dark screen with a faint smudge in the corner.
+ */
+object Brand {
+    /** `--bg-color`, both themes. */
+    fun ground(dark: Boolean) = if (dark) Color(0xFF000000) else Color(0xFFFCFCFC)
+
+    /** `--primary-text-color`. */
+    fun text(dark: Boolean) = if (dark) Color(0xFFFFFFFF) else Color(0xFF000000)
+
+    /** Body copy under a heading: the same ink, stepped back. */
+    fun textDim(dark: Boolean) = text(dark).copy(alpha = 0.78f)
+
+    /** Step numbers that are not the current one, and anything else deliberately quiet. */
+    fun textFaint(dark: Boolean) = text(dark).copy(alpha = 0.35f)
+
+    /**
+     * The panel idiom from the landing page: a translucent card over the ground with a hairline
+     * edge, not a filled block. It lets the blobs through, which is the whole reason the site's
+     * cards look like they belong to the page behind them.
+     */
+    fun card(dark: Boolean) = if (dark) Color(0x0FFFFFFF) else Color(0x0A000000)
+    fun cardBorder(dark: Boolean) = if (dark) Color(0x24FFFFFF) else Color(0x1F000000)
+
+    /** primary-400, `tailwind.config.cjs`. The accent on icons and the current step. */
+    val accent = Color(0xFFA78BFA)
+
+    /** The "Start free" button: a solid pill in the ink colour, reversed out. */
+    fun onAction(dark: Boolean) = ground(dark)
+    fun action(dark: Boolean) = text(dark)
+
+    val corner = 14
+}
 
 // @keyframes move-purple-fy / move-green-fy / move-blue-fy: translate x, translate y, scale x,
 // scale y at 0%, 33%, 66%, 100%. Translations are a fraction of the blob's own size, as `translate`
