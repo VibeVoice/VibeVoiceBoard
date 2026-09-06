@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -56,7 +63,9 @@ import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings as KeySettings
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.vibevoice.VoiceOverlay
+import helium314.keyboard.latin.vibevoice.VoiceWaveView
 import helium314.keyboard.latin.utils.JniUtils
 import helium314.keyboard.latin.utils.Theme
 import helium314.keyboard.latin.utils.UncachedInputMethodManagerUtils
@@ -95,7 +104,10 @@ fun WelcomeWizard(
     val titleColor = Color(ContextCompat.getColor(ctx, R.color.setup_text_title))
     val appName = stringResource(ctx.applicationInfo.labelRes)
     @Composable fun bigText() {
-        val resource = if (step == 0) R.string.setup_welcome_title else R.string.setup_steps_title
+        // Nothing above the hero. It carries the wordmark and the slogan itself, and a second
+        // heading over them would be the page saying its own name twice.
+        if (step == 0) return
+        val resource = R.string.setup_steps_title
         Column(Modifier.padding(bottom = 36.dp)) {
             Text(
                 stringResource(resource, appName),
@@ -174,7 +186,7 @@ fun WelcomeWizard(
     }
     @Composable fun steps() {
         if (step == 0)
-            Step0 { step = 1 }
+            WizardHero { step = 1 }
         else
             Column {
                 val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -279,6 +291,29 @@ fun WelcomeWizard(
                     ) {
                         if (!mic) micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                     }
+                    if (mic) {
+                        // The first dictation, here, before the wizard is over. Everything up to
+                        // this point is a description of a thing; this is the thing. It works
+                        // because the account was linked in step 4 -- the version that runs before
+                        // any of that needs the server-side trial, which is P-058 in the VibeVoice
+                        // repository.
+                        var practice by rememberSaveable { mutableStateOf("") }
+                        Spacer(Modifier.height(4.dp))
+                        Column(Modifier.background(color = stepBackgroundColor).padding(16.dp)) {
+                            Text(
+                                stringResource(R.string.setup_step5_try_label),
+                                style = MaterialTheme.typography.bodyLarge.merge(color = textColor)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = practice,
+                                onValueChange = { practice = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(stringResource(R.string.setup_step5_try_hint)) },
+                                minLines = 3
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(4.dp))
                     ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
                         step = 6
@@ -338,7 +373,16 @@ fun WelcomeWizard(
                 }
             }
     }
-    Surface {
+    val ground = MaterialTheme.colorScheme.surface
+    // Which palette the blobs take. The CSS has two, and they are not each other's inverse: the
+    // light one multiplies at 0.12 and the dark one screens at 0.165.
+    val dark = ground.luminance() < 0.5f
+    Box(Modifier.fillMaxSize()) {
+        BrandBackground(ground, dark)
+        // The waves only on the hero. They are the keyboard's signature -- what a running session
+        // looks like -- and putting them behind every page would spend that.
+        if (step == 0) HeroWaves()
+        Surface(color = Color.Transparent) {
         CompositionLocalProvider(
             LocalContentColor provides textColor,
             LocalTextStyle provides MaterialTheme.typography.titleLarge.merge(color = textColor),
@@ -363,18 +407,65 @@ fun WelcomeWizard(
                     }
             }
         }
+        }
     }
 }
 
+/**
+ * The first page: the landing page's header, in the app.
+ *
+ * It used to be `setup_welcome_image` -- HeliBoard's illustration -- so the first thing anybody saw
+ * after installing said nothing about VibeVoice. This is the site's hero, element for element: the
+ * mark, the wordmark, the two slogan lines, the category line under them. Somebody who came from
+ * vibevoice.net recognises the app; somebody who starts here recognises the site later.
+ *
+ * One action, like the site's own hero. A second button beside the first competes with it for the
+ * same tap, and there is nothing else to do on this page.
+ */
 @Composable
-fun Step0(onClick: () -> Unit) {
+fun WizardHero(onClick: () -> Unit) {
+    val ctx = LocalContext.current
+    // Drawn through renderMark for the reason it exists: a vector's bounds are not its ink. The
+    // launcher foreground carries the adaptive-icon safe area, so laying it out at 160dp puts a
+    // mark of about a hundred on screen, off centre by whatever the artwork is off centre by.
+    val logo = remember {
+        val px = (ctx.resources.displayMetrics.density * HERO_LOGO_DP).toInt()
+        ContextCompat.getDrawable(ctx, R.drawable.ic_launcher_foreground)
+            ?.let { VoiceGlow.renderMark(it, px) }
+            ?.asImageBitmap()
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(painterResource(R.drawable.setup_welcome_image), null)
-        Row(Modifier.clickable { onClick() }
-            .padding(top = 4.dp, start = 4.dp, end = 4.dp)
-            //.background(color = MaterialTheme.colorScheme.primary)
-        ) {
-            Spacer(Modifier.weight(1f))
+        if (logo != null)
+            Image(BitmapPainter(logo), null, Modifier.size(HERO_LOGO_DP.dp))
+        else
+            Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(HERO_LOGO_DP.dp))
+        Spacer(Modifier.height(20.dp))
+        Text(
+            stringResource(R.string.brand_wordmark).uppercase(),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            stringResource(R.string.brand_slogan_line1),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Thin,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            stringResource(R.string.brand_slogan_line2),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Thin,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
+        Text(
+            stringResource(R.string.brand_subline),
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(28.dp))
+        Row(Modifier.clickable { onClick() }.padding(top = 4.dp, start = 4.dp, end = 4.dp)) {
             Text(
                 stringResource(R.string.setup_start_action),
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -382,6 +473,36 @@ fun Step0(onClick: () -> Unit) {
         }
     }
 }
+
+/**
+ * The waves behind the hero, with nothing speaking into them.
+ *
+ * The same [VoiceWaveView] the keyboard runs during a session, in its demo mode. Not a second
+ * implementation and not a video: it is the one piece of the landing page's hero that this app
+ * already had, and it costs a view and a sine to reuse it.
+ */
+@Composable
+private fun HeroWaves() {
+    AndroidView(
+        factory = { c -> VoiceWaveView(c).apply { startDemo(HERO_WAVE_COLOUR) } },
+        modifier = Modifier.fillMaxSize(),
+        // Leaving the page must stop the frame loop. VoiceWaveView stops itself on detach as well,
+        // but relying on that alone is how an animation outlives the thing that started it.
+        onRelease = { it.stop() }
+    )
+}
+
+/** Big enough to be the page's subject rather than an icon above a heading. */
+private const val HERO_LOGO_DP = 140
+
+/**
+ * The waves' colour on the hero, which is the brand's and not the keyboard theme's.
+ *
+ * `tailwind.config.cjs` primary-500. During a session the waves take ColorType.GESTURE_TRAIL so
+ * they belong to whatever theme the user picked; here there is no keyboard on screen and no session,
+ * and the page's whole job is to look like vibevoice.net.
+ */
+private const val HERO_WAVE_COLOUR = 0xFF8B5CF6.toInt()
 
 @Preview
 @Composable

@@ -1,31 +1,35 @@
-VibeVoiceBoard is a customizable Android keyboard with built-in voice typing, based on the open-source HeliBoard / AOSP keyboard.
+Stop typing. Start speaking.
 
-Speak instead of typing: hold the space bar or tap the microphone key, and your speech is transcribed into any text field, in any app.
+VibeVoiceBoard is a full Android keyboard with dictation built into it. Tap the mark in the toolbar or hold the space bar, say what you mean, and the text appears in whatever field you were already in — a message, an email, a document, a commit message. It is a keyboard first, so everything else about typing keeps working exactly as before.
 
-<b>Voice typing requires a VibeVoice account.</b> Transcription runs on the VibeVoice service, not on your device. The free tier includes 30 minutes of transcription per month; paid tiers offer more. You create the account in your browser and link it once from the app's settings. Everything else in the keyboard works without an account.
+<b>It writes the punctuation for you</b>
+Commas, full stops, question marks and sentence breaks are applied from how you speak, not from saying the word "comma". Casing too. A dictated paragraph comes out looking like a written one.
 
-<b>What is sent off the device</b>
-Voice typing needs the microphone and internet permissions. Audio is streamed to vibevoice.net only while a transcription session is active, that is, while you hold the space bar or after you tap the microphone key, and the keyboard shows that it is recording. Nothing is transmitted at any other time, and everything else the keyboard does works without a network connection.
+<b>Measured accuracy, published method</b>
+9.31% word error rate, averaged across twelve fixtures in six languages. That figure, the fixtures behind it and the way it is scored are all written up at vibevoice.net — including the one fixture we keep because dropping it would improve the number.
 
-If you submit a bug report from the settings, the diagnostic log is uploaded with it. That log can contain text you previously dictated. See the privacy policy for what is processed and retained.
+<b>Faster than your thumbs</b>
+People type at around 40 words a minute and speak at around 150. In the closest thing to a controlled measurement anybody has published (Ruan et al., ACM IMWUT 2017), speech ran at 153 words a minute against 52 typed. Roughly three times, on a phone keyboard, for anything longer than a line.
 
-Features:
-<ul>
-  <li>Voice typing in any text field, from the toolbar key or by holding the space bar</li>
-  <li>Add dictionaries for suggestions and spell check</li>
-  <li>Customize keyboard themes (style, colors and background image)</li>
-  <ul>
-    <li>can follow the system's day/night setting on Android 10+</li>
-    <li>can follow dynamic colors for Android 12+</li>
-  </ul>
-  <li>Customize keyboard layouts, and special layouts like symbols, number or functional keys</li>
-  <li>Multilingual typing</li>
-  <li>Emoji search</li>
-  <li>Clipboard history</li>
-  <li>One-handed mode</li>
-  <li>Split keyboard</li>
-  <li>Number pad</li>
-  <li>Backup and restore your settings and learned word / history data</li>
-</ul>
+<b>Over fifty languages</b>
+Recognition is not tied to your keyboard layout, and you do not have to tell it which language you are speaking.
 
-VibeVoiceBoard is free software licensed under the GNU General Public License v3.0. The complete source code is available at https://github.com/VibeVoice/VibeVoiceBoard
+<b>It keeps going when the keyboard closes</b>
+Switch this on and a dictation survives leaving the app. Start a thought in one place and finish it in another; a notification shows what has been heard so far and ends the session. Optionally a small floating mark stays on screen, pulsing with your voice, which you drag onto an X to stop.
+
+<b>Voice typing needs a VibeVoice account</b>
+Transcription runs on the VibeVoice service, not on your device. The free tier is 30 minutes a month at no cost; Pro is €3 a month for 180 minutes and Ultra €10 for 6000. You create the account in a browser and link it once — the app shows you a code and waits.
+
+Everything else in the keyboard works with no account and no network at all.
+
+<b>What leaves the device</b>
+Audio is streamed to vibevoice.net only while a session is running — while you hold the space bar, or after you tap the mark, with the keyboard visibly recording. Nothing is transmitted at any other time. Recordings are deleted as soon as the transcript exists or the attempt fails.
+
+If you send a bug report from the settings, the diagnostic log goes with it, and that log can contain text you dictated earlier. The privacy policy at vibevoice.net covers what is processed and how long it is kept.
+
+<b>A real keyboard underneath</b>
+VibeVoiceBoard is built on HeliBoard, itself derived from AOSP and OpenBoard, and it keeps what that gives you: multilingual typing with per-language layouts, glide typing, clipboard history, one-handed and split modes, a customisable toolbar, adjustable key height and spacing, themes with your own colours, and a layout editor. No ads, no tracking, and no account needed for any of it.
+
+Free software under the GNU General Public License v3.0.
+Source: https://github.com/VibeVoice/VibeVoiceBoard
+Service and privacy policy: https://vibevoice.net

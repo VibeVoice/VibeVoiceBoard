@@ -75,6 +75,17 @@ class VoiceWaveView @JvmOverloads constructor(
      */
     private var animationsEnabled = true
 
+    /**
+     * Whether the level comes from a microphone or from [demoLevel].
+     *
+     * The setup wizard's first page shows these waves behind the logo, where there is no session
+     * and no client to poll. It is the same view and the same maths on purpose: the waves are the
+     * one piece of the landing page the keyboard already had, and a second implementation of them
+     * for a decorative background would be a second thing to keep in step with the site.
+     */
+    private var demo = false
+    private var demoPhase = 0f
+
     init {
         isClickable = false
         isFocusable = false
@@ -87,6 +98,7 @@ class VoiceWaveView @JvmOverloads constructor(
      */
     fun start(source: VibeVoiceClient) {
         client = WeakReference(source)
+        demo = false
         readTuning()
         animationsEnabled = readAnimationsEnabled()
         // Resolved here and not in onDraw: the settings may legitimately not be loaded yet, and a
@@ -108,6 +120,28 @@ class VoiceWaveView @JvmOverloads constructor(
     }
 
     /**
+     * Starts the same animation with no microphone behind it, driven by [demoLevel].
+     *
+     * [colour] is passed in rather than resolved, because the wizard runs before a keyboard theme
+     * has necessarily been loaded and the accent it wants there is the brand's, not the current
+     * key-gesture colour.
+     */
+    fun startDemo(colour: Int) {
+        client = null
+        demo = true
+        readTuning()
+        animationsEnabled = readAnimationsEnabled()
+        baseColor = colour
+        if (running) return
+        running = true
+        phase = 0f
+        level = 0f
+        demoPhase = 0f
+        visibility = VISIBLE
+        invalidate()
+    }
+
+    /**
      * Stops it and leaves nothing behind. Must be reached on every path that ends a session,
      * including the ones that end it abnormally — a surviving frame callback here would keep the
      * keyboard redrawing after the microphone is long gone.
@@ -115,6 +149,7 @@ class VoiceWaveView @JvmOverloads constructor(
     fun stop() {
         running = false
         client = null
+        demo = false
         level = 0f
         visibility = GONE
         VibeVoiceDebugLogger.log("VoiceWaveView stop")
@@ -162,7 +197,7 @@ class VoiceWaveView @JvmOverloads constructor(
             return
         }
 
-        val raw = client?.get()?.currentLevel ?: 0f
+        val raw = if (demo) demoLevel() else client?.get()?.currentLevel ?: 0f
         // Asymmetric, the way a level meter behaves: jump at the onset of a syllable, fall back
         // slowly. The web component uses one constant for both directions, which is what made the
         // swell arrive late and then linger. Attack is more than three times the release here.
@@ -276,6 +311,20 @@ class VoiceWaveView @JvmOverloads constructor(
             .toInt().coerceIn(1, 12)
     }
 
+    /**
+     * A stand-in for a voice, for the wizard's background.
+     *
+     * Two detuned sines rather than one: a single sine breathes in an obvious period and reads as a
+     * loading animation. The second is deliberately not a harmonic of the first, so the sum never
+     * quite repeats over the few seconds anybody looks at it, and the swell lands somewhere
+     * different each time.
+     */
+    private fun demoLevel(): Float {
+        demoPhase += DEMO_STEP
+        return (DEMO_FLOOR + DEMO_SWING * sin(demoPhase) + DEMO_DETUNE * sin(demoPhase * DEMO_RATIO))
+            .coerceIn(0f, 1f)
+    }
+
     private fun readAnimationsEnabled(): Boolean = try {
         AndroidSettings.Global.getFloat(
             context.contentResolver, AndroidSettings.Global.ANIMATOR_DURATION_SCALE, 1f
@@ -285,6 +334,14 @@ class VoiceWaveView @JvmOverloads constructor(
     }
 
     companion object {
+        // The synthetic level: floor plus a slow swing, detuned by a second sine that is not a
+        // harmonic of the first. At 30fps the primary period is about eight seconds.
+        private const val DEMO_STEP = 0.026f
+        private const val DEMO_FLOOR = 0.34f
+        private const val DEMO_SWING = 0.30f
+        private const val DEMO_DETUNE = 0.14f
+        private const val DEMO_RATIO = 2.7f
+
         private const val FRAME_INTERVAL_MS = 33L // ~30fps; 60 buys nothing here and costs battery
         // Multiples of the fundamental, which is a setting. Not whole numbers on purpose: an exact
         // double beats visibly and the composite starts to read as a repeat.

@@ -1,31 +1,35 @@
-HeliBoard ist eine datenschutzbewusste quelloffene Tastatur, die auf AOSP / OpenBoard basiert.
-Verwendet keine Internetberechtigung und ist daher zu 100 % offline.
+Stop typing. Start speaking.
 
-Features:
-<ul>
-   <li>Wörterbücher für Vorschläge und Rechtschreibprüfung hinzufügen</li>
-   <ul>
-     <li>Erstelle deine eigenen oder hole sie dir <a href="https://codeberg.org/Helium314/aosp-dictionaries#dictionaries">hier</a> oder im <a href="https://codeberg.org/Helium314/aosp-dictionaries#experimental-dictionaries">experimentellen</a> Bereich (Qualität kann variieren)</li>
-     <li>Zusätzliche Wörterbücher für Emojis oder wissenschaftliche Symbole können zur Bereitstellung von Vorschlägen genutzt werden (ähnlich wie bei der „Emoji-Suche“)</li>
-     <li>Beachte, dass die Vorschläge für koreanische Layouts nur mit <a href="https://github.com/openboard-team/openboard/commit/83fca9533c03b9fecc009fc632577226bbd6301f">diesem Wörterbuch</a> funktionieren, die Werkzeuge im Wörterbuch-Repository können keine funktionierenden Wörterbücher erstellen</li>
-   </ul>
-   <li>Tastaturdesigns anpassen (Stil, Farben und Hintergrundbild)</li>
-   <ul>
-     <li>kann der Tag-/Nachteinstellung des Systems auf Android 10+ (und auf einigen Versionen von Android 9) folgen</li>
-     <li>kann dynamischen Farben für Android 12+ folgen</li>
-   </ul>
-   <li>Tastatur-<a href="https://github.com/HeliBorg/HeliBoard/blob/main/layouts.md">Layouts</a> anpassen (nur verfügbar, wenn <i>Systemsprachen verwenden</i deaktiviert ist >)
-   </li>Anpassen spezieller Layouts, wie Symbole, Zahlen oder Funktionstastenlayout</li>
-   <li>Mehrsprachiges Tippen</li>
-   <li>Gleitendes Tippen (<i>nur mit quellgeschlossener Bibliothek</i> ☹️)</li>
-   <ul>
-     <li>Bibliothek nicht in der App enthalten, da keine kompatible quelloffene Bibliothek verfügbar ist</li>
-     <li>kann aus GApps-Paketen („<i>swypelibs</i>“) extrahiert oder heruntergeladen werden <a href="https://github.com/erkserkserks/openboard/tree/46fdf2b550035ca69299ce312fa158e7ade36967/app/src/main /jniLibs">hier</a>
-(klicke auf die Datei und dann auf "raw" oder den kleinen Download-Button)</li>
-   </ul>
-   <li>Zwischenablageverlauf</li>
-   <li>Einhandmodus</li>
-   <li>Geteilte Tastatur (nur verfügbar, wenn der Bildschirm groß genug ist)</li>
-   <li>Ziffernblock</li>
-   <li>Sichere und stelle deine Einstellungen und gelernte Wort-/Verlaufsdaten wieder her</li>
-</ul>
+VibeVoiceBoard ist eine vollwertige Android-Tastatur mit eingebautem Diktat. Tippe oben auf die Marke oder halte die Leertaste, sag was du meinst, und der Text steht in dem Feld, in dem du sowieso schon warst – Nachricht, E-Mail, Dokument, Commit-Message. Es ist zuerst eine Tastatur: alles andere am Tippen funktioniert genau wie vorher.
+
+<b>Die Satzzeichen kommen von selbst</b>
+Kommas, Punkte, Fragezeichen und Satzgrenzen entstehen daraus, wie du sprichst – nicht daraus, dass du „Komma" sagst. Die Großschreibung ebenso. Ein diktierter Absatz sieht aus wie ein geschriebener.
+
+<b>Gemessene Genauigkeit, offengelegte Methode</b>
+9,31 % Wortfehlerrate, gemittelt über zwölf Prüfsätze in sechs Sprachen. Die Zahl, die Prüfsätze dahinter und die Art der Auswertung stehen auf vibevoice.net – einschließlich des einen Prüfsatzes, den wir behalten, obwohl das Weglassen die Zahl verbessern würde.
+
+<b>Schneller als deine Daumen</b>
+Menschen tippen etwa 40 Wörter pro Minute und sprechen etwa 150. In der einzigen halbwegs kontrollierten Messung, die dazu veröffentlicht ist (Ruan et al., ACM IMWUT 2017), lag Sprache bei 153 Wörtern pro Minute gegen 52 getippte. Also grob das Dreifache, auf einer Handytastatur, für alles was länger als eine Zeile ist.
+
+<b>Über fünfzig Sprachen</b>
+Die Erkennung hängt nicht an deinem Tastaturlayout, und du musst ihr nicht sagen, welche Sprache du gerade sprichst.
+
+<b>Es läuft weiter, wenn die Tastatur zugeht</b>
+Einmal eingeschaltet, überlebt ein Diktat den Wechsel in eine andere App. Fang einen Gedanken hier an und beende ihn dort; eine Benachrichtigung zeigt das bisher Gehörte und beendet die Sitzung. Auf Wunsch bleibt eine kleine schwebende Marke auf dem Bildschirm, die mit deiner Stimme pulsiert und die du zum Beenden auf ein X ziehst.
+
+<b>Für das Diktat braucht es ein VibeVoice-Konto</b>
+Die Transkription läuft auf dem VibeVoice-Dienst, nicht auf deinem Gerät. Der kostenlose Tarif umfasst 30 Minuten pro Monat; Pro kostet 3 € im Monat für 180 Minuten, Ultra 10 € für 6000. Das Konto legst du im Browser an und verknüpfst es einmal – die App zeigt dir einen Code und wartet.
+
+Alles andere an der Tastatur funktioniert ohne Konto und ohne Netz.
+
+<b>Was das Gerät verlässt</b>
+Audio wird nur zu vibevoice.net übertragen, solange eine Sitzung läuft – während du die Leertaste hältst oder nachdem du auf die Marke getippt hast, und die Tastatur sichtbar aufnimmt. Zu keinem anderen Zeitpunkt wird etwas gesendet. Aufnahmen werden gelöscht, sobald das Transkript vorliegt oder der Versuch fehlschlägt.
+
+Wenn du aus den Einstellungen einen Fehlerbericht schickst, geht das Diagnoseprotokoll mit, und darin kann Text stehen, den du vorher diktiert hast. Die Datenschutzerklärung auf vibevoice.net beschreibt, was verarbeitet und wie lange es aufbewahrt wird.
+
+<b>Darunter eine richtige Tastatur</b>
+VibeVoiceBoard baut auf HeliBoard auf, das seinerseits von AOSP und OpenBoard abstammt, und behält, was das mitbringt: mehrsprachiges Tippen mit eigenen Layouts je Sprache, Wischtippen, Zwischenablage-Verlauf, Einhand- und geteilter Modus, anpassbare Werkzeugleiste, einstellbare Tastenhöhe und -abstände, Themes mit eigenen Farben und ein Layout-Editor. Keine Werbung, kein Tracking, und für all das kein Konto.
+
+Freie Software unter der GNU General Public License v3.0.
+Quellcode: https://github.com/VibeVoice/VibeVoiceBoard
+Dienst und Datenschutzerklärung: https://vibevoice.net

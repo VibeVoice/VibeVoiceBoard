@@ -121,4 +121,9 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_step6_background">Weiter transkribieren, wenn die Tastatur zugeht (optional)</string>
     <string name="setup_step6_overlay">Marke dabei anzeigen – öffnet die Systemeinstellungen (optional)</string>
     <string name="setup_step6_overlay_granted">Die Marke wird angezeigt</string>
+
+    <!-- Wortmarke und Slogan bleiben englisch, siehe die Begruendung in values/strings.xml. -->
+    <string name="brand_subline">Sprache zu Text, überall wo du tippst.</string>
+    <string name="setup_step5_try_label">Probier es gleich aus</string>
+    <string name="setup_step5_try_hint">Hier tippen und losdiktieren…</string>
 </resources>

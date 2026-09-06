@@ -734,6 +734,19 @@ language, hence "No language". -->
     <string name="setup_step6_background">Keep transcribing after the keyboard closes (optional)</string>
     <string name="setup_step6_overlay">Show the mark while it runs \u2014 opens system settings (optional)</string>
     <string name="setup_step6_overlay_granted">The mark will be shown</string>
+
+    <!-- The brand, shown on the wizard's first page. The wordmark and the slogan are the same two
+         lines the landing page opens with, and they stay English everywhere: a slogan is a name for
+         a thing, not a sentence about it, and a translated one is a different slogan. The line
+         below them is an ordinary sentence and is translated. -->
+    <string name="brand_wordmark" translatable="false">VibeVoice</string>
+    <string name="brand_slogan_line1" translatable="false">Stop typing.</string>
+    <string name="brand_slogan_line2" translatable="false">Start speaking.</string>
+    <string name="brand_subline">Speech to text for everywhere you type.</string>
+
+    <!-- The practice field, step 5. Shown only once the microphone has been granted. -->
+    <string name="setup_step5_try_label">Try it now</string>
+    <string name="setup_step5_try_hint">Tap here, then start dictating…</string>
     <string name="setup_finish_action">Finished</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
