@@ -116,4 +116,9 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_step5_instruction">Tippe oben rechts auf das V. Es leuchtet, solange die Tastatur zuhört, und ein weiterer Tipp beendet es. Ein langer Druck auf die Leertaste tut dasselbe, ohne die Tasten zu verlassen – einmal drücken, loslassen, weiterreden.</string>
     <string name="setup_step5_mic">Mikrofon erlauben</string>
     <string name="setup_step5_mic_granted">Mikrofon erlaubt</string>
+    <string name="setup_step6_title">"Zwei Extras, wenn du magst"</string>
+    <string name="setup_step6_instruction">Normalerweise endet das Diktat, wenn die Tastatur zugeht. Schalte das an, und es läuft weiter – du kannst hier zu sprechen anfangen und in einer anderen App fertig werden.</string>
+    <string name="setup_step6_background">Weiter transkribieren, wenn die Tastatur zugeht (optional)</string>
+    <string name="setup_step6_overlay">Marke dabei anzeigen – öffnet die Systemeinstellungen (optional)</string>
+    <string name="setup_step6_overlay_granted">Die Marke wird angezeigt</string>
 </resources>

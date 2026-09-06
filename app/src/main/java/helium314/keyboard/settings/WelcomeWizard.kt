@@ -52,7 +52,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.Settings as KeySettings
+import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import helium314.keyboard.latin.vibevoice.VoiceOverlay
 import helium314.keyboard.latin.utils.JniUtils
 import helium314.keyboard.latin.utils.Theme
 import helium314.keyboard.latin.utils.UncachedInputMethodManagerUtils
@@ -112,7 +116,7 @@ fun WelcomeWizard(
     @Composable
     fun ColumnScope.Step(step: Int, title: String, instruction: String, actionText: String, icon: Painter, action: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            (1..5).forEach { Text("$it", color = if (it == step) titleColor else textColorDim) }
+            (1..6).forEach { Text("$it", color = if (it == step) titleColor else textColorDim) }
         }
         Column(Modifier
             .background(color = stepBackgroundColor)
@@ -146,7 +150,7 @@ fun WelcomeWizard(
         current: Int, titleC: Color, dimC: Color, bg: Color, textC: Color, title: String, instruction: String
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            (1..5).forEach { Text("$it", color = if (it == current) titleC else dimC) }
+            (1..6).forEach { Text("$it", color = if (it == current) titleC else dimC) }
         }
         Column(Modifier.background(color = bg).padding(16.dp)) {
             Text(title)
@@ -239,22 +243,22 @@ fun WelcomeWizard(
                         stringResource(R.string.setup_step4_title),
                         stringResource(R.string.setup_step4_instruction))
                     Spacer(Modifier.height(4.dp))
-                    ActionRow(
-                        if (linked) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
-                        stringResource(if (linked) R.string.setup_step4_linked else R.string.setup_step4_link),
-                        linked
-                    ) {
-                        if (!linked) {
-                            val intent = Intent(ctx, SettingsActivity2::class.java)
-                                .putExtra("startDestination", "vibevoice")
-                            launcher.launch(intent)
+                    if (linked) {
+                        ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_step4_linked), true) { }
+                        Spacer(Modifier.height(4.dp))
+                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
+                            step = 5
+                        }
+                    } else {
+                        // Linked here rather than by sending the user into the settings screen,
+                        // which carries the account, the quota, bug reports and three tuning blocks
+                        // -- everything except the one thing they came for. The panel is the same
+                        // implementation that screen uses.
+                        Column(Modifier.background(color = stepBackgroundColor).padding(16.dp)) {
+                            VibeVoiceLinkPanel { linked = true; step = 5 }
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
-                        step = 5
-                    }
-                } else { // step 5: the microphone, and how dictation is actually started
+                } else if (step == 5) { // the microphone, and how dictation is actually started
                     var mic by rememberSaveable {
                         mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
                                 == android.content.pm.PackageManager.PERMISSION_GRANTED)
@@ -274,6 +278,53 @@ fun WelcomeWizard(
                         mic
                     ) {
                         if (!mic) micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
+                        step = 6
+                    }
+                } else { // step 6: optional, and chained -- the second offer only means something
+                         // once the first has been taken
+                    val prefs = ctx.prefs()
+                    var background by rememberSaveable {
+                        mutableStateOf(prefs.getBoolean(KeySettings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
+                    }
+                    var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
+                    OnResume { overlay = VoiceOverlay.isAllowed(ctx) }
+                    StepHeader(6, titleColor, textColorDim, stepBackgroundColor, textColor,
+                        stringResource(R.string.setup_step6_title),
+                        stringResource(R.string.setup_step6_instruction))
+                    Spacer(Modifier.height(4.dp))
+                    ActionRow(
+                        if (background) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
+                        stringResource(R.string.setup_step6_background),
+                        background
+                    ) {
+                        background = !background
+                        prefs.edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, background).apply()
+                    }
+                    if (background) {
+                        // Only now: allowing an overlay for a mark that can never appear is a
+                        // permission asked for nothing.
+                        Spacer(Modifier.height(4.dp))
+                        ActionRow(
+                            if (overlay) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
+                            stringResource(if (overlay) R.string.setup_step6_overlay_granted
+                                else R.string.setup_step6_overlay),
+                            overlay
+                        ) {
+                            if (!overlay) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    android.net.Uri.parse("package:" + ctx.packageName)
+                                )
+                                try {
+                                    launcher.launch(intent)
+                                } catch (_: android.content.ActivityNotFoundException) {
+                                    // Some builds have no such screen. Nothing else breaks.
+                                }
+                            }
+                        }
                     }
                     Spacer(Modifier.height(4.dp))
                     ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_finish_action), true) {

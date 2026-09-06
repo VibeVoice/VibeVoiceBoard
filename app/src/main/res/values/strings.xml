@@ -729,6 +729,11 @@ language, hence "No language". -->
     <string name="setup_step5_instruction">Tap the V in the top row to start. It glows while the keyboard is listening, and tapping it again stops. A long press on the space bar does the same without leaving the keys \u2014 press once, let go, keep talking.</string>
     <string name="setup_step5_mic">Allow the microphone</string>
     <string name="setup_step5_mic_granted">Microphone allowed</string>
+    <string name="setup_step6_title">"Two extras, if you want them"</string>
+    <string name="setup_step6_instruction">Dictation normally stops when the keyboard closes. Turn this on and it carries on, so you can start talking here and finish in another app.</string>
+    <string name="setup_step6_background">Keep transcribing after the keyboard closes (optional)</string>
+    <string name="setup_step6_overlay">Show the mark while it runs \u2014 opens system settings (optional)</string>
+    <string name="setup_step6_overlay_granted">The mark will be shown</string>
     <string name="setup_finish_action">Finished</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
