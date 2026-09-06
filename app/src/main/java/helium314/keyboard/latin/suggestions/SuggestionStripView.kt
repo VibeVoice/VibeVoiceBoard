@@ -10,11 +10,18 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.graphics.Color
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.OvalShape
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.Gravity
+import androidx.core.content.ContextCompat
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.LayoutInflater
@@ -46,6 +53,7 @@ import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.ToolbarMode
 import helium314.keyboard.latin.utils.addPinnedKey
@@ -505,6 +513,28 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
+    /**
+     * The glow drawable that sits behind the active microphone key.
+     *
+     * Centred and not stretched: a BitmapDrawable used as a background is scaled to the view by
+     * default, which would pull the light out of shape as the key's size changes.
+     */
+    private fun buildVoiceGlow(mark: Drawable, box: Int, accent: Int, prefs: SharedPreferences): Drawable? {
+        val margin = IntArray(1)
+        val bitmap = VoiceGlow.render(
+            mark, box, accent,
+            prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE),
+            prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN),
+            margin
+        ) ?: return null
+        return BitmapDrawable(resources, bitmap).apply { gravity = Gravity.CENTER }
+    }
+
+    /** The rendered pieces, and what they were rendered for. */
+    private var voiceActiveMark: android.graphics.Bitmap? = null
+    private var voiceActiveGlow: Drawable? = null
+    private var voiceActiveKey: String? = null
+
     fun updateVoiceKey() {
         val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
         // VibeVoice key is always visible — it is not gated on system voice IME availability
@@ -517,10 +547,41 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         button.isVisible = show
         button.isActivated = isActivated
         if (isActivated) {
-            button.setImageResource(R.drawable.ic_vibevoice_active)
-            button.background = null
+            // The full VibeVoice logo while recording -- the two-tone one with the dark backing
+            // shape, the same artwork the floating mark uses. Not tinted: TOOL_BAR_KEY would
+            // flatten both tones into one and throw away the thing that makes it read as the logo
+            // rather than as a glyph.
+            val plain = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
+            val inkPx = plain?.intrinsicWidth?.takeIf { it > 0 }
+                ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
+            // Built once and kept. updateVoiceKey runs on every recording state change and on every
+            // window show, and rebuilding here meant a software blur and several bitmap
+            // allocations on the UI thread each time -- during a rotation, exactly when there is
+            // least room for it.
+            val prefs = context.prefs()
+            val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
+            val key = "$inkPx|$accent|" +
+                    prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE) + "|" +
+                    prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN)
+            if (key != voiceActiveKey) {
+                val logo = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+                // Sized by its ink, not its viewport: the launcher artwork carries an adaptive
+                // icon's padding, so drawn at its own bounds it would sit a third smaller than the
+                // key it replaces.
+                voiceActiveMark = logo?.let { VoiceGlow.renderMark(it, inkPx) }
+                voiceActiveGlow = voiceActiveMark?.let {
+                    buildVoiceGlow(BitmapDrawable(resources, it), inkPx, accent, prefs)
+                }
+                voiceActiveKey = key
+            }
+            val mark = voiceActiveMark
             button.clearColorFilter()
-            button.scaleType = ImageView.ScaleType.FIT_CENTER
+            if (mark != null) button.setImageBitmap(mark) else button.setImageDrawable(plain)
+            button.scaleType = ImageView.ScaleType.CENTER
+            // The glow goes on the layer underneath as the view's background, which is also what
+            // keeps it out of any tint: a colour filter on an ImageView applies to its image and
+            // not to its background.
+            button.background = voiceActiveGlow
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"
@@ -584,5 +645,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         var DEBUG_SUGGESTIONS = false
         private const val DEBUG_INFO_TEXT_SIZE_IN_DIP = 6.5f
         private val TAG = SuggestionStripView::class.java.simpleName
+        /** The box the glowing mark is rendered at; FIT_CENTER scales it to whatever the key is. */
+        private const val VOICE_GLOW_BOX_DP = 40f
     }
 }

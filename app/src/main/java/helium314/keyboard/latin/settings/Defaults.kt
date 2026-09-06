@@ -98,6 +98,38 @@ object Defaults {
     val PREF_KEY_GAP_SCALE = Array(4) { DEFAULT_SIZE_SCALE }
     const val PREF_FONT_SCALE = DEFAULT_SIZE_SCALE
     /** Peak excursion as a fraction of the gap between waves, before the level multiplies it. */
+    // Off by default: a keyboard that keeps the microphone open after it is dismissed is not what
+    // anyone expects of a keyboard, so it is something the user turns on rather than discovers.
+    const val PREF_VOICE_BACKGROUND = false
+    // On by default: a session running without the keyboard needs something on screen saying so,
+    // and this is the part of that a user can actually see without pulling the shade down.
+    /** Whether the one-off "this could have kept running" notice has been shown. */
+    const val PREF_BG_HINT_SHOWN = false
+    const val PREF_OVERLAY_ENABLED = true
+    // The geometry is expressed from the inside out -- the V decides the size, the padding decides
+    // the disc, the bars grow outward from it -- so changing one does not silently rescale the rest.
+    const val PREF_OVERLAY_ICON = 32f
+    const val PREF_OVERLAY_PADDING = 6f
+    const val PREF_OVERLAY_BARS = 14f
+    const val PREF_OVERLAY_BAR_WIDTH = 3.0f
+    const val PREF_OVERLAY_BAR_COUNT = 36f
+    const val PREF_OVERLAY_REST = 0.06f
+    // The glow behind the mark, in the toolbar and on the floating mark alike. Size is the blur
+    // radius as a fraction of the mark; gain is how far the blurred coverage is multiplied before
+    // it is painted. They are separate because one moves how far the light reaches and the other
+    // how solid it is, and tuning either through the other never worked.
+    // These are also what ships: in a release build the sliders are gone, so the defaults are the
+    // whole of it.
+    const val PREF_GLOW_SIZE = 0.20f
+    const val PREF_GLOW_GAIN = 1.0f
+    // The floating mark's own pair. Separate from the toolbar's because the mark sits on a dark
+    // disc with nothing else competing, where the same numbers read considerably stronger -- and
+    // because the toolbar's are settled and must not move when this is tuned.
+    const val PREF_OVERLAY_GLOW_SIZE = 0.08f
+    const val PREF_OVERLAY_GLOW_GAIN = 1.0f
+    /** Where the mark was left. Negative means it has never been moved. */
+    const val PREF_OVERLAY_X = -1
+    const val PREF_OVERLAY_Y = -1
     const val PREF_WAVE_AMPLITUDE = 0.19f
     /** How much a loud voice multiplies the amplitude. */
     const val PREF_WAVE_REACTION = 4.0f

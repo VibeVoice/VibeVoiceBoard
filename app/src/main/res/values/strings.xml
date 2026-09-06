@@ -75,8 +75,39 @@
     <!-- Shown when the microphone stopped delivering audio and restarting it did not help -->
     <string name="vibevoice_mic_unavailable">Microphone stopped working. Transcription stopped.</string>
     <!-- Section heading for the sliders that shape the sound waves drawn behind the keys -->
+    <!-- Background dictation -->
+    <string name="vibevoice_background_hint">Dictation stopped because the keyboard closed. It can keep running instead \u2014 see \"Keep listening in the background\" in VibeVoice settings.</string>
+    <string name="vibevoice_background_title">Keep listening in the background</string>
+    <string name="vibevoice_background_desc">Off, dictation ends when the keyboard closes and whatever was said until then is committed. On, it carries on while you switch apps, and a notification shows what is being heard with a button to stop it.</string>
+    <string name="vibevoice_background_switch">Carry on after the keyboard closes</string>
+    <string name="vibevoice_session_channel">Dictation session</string>
+    <string name="vibevoice_session_title">VibeVoice is listening</string>
+    <string name="vibevoice_session_listening">Waiting for speech\u2026</string>
+    <string name="vibevoice_session_stop">Stop</string>
+    <string name="vibevoice_overlay_title">Floating mark</string>
+    <string name="vibevoice_overlay_show">Show the floating mark</string>
+    <string name="vibevoice_overlay_tuning_title">Floating mark</string>
+    <string name="vibevoice_overlay_tuning_desc">Size and shape of the mark. It is built from the inside out, so each of these moves one thing: a change applies the next time the mark appears.</string>
+    <string name="vibevoice_overlay_icon">Mark size</string>
+    <string name="vibevoice_overlay_padding">Padding</string>
+    <string name="vibevoice_overlay_bars">Waveform length</string>
+    <string name="vibevoice_overlay_bar_width">Bar width</string>
+    <string name="vibevoice_overlay_bar_count">Bar count</string>
+    <string name="vibevoice_overlay_rest">Resting height</string>
+    <string name="vibevoice_overlay_glow_size">Glow size (mark)</string>
+    <string name="vibevoice_overlay_glow_gain">Glow strength (mark)</string>
+    <string name="vibevoice_glow_title">Microphone key glow</string>
+    <string name="vibevoice_glow_desc">The light behind the microphone key in the keyboard\'s top row while a session is running. The floating mark has its own glow, tuned separately.</string>
+    <string name="vibevoice_glow_size">Glow size</string>
+    <string name="vibevoice_glow_gain">Glow strength</string>
+    <string name="vibevoice_overlay_desc">While a session runs without the keyboard, show the VibeVoice mark on screen. It pulses with what is being heard, and it is dragged onto the X at the bottom to end the session.</string>
+    <string name="vibevoice_overlay_grant">Allow drawing over other apps</string>
+    <string name="vibevoice_no_overlay_settings">This device has no screen for the permission. Look for \"Display over other apps\" in the system settings under VibeVoiceBoard.</string>
+    <string name="vibevoice_overlay_granted">Allowed</string>
+    <string name="vibevoice_session_finishing">Finishing the last sentence\u2026</string>
+    <string name="vibevoice_background_needs_notifications">Allow notifications, or a session running in the background has no visible indicator and no way to stop it.</string>
     <string name="vibevoice_waves_title">Sound waves</string>
-    <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. Changes apply immediately \u2014 open a chat next to this screen and hold space to watch them.</string>
+    <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. A change takes effect the next time you start dictating.</string>
     <string name="vibevoice_waves_amplitude">Size</string>
     <string name="vibevoice_waves_reaction">Reaction to your voice</string>
     <string name="vibevoice_waves_attack">Attack (how fast it rises)</string>
@@ -88,7 +119,9 @@
     <string name="vibevoice_waves_jitter">Roughness</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
-    <string name="vibevoice_hold_to_transcribe">Hold to Transcribe</string>
+    <!-- On the space bar while a session runs. %s is the elapsed time, m:ss. -->
+    <string name="vibevoice_transcribing_timer">Transcribing… %s</string>
+    <string name="vibevoice_hold_to_transcribe">Long-press to dictate</string>
     <string name="privacy_policy">Privacy Policy</string>
     <!-- Bug reporting strings -->
     <string name="vibevoice_report_bug_title">Report a Bug</string>
@@ -684,6 +717,23 @@ language, hence "No language". -->
     <!-- The label of the button that triggers the settings screen for the keyboard. -->
     <string name="setup_step3_action">Configure the keyboard</string>
     <!-- The label of the button that finishes the setup wizard. -->
+    <!-- Replaces upstream's "you're all set" at step 3: this wizard has two more steps after it. -->
+    <string name="setup_step3_typing_ready">"Typing works"</string>
+    <string name="setup_step4_action">Set up dictation</string>
+    <string name="setup_step4_title">"Connect your VibeVoice account"</string>
+    <string name="setup_step4_instruction">Dictation is transcribed by VibeVoice, so the keyboard needs an account to talk to. It is free, and linking takes a browser tab.</string>
+    <string name="setup_step4_link">Link an account</string>
+    <string name="setup_step4_linked">Account linked</string>
+    <string name="setup_next_action">Next</string>
+    <string name="setup_step5_title">"Let it hear you"</string>
+    <string name="setup_step5_instruction">Tap the V in the top row to start. It glows while the keyboard is listening, and tapping it again stops. A long press on the space bar does the same without leaving the keys \u2014 press once, let go, keep talking.</string>
+    <string name="setup_step5_mic">Allow the microphone</string>
+    <string name="setup_step5_mic_granted">Microphone allowed</string>
+    <string name="setup_step6_title">"Two extras, if you want them"</string>
+    <string name="setup_step6_instruction">Dictation normally stops when the keyboard closes. Turn this on and it carries on, so you can start talking here and finish in another app.</string>
+    <string name="setup_step6_background">Keep transcribing after the keyboard closes (optional)</string>
+    <string name="setup_step6_overlay">Show the mark while it runs \u2014 opens system settings (optional)</string>
+    <string name="setup_step6_overlay_granted">The mark will be shown</string>
     <string name="setup_finish_action">Finished</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>

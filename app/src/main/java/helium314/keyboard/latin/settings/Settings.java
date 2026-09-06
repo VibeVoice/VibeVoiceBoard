@@ -111,6 +111,21 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_FLOATING_POS_Y_PREFIX = "floating_pos_y";
     public static final String PREF_FONT_SCALE = "font_scale";
     // Voice wave background, tunable from the VibeVoice settings screen
+    public static final String PREF_VOICE_BACKGROUND = "vibevoice_background_dictation";
+    public static final String PREF_BG_HINT_SHOWN = "vibevoice_background_hint_shown";
+    public static final String PREF_OVERLAY_ENABLED = "vibevoice_overlay_enabled";
+    public static final String PREF_OVERLAY_ICON = "vibevoice_overlay_icon";
+    public static final String PREF_OVERLAY_PADDING = "vibevoice_overlay_padding";
+    public static final String PREF_OVERLAY_BARS = "vibevoice_overlay_bars";
+    public static final String PREF_OVERLAY_BAR_WIDTH = "vibevoice_overlay_bar_width";
+    public static final String PREF_OVERLAY_BAR_COUNT = "vibevoice_overlay_bar_count";
+    public static final String PREF_OVERLAY_REST = "vibevoice_overlay_rest";
+    public static final String PREF_GLOW_SIZE = "vibevoice_glow_size";
+    public static final String PREF_GLOW_GAIN = "vibevoice_glow_gain";
+    public static final String PREF_OVERLAY_GLOW_SIZE = "vibevoice_overlay_glow_size";
+    public static final String PREF_OVERLAY_GLOW_GAIN = "vibevoice_overlay_glow_gain";
+    public static final String PREF_OVERLAY_X = "vibevoice_overlay_x";
+    public static final String PREF_OVERLAY_Y = "vibevoice_overlay_y";
     public static final String PREF_WAVE_AMPLITUDE = "vibevoice_wave_amplitude";
     public static final String PREF_WAVE_REACTION = "vibevoice_wave_reaction";
     public static final String PREF_WAVE_CYCLES = "vibevoice_wave_cycles";

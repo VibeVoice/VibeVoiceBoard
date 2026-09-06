@@ -849,6 +849,13 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         return newLocales;
     }
 
+    /** Repaints the space bar alone, for the dictation clock. */
+    public void invalidateSpaceKey() {
+        final Keyboard keyboard = getKeyboard();
+        if (keyboard == null) return;
+        invalidateKey(keyboard.getKey(Constants.CODE_SPACE));
+    }
+
     private void drawLanguageOnSpacebar(final Key key, final Canvas canvas, final Paint paint) {
         final Keyboard keyboard = getKeyboard();
         if (keyboard == null) {
@@ -861,7 +868,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final String spaceText;
         final LatinIME latinIME = KeyboardSwitcher.getInstance().getLatinIME();
         if (latinIME != null && latinIME.isRecordingVoice()) {
-            spaceText = getContext().getString(R.string.vibevoice_transcribing);
+            // Counting up, because "Transcribing…" on its own says nothing about whether anything
+            // is still happening -- a stalled session and a working one look identical.
+            final long seconds = latinIME.getVoiceElapsedSeconds();
+            spaceText = getContext().getString(R.string.vibevoice_transcribing_timer,
+                    String.format(java.util.Locale.US, "%d:%02d", seconds / 60, seconds % 60));
         } else {
             spaceText = getContext().getString(R.string.vibevoice_hold_to_transcribe);
         }
