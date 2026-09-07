@@ -37,5 +37,9 @@ tools/.build.lock
 # Release signing material - never commit
 keystore.properties
 *.jks
+
+# The Play service-account key. It can publish to the store as us, so it is the one file in this
+# tree whose leak would be worse than the signing key's: that one only signs, this one ships.
+play-service-account.json
 *.keystore
 .wt/
