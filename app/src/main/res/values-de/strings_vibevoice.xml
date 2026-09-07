@@ -55,7 +55,7 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_overlay_desc">Zeigt die VibeVoice-Marke auf dem Bildschirm, solange ein Diktat ohne Tastatur läuft. Sie pulsiert mit dem Gehörten und wird auf das X unten gezogen, um das Diktat zu beenden.</string>
     <string name="vibevoice_overlay_grant">Anzeige über anderen Apps erlauben</string>
     <string name="vibevoice_overlay_granted">Erlaubt</string>
-    <string name="vibevoice_no_overlay_settings">Dieses Gerät hat keinen Bildschirm für diese Berechtigung. Suche in den Systemeinstellungen unter VibeVoiceBoard nach „Über anderen Apps anzeigen“.</string>
+    <string name="vibevoice_no_overlay_settings">Dieses Gerät hat keinen Bildschirm für diese Berechtigung. Suche in den Systemeinstellungen unter VibeVoice Keyboard nach „Über anderen Apps anzeigen“.</string>
 
     <!-- Developer tuning: the mark -->
     <string name="vibevoice_overlay_tuning_title">Schwebende Marke</string>

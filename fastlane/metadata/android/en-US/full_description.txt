@@ -1,6 +1,6 @@
 Stop typing. Start speaking.
 
-VibeVoiceBoard is a full Android keyboard with dictation built into it. Tap the mark in the toolbar or hold the space bar, say what you mean, and the text appears in whatever field you were already in — a message, an email, a document, a commit message. It is a keyboard first, so everything else about typing keeps working exactly as before.
+VibeVoice Keyboard is a full Android keyboard with dictation built into it. Tap the mark in the toolbar or hold the space bar, say what you mean, and the text appears in whatever field you were already in — a message, an email, a document, a commit message. It is a keyboard first, so everything else about typing keeps working exactly as before.
 
 <b>It writes the punctuation for you</b>
 Commas, full stops, question marks and sentence breaks are applied from how you speak, not from saying the word "comma". Casing too. A dictated paragraph comes out looking like a written one.
@@ -28,8 +28,8 @@ Audio is streamed to vibevoice.net only while a session is running — while you
 If you send a bug report from the settings, the diagnostic log goes with it, and that log can contain text you dictated earlier. The privacy policy at vibevoice.net covers what is processed and how long it is kept.
 
 <b>A real keyboard underneath</b>
-VibeVoiceBoard is built on HeliBoard, itself derived from AOSP and OpenBoard, and it keeps what that gives you: multilingual typing with per-language layouts, glide typing, clipboard history, one-handed and split modes, a customisable toolbar, adjustable key height and spacing, themes with your own colours, and a layout editor. No ads, no tracking, and no account needed for any of it.
+VibeVoice Keyboard is built on HeliBoard, itself derived from AOSP and OpenBoard, and it keeps what that gives you: multilingual typing with per-language layouts, glide typing, clipboard history, one-handed and split modes, a customisable toolbar, adjustable key height and spacing, themes with your own colours, and a layout editor. No ads, no tracking, and no account needed for any of it.
 
 Free software under the GNU General Public License v3.0.
-Source: https://github.com/VibeVoice/VibeVoiceBoard
+Source: https://github.com/VibeVoice/VibeVoice Keyboard
 Service and privacy policy: https://vibevoice.net
