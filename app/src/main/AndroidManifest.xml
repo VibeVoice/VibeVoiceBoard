@@ -12,7 +12,23 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WRITE_USER_DICTIONARY" />
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!--
+        READ_CONTACTS is deliberately NOT declared.
+
+        Upstream uses it to feed contact names into the suggestion dictionary. It is the one
+        permission in this manifest the fork has no use for, and it is exactly the kind a Play
+        reviewer stops on: a keyboard asking for the address book has to justify itself, and
+        "upstream did it" is not a justification a store form accepts.
+
+        The code stays. Every consumer of it (ContactsBinaryDictionary, ContactsContentObserver,
+        DictionaryFacilitatorImpl, SettingsValues) checks the permission before touching a
+        contact, so with the declaration gone nothing reads anything and nothing breaks. Ripping
+        the twelve files out instead would be a large diff against HeliBoard for no gain, and
+        every future `git merge main` would pay for it.
+
+        The setting that offered to turn it on is hidden in TextCorrectionScreen, because a switch
+        that can never be granted is worse than no switch.
+    -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- A dictation session has to survive the keyboard being dismissed, and a process with no
