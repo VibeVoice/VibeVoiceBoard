@@ -88,12 +88,31 @@ fun WelcomeWizard(
 ) {
     val ctx = LocalContext.current
     val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-    fun determineStep(): Int = when {
-        !UncachedInputMethodManagerUtils.isThisImeEnabled(ctx, imm) -> 0
+    /**
+     * The first step that still has something to do. Never the hero.
+     *
+     * This used to answer 0 when the keyboard was not yet enabled, and be used for two different
+     * questions, and it was wrong for both.
+     *
+     * As the opening step it meant the hero appeared only to somebody whose keyboard was not
+     * already enabled. Enabling an input method is a system setting, not app data, so clearing the
+     * app's data does not undo it -- which is why the brand page never showed on a device that had
+     * ever had the keyboard turned on, and why a user who enables it from Android's own prompt
+     * before opening the app would never have seen it either.
+     *
+     * As the return value after a trip to the system settings it was worse: tap "Enable" on step 1,
+     * think better of it, come back, and this answered 0 and threw you onto the welcome page for
+     * hesitating.
+     *
+     * So it answers 1, 2 or 3 now, and the hero is where the wizard starts rather than something it
+     * can be sent back to.
+     */
+    fun firstUnfinishedStep(): Int = when {
+        !UncachedInputMethodManagerUtils.isThisImeEnabled(ctx, imm) -> 1
         !UncachedInputMethodManagerUtils.isThisImeCurrent(ctx, imm) -> 2
         else -> 3
     }
-    var step by rememberSaveable { mutableIntStateOf(determineStep()) }
+    var step by rememberSaveable { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope { Dispatchers.IO }
 
     // The free minutes, asked for the moment the wizard opens rather than when they are needed.
@@ -240,13 +259,14 @@ fun WelcomeWizard(
     }
     @Composable fun steps() {
         if (step == 0)
-            WizardHero { step = 1 }
+            WizardHero { step = firstUnfinishedStep() }
         else
             Column {
                 val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-                    // Step 4 is chosen, not derived: determineStep only knows about the input method
-                    // and would send anyone who opened the overlay settings back to "all set".
-                    if (step < 4) step = determineStep()
+                    // Only 1 to 3 are derived from the system. Step 6 uses this same launcher for
+                    // the overlay permission, and re-deriving there would send somebody who just
+                    // granted it back to "all set".
+                    if (step in 1..3) step = firstUnfinishedStep()
                 }
                 if (step == 1) {
                     Step(
