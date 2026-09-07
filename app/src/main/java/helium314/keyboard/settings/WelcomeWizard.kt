@@ -161,15 +161,22 @@ fun WelcomeWizard(
         // Nothing above the hero. It carries the wordmark and the slogan itself, and a second
         // heading over them would be the page saying its own name twice.
         if (step == 0) return
-        val resource = R.string.setup_steps_title
         Column(Modifier.padding(bottom = 20.dp)) {
-            // Set the way the site sets its headline: uppercase and light, not a Material display
-            // face. It is the same voice two pages apart, which is the whole point of the exercise.
+            // The wordmark, not "Setting up VibeVoice Board".
+            //
+            // That sentence set thin over two wrapped lines was weak to read and said nothing the
+            // page did not already say: the row of numbers under it means "you are in a setup", and
+            // the card below says what to do. It cost a fifth of the height on the one screen --
+            // step 4, with the practice field and the keyboard over it -- that has none to spare.
+            //
+            // The site's own header carries the wordmark on every page and no sentence at all, so
+            // this is what belongs here: one line, semibold, the same face and weight as the hero's
+            // first line, which makes the two screens read as one place.
             Text(
-                stringResource(resource, appName).uppercase(),
+                stringResource(R.string.brand_wordmark).uppercase(),
                 fontFamily = BrandFont,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Thin,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 color = titleColor,
                 modifier = Modifier.fillMaxWidth()
@@ -184,14 +191,39 @@ fun WelcomeWizard(
                 )
         }
     }
-    @Composable
-    fun ColumnScope.Step(step: Int, title: String, instruction: String, actionText: String, icon: Painter, action: () -> Unit) {
+    /**
+     * The 1..6 row, with three states rather than two.
+     *
+     * It used to draw every step that was not the current one in the same grey, and that made a
+     * correct behaviour look like a bug: a device that already has the keyboard enabled has nothing
+     * to do in step 1, so the wizard opens at 2 -- and the row said "1" in exactly the tone it used
+     * for the 6 that had not happened yet. Tapping "Get started" and landing on 2 read as skipping
+     * something.
+     *
+     * A step behind the current one has been dealt with, either done or found already done, because
+     * this wizard only moves forward. So it gets a tick, and the question does not arise.
+     */
+    @Composable fun StepNumbers(current: Int) {
         Row(
             Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            (1..6).forEach { Text("$it", color = if (it == step) Brand.accent else textColorDim) }
+            (1..6).forEach {
+                Text(
+                    if (it < current) "\u2713" else "$it",
+                    fontFamily = BrandFont,
+                    color = when {
+                        it == current -> Brand.accent
+                        it < current -> Brand.accent.copy(alpha = 0.5f)
+                        else -> textColorDim
+                    }
+                )
+            }
         }
+    }
+    @Composable
+    fun ColumnScope.Step(step: Int, title: String, instruction: String, actionText: String, icon: Painter, action: () -> Unit) {
+        StepNumbers(step)
         Column(Modifier
             .clip(cardShape)
             .background(color = stepBackgroundColor)
@@ -224,27 +256,19 @@ fun WelcomeWizard(
             onDispose { owner.lifecycle.removeObserver(observer) }
         }
     }
-    @Composable fun StepHeader(
-        current: Int, titleC: Color, dimC: Color, bg: Color, textC: Color, title: String, instruction: String
-    ) {
-        // 12dp, not zero. The row used to sit flush on the card underneath it, so a step whose
+    @Composable fun StepHeader(current: Int, title: String, instruction: String) {
+        // 12dp under the row, not zero: it used to sit flush on the card below, so a step whose
         // instruction ran to four lines looked like one block with a strip of digits welded to the
-        // top of it. The gap above shrank by the same amount, so the numbers move up and the space
-        // goes to the content, which is where step 6 needs it.
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            (1..6).forEach { Text("$it", color = if (it == current) Brand.accent else dimC) }
-        }
+        // top of it.
+        StepNumbers(current)
         Column(Modifier
             .clip(cardShape)
-            .background(color = bg)
+            .background(color = stepBackgroundColor)
             .border(1.dp, stepBorderColor, cardShape)
             .padding(16.dp)
         ) {
             Text(title)
-            Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = textC))
+            Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = Brand.textDim(dark)))
         }
     }
     @Composable fun ActionRow(icon: Int, text: String, active: Boolean, onClick: () -> Unit) {
@@ -333,7 +357,7 @@ fun WelcomeWizard(
                         mic = it
                     }
                     var practice by rememberSaveable { mutableStateOf("") }
-                    StepHeader(4, titleColor, textColorDim, stepBackgroundColor, textColor,
+                    StepHeader(4,
                         stringResource(R.string.setup_mic_title),
                         stringResource(R.string.setup_mic_instruction))
                     if (trialMinutes > 0) {
@@ -396,7 +420,7 @@ fun WelcomeWizard(
                     // The account, now that there is something to have an account for.
                     var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.isLinked(ctx)) }
                     OnResume { linked = VibeVoiceClient.isLinked(ctx) }
-                    StepHeader(5, titleColor, textColorDim, stepBackgroundColor, textColor,
+                    StepHeader(5,
                         stringResource(R.string.setup_link_title),
                         stringResource(R.string.setup_link_instruction))
                     Spacer(Modifier.height(8.dp))
@@ -446,7 +470,7 @@ fun WelcomeWizard(
                     }
                     var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
                     OnResume { overlay = VoiceOverlay.isAllowed(ctx) }
-                    StepHeader(6, titleColor, textColorDim, stepBackgroundColor, textColor,
+                    StepHeader(6,
                         stringResource(R.string.setup_extras_title),
                         stringResource(R.string.setup_extras_instruction))
                     Spacer(Modifier.height(8.dp))
