@@ -23,6 +23,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import helium314.keyboard.latin.R
 import kotlin.math.min
 
 /**
@@ -209,6 +213,26 @@ private const val BLUE_PERIOD_MS = 35_000
  * MaterialTheme calls a surface. Painting the ground grey was the difference between the landing
  * page and a dark screen with a faint smudge in the corner.
  */
+/**
+ * Ubuntu Sans, the landing page's face.
+ *
+ * The site self-hosts it (`website_react/src/css/index.css`) and it is most of why its hero looks
+ * the way it does: one family, the wordmark at 600 against the slogan at 100, and that contrast
+ * carries the whole composition. Rebuilt in Roboto the same layout reads as a settings screen with
+ * big text on it, because Roboto's thin is a different animal and its capitals are wider.
+ *
+ * Three weights, instanced out of the upstream variable font and subset to Latin: 55 KB in total
+ * against the 1.08 MB the variable file would have cost for one screen.
+ * `marketing/tools/build_brand_font.sh` rebuilds them and fetches the licence, which ships in the
+ * APK as `res/raw/licence_ubuntu_font.txt` because the Ubuntu Font Licence requires it to travel
+ * with the font.
+ */
+val BrandFont = FontFamily(
+    Font(R.font.ubuntu_sans_thin, FontWeight.Thin),
+    Font(R.font.ubuntu_sans_regular, FontWeight.Normal),
+    Font(R.font.ubuntu_sans_semibold, FontWeight.SemiBold),
+)
+
 object Brand {
     /** `--bg-color`, both themes. */
     fun ground(dark: Boolean) = if (dark) Color(0xFF000000) else Color(0xFFFCFCFC)

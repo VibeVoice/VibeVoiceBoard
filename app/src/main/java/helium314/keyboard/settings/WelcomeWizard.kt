@@ -49,10 +49,16 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -161,8 +167,9 @@ fun WelcomeWizard(
             // face. It is the same voice two pages apart, which is the whole point of the exercise.
             Text(
                 stringResource(resource, appName).uppercase(),
+                fontFamily = BrandFont,
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Light,
+                fontWeight = FontWeight.Thin,
                 textAlign = TextAlign.Center,
                 color = titleColor,
                 modifier = Modifier.fillMaxWidth()
@@ -578,35 +585,63 @@ fun WizardHero(onClick: () -> Unit) {
             Image(BitmapPainter(logo), null, Modifier.size(HERO_LOGO_DP.dp))
         else
             Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(HERO_LOGO_DP.dp))
-        Spacer(Modifier.height(20.dp))
-        Text(
-            stringResource(R.string.brand_wordmark).uppercase(),
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            stringResource(R.string.brand_slogan_line1),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Thin,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            stringResource(R.string.brand_slogan_line2),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Thin,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(24.dp))
+        // One Text, not three.
+        //
+        // On the site this is a single h1 with `tw-uppercase` on the element and `tw-font-thin` on
+        // the last two spans, so all three lines share a size and a leading and differ only in
+        // weight. Built as three composables at two Material sizes it was three headings stacked,
+        // which is a different picture: the eye reads a title with a subtitle under it rather than
+        // one block of type. The contrast is the whole composition, and it only works when the
+        // size is constant.
+        //
+        // Uppercase on every line, including the slogan -- the site's `tw-uppercase` sits on the
+        // h1 and reaches all of them, and sentence case on the last two was a misreading of it.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // Shrink to fit rather than wrap.
+            //
+            // The longest line is the slogan's second, and it needs about HERO_DP_PER_SP of width
+            // for every sp of size. On a wide phone at the default font scale that lands well
+            // under the cap and nothing happens; on a narrow one, or for somebody running the
+            // system font at 130%, the alternative was "START SPEAKING." breaking over two lines,
+            // which turns a three-line composition into a four-line one and loses the shape
+            // entirely. Dividing by fontScale is what keeps the accessibility setting working:
+            // the type still grows with it, just not past the width it has.
+            val scale = LocalDensity.current.fontScale
+            val size = minOf(HERO_TYPE_SP.toFloat(), maxWidth.value / (HERO_DP_PER_SP * scale))
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                        append(stringResource(R.string.brand_wordmark).uppercase())
+                    }
+                    append("\n")
+                    withStyle(SpanStyle(fontWeight = FontWeight.Thin)) {
+                        append(stringResource(R.string.brand_slogan_line1).uppercase())
+                        append("\n")
+                        append(stringResource(R.string.brand_slogan_line2).uppercase())
+                    }
+                },
+                fontFamily = BrandFont,
+                fontSize = size.sp,
+                lineHeight = (size * HERO_LEADING).sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        Spacer(Modifier.height(24.dp))
         Text(
             stringResource(R.string.brand_subline),
+            fontFamily = BrandFont,
+            fontWeight = FontWeight.Normal,
             style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(28.dp))
         Row(Modifier.clickable { onClick() }.padding(top = 4.dp, start = 4.dp, end = 4.dp)) {
             Text(
                 stringResource(R.string.setup_start_action),
+                fontFamily = BrandFont,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
@@ -633,6 +668,26 @@ private fun HeroWaves() {
 
 /** Big enough to be the page's subject rather than an icon above a heading. */
 private const val HERO_LOGO_DP = 140
+
+/**
+ * One size for all three headline lines, and a leading tighter than the size.
+ *
+ * `leading-tight` on the site is 1.25; 1.1 here because these lines are all capitals, which have no
+ * descenders to clear, and the site's own hero looks tighter than 1.25 for the same reason.
+ *
+ * 34sp is the cap, not the size: the block shrinks below it when the width demands. See the note
+ * at the call site.
+ */
+private const val HERO_TYPE_SP = 34
+private const val HERO_LEADING = 1.12f
+
+/**
+ * How much width, in dp, one sp of headline costs.
+ *
+ * Measured, not guessed: "START SPEAKING." set in Ubuntu Sans Thin is 258.4dp wide at 34sp, which
+ * is 7.6 to one. Re-measure it if the slogan or the family changes.
+ */
+private const val HERO_DP_PER_SP = 7.6f
 
 /**
  * The waves' colour on the hero, which is the brand's and not the keyboard theme's.
