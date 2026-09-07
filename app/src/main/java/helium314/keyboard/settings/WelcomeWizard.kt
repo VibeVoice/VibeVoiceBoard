@@ -137,7 +137,7 @@ fun WelcomeWizard(
         // heading over them would be the page saying its own name twice.
         if (step == 0) return
         val resource = R.string.setup_steps_title
-        Column(Modifier.padding(bottom = 36.dp)) {
+        Column(Modifier.padding(bottom = 20.dp)) {
             // Set the way the site sets its headline: uppercase and light, not a Material display
             // face. It is the same voice two pages apart, which is the whole point of the exercise.
             Text(
@@ -160,7 +160,10 @@ fun WelcomeWizard(
     }
     @Composable
     fun ColumnScope.Step(step: Int, title: String, instruction: String, actionText: String, icon: Painter, action: () -> Unit) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             (1..6).forEach { Text("$it", color = if (it == step) Brand.accent else textColorDim) }
         }
         Column(Modifier
@@ -198,7 +201,14 @@ fun WelcomeWizard(
     @Composable fun StepHeader(
         current: Int, titleC: Color, dimC: Color, bg: Color, textC: Color, title: String, instruction: String
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        // 12dp, not zero. The row used to sit flush on the card underneath it, so a step whose
+        // instruction ran to four lines looked like one block with a strip of digits welded to the
+        // top of it. The gap above shrank by the same amount, so the numbers move up and the space
+        // goes to the content, which is where step 6 needs it.
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             (1..6).forEach { Text("$it", color = if (it == current) Brand.accent else dimC) }
         }
         Column(Modifier
