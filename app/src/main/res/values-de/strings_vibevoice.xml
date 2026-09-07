@@ -106,24 +106,30 @@ SPDX-License-Identifier: GPL-3.0-only
 
     <!-- Setup wizard, steps 4 and 5 -->
     <string name="setup_step3_typing_ready">"Tippen funktioniert"</string>
-    <string name="setup_step4_action">Diktat einrichten</string>
-    <string name="setup_step4_title">"VibeVoice-Konto verbinden"</string>
-    <string name="setup_step4_instruction">Diktiertes wird von VibeVoice transkribiert, die Tastatur braucht dafür also ein Konto. Es ist kostenlos, und das Verknüpfen dauert einen Browser-Tab.</string>
-    <string name="setup_step4_link">Konto verknüpfen</string>
-    <string name="setup_step4_linked">Konto verknüpft</string>
+    <string name="setup_continue_action">Diktat einrichten</string>
+    <string name="setup_link_title">"VibeVoice-Konto verbinden"</string>
+    <string name="setup_link_instruction">Die Gratis-Minuten sind fast das Einzige, was ohne Konto läuft. Verknüpf eins, und du bekommst 30 Minuten im Monat kostenlos – auf diesem Gerät und jedem anderen. Dauert einen Browser-Tab.</string>
+    <string name="setup_link_action">Konto verknüpfen</string>
+    <string name="setup_link_done">Konto verknüpft</string>
     <string name="setup_next_action">Weiter</string>
-    <string name="setup_step5_title">"Lass es dich hören"</string>
-    <string name="setup_step5_instruction">Tippe oben rechts auf das V. Es leuchtet, solange die Tastatur zuhört, und ein weiterer Tipp beendet es. Ein langer Druck auf die Leertaste tut dasselbe, ohne die Tasten zu verlassen – einmal drücken, loslassen, weiterreden.</string>
-    <string name="setup_step5_mic">Mikrofon erlauben</string>
-    <string name="setup_step5_mic_granted">Mikrofon erlaubt</string>
-    <string name="setup_step6_title">"Zwei Extras, wenn du magst"</string>
-    <string name="setup_step6_instruction">Normalerweise endet das Diktat, wenn die Tastatur zugeht. Schalte das an, und es läuft weiter – du kannst hier zu sprechen anfangen und in einer anderen App fertig werden.</string>
-    <string name="setup_step6_background">Weiter transkribieren, wenn die Tastatur zugeht (optional)</string>
-    <string name="setup_step6_overlay">Marke dabei anzeigen – öffnet die Systemeinstellungen (optional)</string>
-    <string name="setup_step6_overlay_granted">Die Marke wird angezeigt</string>
+    <string name="setup_mic_title">"Lass es dich hören"</string>
+    <string name="setup_mic_instruction">Tippe oben rechts auf das V. Es leuchtet, solange die Tastatur zuhört, und ein weiterer Tipp beendet es. Ein langer Druck auf die Leertaste tut dasselbe, ohne die Tasten zu verlassen – einmal drücken, loslassen, weiterreden.</string>
+    <string name="setup_mic_grant">Mikrofon erlauben</string>
+    <string name="setup_mic_granted">Mikrofon erlaubt</string>
+    <string name="setup_extras_title">"Zwei Extras, wenn du magst"</string>
+    <string name="setup_extras_instruction">Normalerweise endet das Diktat, wenn die Tastatur zugeht. Schalte das Erste an, und es läuft weiter – du kannst hier zu sprechen anfangen und in einer anderen App fertig werden. Dann wird auch das Zweite verfügbar.</string>
+    <string name="setup_extras_background">Weiter transkribieren, wenn die Tastatur zugeht (optional)</string>
+    <string name="setup_extras_overlay">Marke dabei anzeigen – öffnet die Systemeinstellungen (optional)</string>
+    <string name="setup_extras_overlay_granted">Die Marke wird angezeigt</string>
 
     <!-- Wortmarke und Slogan bleiben englisch, siehe die Begruendung in values/strings.xml. -->
     <string name="brand_subline">Sprache zu Text, überall wo du tippst.</string>
-    <string name="setup_step5_try_label">Probier es gleich aus</string>
-    <string name="setup_step5_try_hint">Hier tippen und losdiktieren…</string>
+    <string name="setup_try_label">Probier es gleich aus</string>
+    <string name="setup_try_hint">Hier tippen und losdiktieren…</string>
+    <string name="setup_try_skip">Überspringen</string>
+    <string name="setup_trial_note">%d Gratis-Minuten zum Ausprobieren, ganz ohne Konto.</string>
+    <string name="setup_trial_unavailable">VibeVoice war für die Gratis-Minuten nicht erreichbar. Verknüpf im nächsten Schritt ein Konto, dann geht das Diktat sofort.</string>
+    <string name="setup_extras_overlay_locked">Marke anzeigen – braucht die Option darüber</string>
+    <string name="setup_finish_without">Ohne die Extras fertig</string>
+    <string name="vibevoice_trial_over">Deine Gratis-Minuten sind aufgebraucht. Verknüpf ein VibeVoice-Konto, um weiter zu diktieren – 30 Minuten im Monat, kostenlos.</string>
 </resources>

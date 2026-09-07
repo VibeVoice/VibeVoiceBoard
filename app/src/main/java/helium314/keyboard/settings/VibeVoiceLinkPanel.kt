@@ -45,9 +45,25 @@ private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
  * settings screen shows quota and an unlink button, the wizard shows a tick and moves on.
  *
  * [onLinked] fires once, when a key arrives.
+ *
+ * [trigger] is a slot rather than a button, because the two callers do not agree on what a button
+ * looks like and only one of them is wrong about it. The settings screen is a Material screen and
+ * wants a Material button; the setup wizard is the brand's, built from translucent cards with
+ * hairline edges, and a filled `colorScheme.primary` button in the middle of that reads as
+ * something pasted in from another app -- which is also the user's wallpaper accent, not ours.
+ * The flow above the button is what had to stay single; its chrome never did.
  */
 @Composable
-fun VibeVoiceLinkPanel(modifier: Modifier = Modifier, onLinked: () -> Unit) {
+fun VibeVoiceLinkPanel(
+    modifier: Modifier = Modifier,
+    trigger: @Composable (enabled: Boolean, loading: Boolean, onClick: () -> Unit) -> Unit = { enabled, loading, onClick ->
+        Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+            if (loading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+            else Text(stringResource(R.string.vibevoice_link_account))
+        }
+    },
+    onLinked: () -> Unit
+) {
     val context = LocalContext.current
     val prefs = remember(context) { VibeVoiceClient.vibeVoicePrefs(context) }
     val scope = rememberCoroutineScope()
@@ -60,7 +76,9 @@ fun VibeVoiceLinkPanel(modifier: Modifier = Modifier, onLinked: () -> Unit) {
         isLoading = true
         errorMessage = null
         scope.launch {
-            val res = VibeVoiceClient.requestDeviceCode("VibeVoiceBoard Android", BuildConfig.VERSION_NAME)
+            val res = VibeVoiceClient.requestDeviceCode(
+                "VibeVoiceBoard Android", BuildConfig.VERSION_NAME, VibeVoiceClient.installId(context)
+            )
             isLoading = false
             if (res == null) {
                 errorMessage = context.getString(R.string.vibevoice_failed_request_device_code)
@@ -116,9 +134,9 @@ fun VibeVoiceLinkPanel(modifier: Modifier = Modifier, onLinked: () -> Unit) {
         }
     }
 
-    if (VibeVoiceClient.getApiKey(context) != null && userCode == null && !isLoading) return
+    if (VibeVoiceClient.isLinked(context) && userCode == null && !isLoading) return
 
-    Column(modifier = modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
         if (userCode != null) {
             Text(stringResource(R.string.vibevoice_waiting_for_approval), style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.size(8.dp))
@@ -131,13 +149,7 @@ fun VibeVoiceLinkPanel(modifier: Modifier = Modifier, onLinked: () -> Unit) {
                 Text(stringResource(R.string.vibevoice_polling_for_token))
             }
         } else {
-            Button(onClick = { startLinking() }, enabled = !isLoading, modifier = Modifier.fillMaxWidth()) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
-                } else {
-                    Text(stringResource(R.string.vibevoice_link_account))
-                }
-            }
+            trigger(!isLoading, isLoading) { startLinking() }
             if (errorMessage != null) {
                 Spacer(modifier = Modifier.size(8.dp))
                 Text(errorMessage!!, color = MaterialTheme.colorScheme.error)

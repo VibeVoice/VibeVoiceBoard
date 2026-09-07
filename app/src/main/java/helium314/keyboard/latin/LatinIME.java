@@ -1710,10 +1710,19 @@ public class LatinIME extends InputMethodService implements
                 return;
             }
 
-            String apiKey = helium314.keyboard.latin.vibevoice.VibeVoiceClient.getApiKey(this);
+            String apiKey = VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
                 android.widget.Toast
                         .makeText(this, R.string.vibevoice_not_linked, android.widget.Toast.LENGTH_LONG).show();
+                launchSettings("vibevoice");
+                return;
+            }
+            // A trial the server has already refused will refuse this one too. Asking again means a
+            // connection, an auth frame and a second of dead air to learn something we were told
+            // last time, so the invitation comes straight away instead.
+            if (!VibeVoiceClient.isLinked(this) && VibeVoiceClient.isTrialSpent(this)) {
+                android.widget.Toast
+                        .makeText(this, R.string.vibevoice_trial_over, android.widget.Toast.LENGTH_LONG).show();
                 launchSettings("vibevoice");
                 return;
             }
@@ -1787,6 +1796,20 @@ public class LatinIME extends InputMethodService implements
                 public void onError(@NonNull String error) {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
+                        // Not a fault: the free minutes ran out. The server keeps this code
+                        // distinct from invalid_api_key precisely so this branch can exist -- one
+                        // is an invitation to link an account, the other is something broken, and
+                        // showing "Dictation error: trial_exhausted" would make the first look like
+                        // the second.
+                        if (VibeVoiceClient.ERR_TRIAL_EXHAUSTED.equals(error)) {
+                            VibeVoiceClient.markTrialSpent(LatinIME.this);
+                            finishVoiceSession(mVoiceComposingText, false);
+                            android.widget.Toast
+                                    .makeText(LatinIME.this, R.string.vibevoice_trial_over, android.widget.Toast.LENGTH_LONG)
+                                    .show();
+                            launchSettings("vibevoice");
+                            return;
+                        }
                         android.widget.Toast
                                 .makeText(LatinIME.this, getString(R.string.vibevoice_error, error), android.widget.Toast.LENGTH_SHORT)
                                 .show();

@@ -293,9 +293,91 @@ Neue Schlüssel nach `app/src/main/res/values/strings.xml`, Übersetzungen nach
 | 3d — Strings | fertig, en + de |
 | 4 — Store-Texte | fertig, en-US und de-DE neu; 26 Locales entfernt |
 | — Bilder | offen, wartet auf die Aufnahmen aus `marketing/briefs/` |
+| 5 — Gratis-Minuten, Client | fertig; Server-Seite ist P-058, `status: done` |
 
-Die Gratis-Minuten selbst (der Trial-Key) sind bewusst **nicht** Teil dieses Branches. Sie hängen
-an P-058 im Server-Repository; das Probierfeld sitzt so lange hinter dem Konto-Schritt statt davor.
+---
+
+## Teil 5 — Die Gratis-Minuten (Client-Seite von P-058)
+
+Der Server ist fertig (`P-058`, `status: done`): zehn Minuten je Installations-ID, eigene Konstante,
+gebrannt beim Token-Einlösen. Was die Tastatur dazu tut:
+
+### Der Trial-Key wohnt nicht beim Konto-Key
+
+Die eine Entscheidung, die in keinem Server-Dokument steht, weil sie reine Client-Seite ist.
+
+`getApiKey() != null` war an vier Stellen der „hat ein Konto"-Test: das Link-Panel versteckt sich
+damit, der Wizard überspringt damit den Konto-Schritt, der Einstellungs-Screen zeigt damit ein
+Kontingent. Ein Trial-Key in `vibevoice_api_key` hätte auf alle vier stumm mit *ja* geantwortet —
+und ausgerechnet der Screen, dessen ganze Aufgabe es ist, aus einem Trial ein Konto zu machen, wäre
+nie erschienen.
+
+Also getrennte Prefs:
+
+| Pref | Inhalt |
+|---|---|
+| `vibevoice_api_key` | der Konto-Schlüssel, wie bisher |
+| `vibevoice_trial_key` | der Trial-Schlüssel |
+| `vibevoice_install_id` | eine zufällige UUID, einmal erzeugt, 36 Zeichen (Server verlangt 32–128) |
+| `vibevoice_trial_spent` | gesetzt, wenn der Server eine Sitzung wegen erschöpftem Trial abgelehnt hat |
+
+`getApiKey()` fällt vom einen auf den anderen zurück, also diktieren Streaming, Fehlerberichte und
+`LatinIME` auf einem Trial, ohne zu wissen, dass es einer ist. Nur `isLinked()` kennt den
+Unterschied, und nur die Stellen, die ihn kennen müssen. Der Einstellungs-Screen liest die Pref
+ohnehin direkt und war nie betroffen.
+
+Die Installations-ID ist eine zufällige UUID und nichts vom Gerät Abgeleitetes. P-058 verlangt eine
+ID, die das Telefon nicht app-übergreifend identifiziert; der Server kann das nicht prüfen, also ist
+der Client der ganze Vertrag.
+
+### `trial_exhausted` ist eine Einladung, kein Fehler
+
+Der Server hält den Code getrennt von `invalid_api_key`, damit genau diese Verzweigung existieren
+kann. Die WS-Fehlerbehandlung reicht den String schon durch — es brauchte dort keine Zeile.
+`LatinIME.onError` verzweigt darauf, merkt sich `trial_spent`, committet was da ist und lädt zum
+Verknüpfen ein, statt „Diktat-Fehler: trial_exhausted" zu zeigen.
+
+`handleVoiceInput` prüft die Merkung vorher: ein abgelehnter Trial wird beim nächsten Tipp wieder
+abgelehnt, und dafür eine Verbindung, einen Auth-Frame und eine Sekunde Totzeit auszugeben, um
+etwas zu erfahren, das schon feststeht, ist verschwendet.
+
+### Der Wizard dreht sich um
+
+Das ist der eigentliche Punkt von P-058, nicht das Endpunkt-Paar.
+
+| vorher | nachher |
+|---|---|
+| 4 Konto verknüpfen | 4 **Mikrofon + Probierfeld** |
+| 5 Mikrofon + Probierfeld | 5 **Konto verknüpfen** |
+
+Das Konto ist der Preis, die Transkription der Nutzen — und zuerst nach dem Preis zu fragen heißt,
+jemanden etwas kaufen zu lassen, das er noch nicht gesehen hat. Der Trial-Key wird angefordert,
+sobald der Wizard aufgeht; bis Schritt 4 liegen zwei Ausflüge in die Systemeinstellungen dazwischen,
+also ist er längst da und das Probierfeld wirkt sofort.
+
+`install_id` reist mit `POST /oauth/device/code` mit, damit das Verknüpfen den Trial brennt (R7).
+
+### Was am Wizard sonst noch falsch war
+
+* **Schritt 2 hatte einen Ausgang**, der den Wizard endgültig beendete — dieselbe Sackgasse, die ich
+  in Schritt 3 entfernt und hier übersehen hatte. Weg.
+* **Das Probierfeld verschwand unter der Tastatur.** `BasicTextField` bittet von selbst darum,
+  sichtbar gescrollt zu werden — nur gab es keinen scrollbaren Vorfahren, der die Bitte erfüllen
+  konnte. Jetzt `verticalScroll` + `imePadding` (die Activity ist edge-to-edge, das Fenster
+  verkleinert sich also nicht von selbst).
+* **Der Weiter-Knopf** bleibt immer sichtbar — wer Mikrofon oder Netz nicht zum Laufen bringt, wäre
+  sonst eingesperrt — wechselt aber sein Gewicht: leise „Überspringen", bis etwas diktiert wurde,
+  danach „Weiter" mit Akzent.
+* **Schritt 6 versprach zwei Extras und zeigte eins.** Die zweite Zeile steht jetzt immer da, inert
+  und mit dem Grund darauf, statt versteckt zu sein. Und der Ausgang heißt „Ohne die Extras fertig",
+  solange nichts an ist — „Finished" unter einem unberührten Schalter liest sich wie „du bist
+  fertig" und verbirgt, dass es überhaupt etwas zu entscheiden gab.
+* **Zwei Fertig-Knöpfe**, von denen nur einer es sagte. Der zweite ist weg.
+* **Der Link-Knopf war Material You.** Das Panel bekommt einen Slot für seinen Auslöser: der Ablauf
+  bleibt eine Implementierung, seine Optik war nie eine. Und es füllt jetzt die Breite — die
+  Polling-Karte war auf Code-Breite geschrumpft.
+* **Die String-Schlüssel hießen nach ihrer Position.** `setup_step4_*` war das Konto, jetzt ist es
+  das Mikrofon. Sie heißen nun nach ihrem Inhalt: `setup_link_*`, `setup_mic_*`, `setup_extras_*`.
 
 ---
 

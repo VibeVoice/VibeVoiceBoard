@@ -29,6 +29,22 @@ import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
 
+/**
+ * What `POST /api/trial/key` can answer. The three failures are not interchangeable: 409 means show
+ * the account step, 429 means try again later, and anything else is a fault. Collapsing any two
+ * either invites somebody to register when it should have retried, or shows an error when it should
+ * have invited. See P-058 R4 in the VibeVoice repository.
+ *
+ * Top level rather than inside the companion: `VibeVoiceClient.TrialResult` is how every caller
+ * wants to write it, and a class nested in a companion is `VibeVoiceClient.Companion.TrialResult`.
+ */
+sealed class TrialResult {
+    data class Granted(val key: String, val minutesGranted: Double) : TrialResult()
+    object AlreadyUsed : TrialResult()
+    object RateLimited : TrialResult()
+    object Failed : TrialResult()
+}
+
 interface VibeVoiceListener {
     fun onPartial(text: String, isNewSegment: Boolean)
     fun onFinal(text: String, isNewSegment: Boolean)
@@ -715,6 +731,45 @@ class VibeVoiceClient(
         private val JSON = "application/json".toMediaType()
         private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
+
+        /**
+         * The trial key, deliberately NOT in [VIBEVOICE_API_KEY_PREF].
+         *
+         * `getApiKey() != null` is what four call sites read as "this user has an account": the
+         * link panel hides itself, the wizard skips its account step, the settings screen shows a
+         * quota. A trial key stored there would silently answer yes to all of them, and the one
+         * screen whose entire job is to turn a trial into an account would never appear.
+         *
+         * So the two live apart, and [getApiKey] falls back from one to the other. Streaming, bug
+         * reports and every other consumer of a key keep working on a trial without knowing it is
+         * one; only [isLinked] can tell the difference, and only the places that must.
+         */
+        private const val VIBEVOICE_TRIAL_KEY_PREF = "vibevoice_trial_key"
+
+        /**
+         * The install this device presents to `POST /api/trial/key`, generated once.
+         *
+         * A random UUID and nothing derived from the device: P-058 requires an id that does not
+         * identify the phone across apps, and the server cannot check that, so the client is the
+         * whole of the contract. 36 characters, inside the server's 32..128 window.
+         */
+        private const val VIBEVOICE_INSTALL_ID_PREF = "vibevoice_install_id"
+
+        /**
+         * Set once the server has refused a session for a spent trial.
+         *
+         * Without it every tap on the microphone opens a socket, sends the auth frame and is
+         * refused -- a round trip and a second of dead air to learn something already known.
+         */
+        private const val VIBEVOICE_TRIAL_SPENT_PREF = "vibevoice_trial_spent"
+
+        /**
+         * The stream's refusal when the free minutes are gone.
+         *
+         * Distinct from an invalid key on purpose, and the distinction is the whole point: one is
+         * an invitation to link an account, the other is a fault. See P-058 R4.
+         */
+        const val ERR_TRIAL_EXHAUSTED = "trial_exhausted"
         private const val TAG = "VibeVoiceClient"
         private const val MAX_RETRIES = 3
         /** RMS that counts as a full-scale level for the waves; see where currentLevel is written. */
@@ -753,14 +808,123 @@ class VibeVoiceClient(
             context.getSharedPreferences("vibevoice_prefs", MODE_PRIVATE)
         }
 
+        /**
+         * A key to transcribe with: the account's if there is one, otherwise the trial's.
+         *
+         * Callers that need to know which they got should ask [isLinked]. Callers that only need
+         * to send audio -- which is nearly all of them -- must not, and do not.
+         */
         @JvmStatic
         fun getApiKey(context: Context): String? =
             vibeVoicePrefs(context).getString(VIBEVOICE_API_KEY_PREF, null)
+                ?: vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null)
 
-        suspend fun requestDeviceCode(deviceName: String, clientVersion: String): JSONObject? = withContext(Dispatchers.IO) {
+        /** Whether an account has been linked. A trial key is not an account. */
+        @JvmStatic
+        fun isLinked(context: Context): Boolean =
+            vibeVoicePrefs(context).getString(VIBEVOICE_API_KEY_PREF, null) != null
+
+        @JvmStatic
+        fun hasTrialKey(context: Context): Boolean =
+            vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null) != null
+
+        /** Whether the server has already refused a session because the trial is spent. */
+        @JvmStatic
+        fun isTrialSpent(context: Context): Boolean =
+            vibeVoicePrefs(context).getBoolean(VIBEVOICE_TRIAL_SPENT_PREF, false)
+
+        @JvmStatic
+        fun markTrialSpent(context: Context) {
+            vibeVoicePrefs(context).edit().putBoolean(VIBEVOICE_TRIAL_SPENT_PREF, true).apply()
+        }
+
+        /**
+         * This install's id, generated on first use and never regenerated.
+         *
+         * Reinstalling produces a new one and therefore a new trial. That is the accepted abuse
+         * ceiling -- ten minutes per reinstall -- and P-058 says so out loud rather than reaching
+         * for attestation to close it.
+         */
+        @JvmStatic
+        fun installId(context: Context): String {
+            val prefs = vibeVoicePrefs(context)
+            prefs.getString(VIBEVOICE_INSTALL_ID_PREF, null)?.let { return it }
+            return synchronized(VibeVoiceClient::class.java) {
+                prefs.getString(VIBEVOICE_INSTALL_ID_PREF, null) ?: java.util.UUID.randomUUID().toString()
+                    .also { prefs.edit().putString(VIBEVOICE_INSTALL_ID_PREF, it).apply() }
+            }
+        }
+
+        /**
+         * Asks for this install's free minutes and stores the key it gets.
+         *
+         * Returns without asking if an account is already linked -- a linked device spending a
+         * trial would burn it for nothing -- or if one has already been stored.
+         */
+        suspend fun requestTrialKey(context: Context): TrialResult = withContext(Dispatchers.IO) {
+            val prefs = vibeVoicePrefs(context)
+            if (isLinked(context)) return@withContext TrialResult.AlreadyUsed
+            prefs.getString(VIBEVOICE_TRIAL_KEY_PREF, null)?.let {
+                return@withContext TrialResult.Granted(it, 0.0)
+            }
+            val body = JSONObject().put("install_id", installId(context)).toString().toRequestBody(JSON)
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/trial/key")
+                .post(body)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    when (response.code) {
+                        409 -> return@use TrialResult.AlreadyUsed
+                        429 -> return@use TrialResult.RateLimited
+                    }
+                    if (!response.isSuccessful) return@use TrialResult.Failed
+                    val json = response.body?.string()?.let { JSONObject(it) } ?: return@use TrialResult.Failed
+                    val key = json.optString("api_key").takeIf { it.isNotBlank() }
+                        ?: return@use TrialResult.Failed
+                    prefs.edit().putString(VIBEVOICE_TRIAL_KEY_PREF, key).apply()
+                    VibeVoiceDebugLogger.log("Trial key granted")
+                    TrialResult.Granted(key, json.optDouble("minutes_granted", 0.0))
+                }
+            } catch (e: Exception) {
+                VibeVoiceDebugLogger.log("Trial key request failed: ${e.message}")
+                TrialResult.Failed
+            }
+        }
+
+        /**
+         * How much of the trial is left. Null when there is no trial key, when the key is not a
+         * trial (the server answers 404 for that), or when the request failed.
+         */
+        suspend fun trialStatus(context: Context): JSONObject? = withContext(Dispatchers.IO) {
+            val key = vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null) ?: return@withContext null
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/trial/status")
+                .header("X-API-Key", key)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) response.body?.string()?.let { JSONObject(it) } else null
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        /**
+         * [installId] is optional on the wire and carried here always: the server stores it on the
+         * device-code row and burns this install's trial when the token is collected, so unlinking
+         * and relinking cannot hand the free minutes back (P-058 R7). An older server ignores it.
+         */
+        suspend fun requestDeviceCode(
+            deviceName: String,
+            clientVersion: String,
+            installId: String? = null
+        ): JSONObject? = withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("device_name", deviceName)
                 .put("client_version", clientVersion)
+                .apply { if (installId != null) put("install_id", installId) }
                 .toString().toRequestBody(JSON)
             val request = Request.Builder()
                 .url("https://vibevoice.net/api/oauth/device/code")

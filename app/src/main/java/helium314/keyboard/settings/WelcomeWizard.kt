@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,6 +68,7 @@ import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings as KeySettings
 import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.latin.vibevoice.TrialResult
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
 import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.vibevoice.VoiceOverlay
@@ -91,6 +95,22 @@ fun WelcomeWizard(
     }
     var step by rememberSaveable { mutableIntStateOf(determineStep()) }
     val scope = rememberCoroutineScope { Dispatchers.IO }
+
+    // The free minutes, asked for the moment the wizard opens rather than when they are needed.
+    // Between here and step 4 the user enables an input method and switches to it -- two trips
+    // through system settings -- so the key is in hand long before the practice field asks for it,
+    // and a slow network never shows as a spinner on the one screen that has to feel immediate.
+    // Null means "no answer yet"; the practice field distinguishes that from a refusal.
+    var trialMinutes by rememberSaveable { mutableStateOf(-1) }
+    LaunchedEffect(Unit) {
+        if (VibeVoiceClient.isLinked(ctx)) { trialMinutes = 0; return@LaunchedEffect }
+        trialMinutes = when (val res = VibeVoiceClient.requestTrialKey(ctx)) {
+            is TrialResult.Granted -> res.minutesGranted.toInt()
+            // Already used, rate limited or unreachable all land in the same place for the user:
+            // there are no free minutes, and the account step is where dictation comes from.
+            else -> 0
+        }
+    }
     LaunchedEffect(step) {
         if (step == 2)
             scope.launch {
@@ -240,23 +260,11 @@ fun WelcomeWizard(
                         painterResource(R.drawable.ic_setup_select),
                         imm::showInputMethodPicker
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        Modifier.clip(cardShape)
-                            .clickable { close() }
-                            .background(color = stepBackgroundColor)
-                            .border(1.dp, stepBorderColor, cardShape)
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.sym_keyboard_language_switch),
-                            null,
-                            Modifier.padding(end = 10.dp).size(28.dp),
-                            tint = Brand.accent
-                        )
-                        Text(stringResource(R.string.setup_step3_action), Modifier.weight(1f))
-                    }
+                    // No exit here. `close()` ends the wizard for good -- there is no way back
+                    // into it -- and offering that on the step before the keyboard has even been
+                    // switched to drops the user into a settings tree with nothing yet to
+                    // configure. The same exit was removed from step 3 for the same reason and
+                    // survived here because I fixed one and not the other.
                 } else if (step == 3) {
                     // One way on, and it is forward. The settings used to be offered here, which
                     // closed the wizard for good -- there is no way back into it -- two steps
@@ -267,41 +275,17 @@ fun WelcomeWizard(
                         step,
                         stringResource(R.string.setup_step3_typing_ready),
                         stringResource(R.string.setup_step3_instruction, appName),
-                        stringResource(R.string.setup_step4_action),
+                        stringResource(R.string.setup_continue_action),
                         painterResource(R.drawable.ic_vibevoice_active)
                     ) { step = 4 }
                 } else if (step == 4) {
-                    // The account first, because nothing else here does anything without it. Sent
-                    // to the VibeVoice screen rather than reimplemented: the device flow there
-                    // handles an expired code, a missing browser and a body that is not the JSON it
-                    // expected, and a second copy of that would be a second copy to get wrong.
-                    var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.getApiKey(ctx) != null) }
-                    OnResume { linked = VibeVoiceClient.getApiKey(ctx) != null }
-                    StepHeader(4, titleColor, textColorDim, stepBackgroundColor, textColor,
-                        stringResource(R.string.setup_step4_title),
-                        stringResource(R.string.setup_step4_instruction))
-                    Spacer(Modifier.height(8.dp))
-                    if (linked) {
-                        ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_step4_linked), true) { }
-                        Spacer(Modifier.height(8.dp))
-                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
-                            step = 5
-                        }
-                    } else {
-                        // Linked here rather than by sending the user into the settings screen,
-                        // which carries the account, the quota, bug reports and three tuning blocks
-                        // -- everything except the one thing they came for. The panel is the same
-                        // implementation that screen uses.
-                        Column(Modifier
-                            .clip(cardShape)
-                            .background(color = stepBackgroundColor)
-                            .border(1.dp, stepBorderColor, cardShape)
-                            .padding(16.dp)
-                        ) {
-                            VibeVoiceLinkPanel { linked = true; step = 5 }
-                        }
-                    }
-                } else if (step == 5) { // the microphone, and how dictation is actually started
+                    // The microphone and the first dictation, BEFORE the account.
+                    //
+                    // It used to be the other way round, and that was the whole defect P-058 names:
+                    // the account is a cost the user pays, the transcription is the benefit they
+                    // have not yet seen, and asking for the cost first is asking someone to buy
+                    // something they have not been shown. The server now issues free minutes
+                    // against an install id, so this step can do the showing.
                     var mic by rememberSaveable {
                         mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
                                 == android.content.pm.PackageManager.PERMISSION_GRANTED)
@@ -311,24 +295,34 @@ fun WelcomeWizard(
                     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
                         mic = it
                     }
-                    StepHeader(5, titleColor, textColorDim, stepBackgroundColor, textColor,
-                        stringResource(R.string.setup_step5_title),
-                        stringResource(R.string.setup_step5_instruction))
+                    var practice by rememberSaveable { mutableStateOf("") }
+                    StepHeader(4, titleColor, textColorDim, stepBackgroundColor, textColor,
+                        stringResource(R.string.setup_mic_title),
+                        stringResource(R.string.setup_mic_instruction))
+                    if (trialMinutes > 0) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.setup_trial_note, trialMinutes),
+                            style = MaterialTheme.typography.bodyMedium.merge(color = Brand.accent)
+                        )
+                    } else if (trialMinutes == 0 && !VibeVoiceClient.isLinked(ctx)) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.setup_trial_unavailable),
+                            style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark))
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     ActionRow(
-                        if (mic) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
-                        stringResource(if (mic) R.string.setup_step5_mic_granted else R.string.setup_step5_mic),
+                        if (mic) R.drawable.ic_setup_check else R.drawable.ic_setup_key,
+                        stringResource(if (mic) R.string.setup_mic_granted else R.string.setup_mic_grant),
                         mic
                     ) {
                         if (!mic) micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                     }
-                    if (mic) {
-                        // The first dictation, here, before the wizard is over. Everything up to
-                        // this point is a description of a thing; this is the thing. It works
-                        // because the account was linked in step 4 -- the version that runs before
-                        // any of that needs the server-side trial, which is P-058 in the VibeVoice
-                        // repository.
-                        var practice by rememberSaveable { mutableStateOf("") }
+                    if (mic && VibeVoiceClient.getApiKey(ctx) != null) {
+                        // The thing itself. Everything before this describes a product; this is the
+                        // product, and it happens before anybody has been asked for anything.
                         Spacer(Modifier.height(8.dp))
                         Column(Modifier
                             .clip(cardShape)
@@ -337,7 +331,7 @@ fun WelcomeWizard(
                             .padding(16.dp)
                         ) {
                             Text(
-                                stringResource(R.string.setup_step5_try_label),
+                                stringResource(R.string.setup_try_label),
                                 style = MaterialTheme.typography.bodyLarge.merge(color = textColor)
                             )
                             Spacer(Modifier.height(8.dp))
@@ -345,17 +339,65 @@ fun WelcomeWizard(
                                 value = practice,
                                 onValueChange = { practice = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text(stringResource(R.string.setup_step5_try_hint)) },
+                                placeholder = { Text(stringResource(R.string.setup_try_hint)) },
                                 minLines = 3
                             )
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
-                        step = 6
+                    // Always present, never hidden: somebody whose microphone or network refuses to
+                    // work would otherwise be shut in this step with no way out, and a wizard must
+                    // not close a door it cannot reopen. It changes weight instead of appearing --
+                    // quiet until something has been dictated, the obvious next move afterwards.
+                    val tried = practice.isNotBlank()
+                    ActionRow(
+                        if (tried) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
+                        stringResource(if (tried) R.string.setup_next_action else R.string.setup_try_skip),
+                        tried
+                    ) { step = 5 }
+                } else if (step == 5) {
+                    // The account, now that there is something to have an account for.
+                    var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.isLinked(ctx)) }
+                    OnResume { linked = VibeVoiceClient.isLinked(ctx) }
+                    StepHeader(5, titleColor, textColorDim, stepBackgroundColor, textColor,
+                        stringResource(R.string.setup_link_title),
+                        stringResource(R.string.setup_link_instruction))
+                    Spacer(Modifier.height(8.dp))
+                    if (linked) {
+                        ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_link_done), true) { }
+                        Spacer(Modifier.height(8.dp))
+                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
+                            step = 6
+                        }
+                    } else {
+                        // Linked here rather than by sending the user into the settings screen,
+                        // which carries the account, the quota, bug reports and three tuning blocks
+                        // -- everything except the one thing they came for. The panel is the same
+                        // implementation that screen uses; only its button is ours.
+                        VibeVoiceLinkPanel(
+                            modifier = Modifier
+                                .clip(cardShape)
+                                .background(color = stepBackgroundColor)
+                                .border(1.dp, stepBorderColor, cardShape)
+                                .padding(16.dp),
+                            trigger = { enabled, loading, onClick ->
+                                ActionRow(
+                                    R.drawable.ic_vibevoice_active,
+                                    stringResource(
+                                        if (loading) R.string.vibevoice_polling_for_token
+                                        else R.string.setup_link_action
+                                    ),
+                                    enabled
+                                ) { if (enabled) onClick() }
+                            }
+                        ) { linked = true; step = 6 }
+                        Spacer(Modifier.height(8.dp))
+                        // The trial does not last forever, but nobody has to link today.
+                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_try_skip), false) {
+                            step = 6
+                        }
                     }
-                } else { // step 6: optional, and chained -- the second offer only means something
-                         // once the first has been taken
+                } else { // step 6: two optional extras, one of which depends on the other
                     val prefs = ctx.prefs()
                     var background by rememberSaveable {
                         mutableStateOf(prefs.getBoolean(KeySettings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
@@ -363,49 +405,62 @@ fun WelcomeWizard(
                     var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
                     OnResume { overlay = VoiceOverlay.isAllowed(ctx) }
                     StepHeader(6, titleColor, textColorDim, stepBackgroundColor, textColor,
-                        stringResource(R.string.setup_step6_title),
-                        stringResource(R.string.setup_step6_instruction))
+                        stringResource(R.string.setup_extras_title),
+                        stringResource(R.string.setup_extras_instruction))
                     Spacer(Modifier.height(8.dp))
                     ActionRow(
-                        if (background) R.drawable.ic_setup_check else R.drawable.ic_vibevoice_active,
-                        stringResource(R.string.setup_step6_background),
+                        if (background) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
+                        stringResource(R.string.setup_extras_background),
                         background
                     ) {
                         background = !background
                         prefs.edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, background).apply()
                     }
-                    if (background) {
-                        // Only now: allowing an overlay for a mark that can never appear is a
-                        // permission asked for nothing.
-                        Spacer(Modifier.height(8.dp))
-                        ActionRow(
-                            if (overlay) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
-                            stringResource(if (overlay) R.string.setup_step6_overlay_granted
-                                else R.string.setup_step6_overlay),
-                            overlay
-                        ) {
-                            if (!overlay) {
-                                val intent = Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    android.net.Uri.parse("package:" + ctx.packageName)
-                                )
-                                try {
-                                    launcher.launch(intent)
-                                } catch (_: android.content.ActivityNotFoundException) {
-                                    // Some builds have no such screen. Nothing else breaks.
-                                }
+                    Spacer(Modifier.height(8.dp))
+                    // Shown even when it cannot be taken, with the reason on it.
+                    //
+                    // It used to be hidden until the option above was on, and hiding it was worse
+                    // than the dependency it was hiding: the heading promises two extras and the
+                    // screen showed one, so the step read as either finished or broken. Allowing an
+                    // overlay for a mark that can never appear is still a permission asked for
+                    // nothing -- so the row stays inert, and says why.
+                    ActionRow(
+                        if (overlay && background) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
+                        stringResource(
+                            when {
+                                !background -> R.string.setup_extras_overlay_locked
+                                overlay -> R.string.setup_extras_overlay_granted
+                                else -> R.string.setup_extras_overlay
+                            }
+                        ),
+                        background && overlay
+                    ) {
+                        if (background && !overlay) {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:" + ctx.packageName)
+                            )
+                            try {
+                                launcher.launch(intent)
+                            } catch (_: android.content.ActivityNotFoundException) {
+                                // Some builds have no such screen. Nothing else breaks.
                             }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_finish_action), true) {
+                    // The label says what is being given up. "Finished" under an untouched toggle
+                    // reads as "you are done" and hides the fact that there was anything to decide.
+                    ActionRow(
+                        R.drawable.ic_setup_check,
+                        stringResource(
+                            if (background) R.string.setup_finish_action else R.string.setup_finish_without
+                        ),
+                        background
+                    ) {
                         finish()
                     }
-                    Spacer(Modifier.height(8.dp))
-                    // The settings, at the end, where leaving the wizard costs nothing.
-                    ActionRow(R.drawable.sym_keyboard_language_switch, stringResource(R.string.setup_step3_action), false) {
-                        close()
-                    }
+                    // No second exit. "Finished" and "Configure the keyboard" both ended the wizard
+                    // and only one of them said so; the settings are one tap away afterwards.
                 }
             }
     }
@@ -419,9 +474,26 @@ fun WelcomeWizard(
             LocalContentColor provides textColor,
             LocalTextStyle provides MaterialTheme.typography.titleLarge.merge(color = textColor),
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(32.dp),
-                contentAlignment = Alignment.Center
+            // Scrollable, and padded for the keyboard.
+            //
+            // The practice field in step 4 asks to be brought into view when it takes focus --
+            // BasicTextField does that by itself -- but the request needs a scrollable ancestor to
+            // be honoured by, and there was none: a fillMaxSize Box with centred content cannot
+            // move. So tapping the field put the keyboard over the field. `imePadding` is what
+            // makes room for it (the activity is edge-to-edge, so the window does not resize on its
+            // own), and the scroll is what lets the content use that room.
+            //
+            // fillMaxSize before verticalScroll is deliberate: the column takes the viewport's
+            // height, so Arrangement.Center still centres content that fits, and only content that
+            // does not fit scrolls. Step 6 was already close to overflowing on a short screen.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (useWideLayout)
                     Row {

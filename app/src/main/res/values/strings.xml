@@ -719,21 +719,21 @@ language, hence "No language". -->
     <!-- The label of the button that finishes the setup wizard. -->
     <!-- Replaces upstream's "you're all set" at step 3: this wizard has two more steps after it. -->
     <string name="setup_step3_typing_ready">"Typing works"</string>
-    <string name="setup_step4_action">Set up dictation</string>
-    <string name="setup_step4_title">"Connect your VibeVoice account"</string>
-    <string name="setup_step4_instruction">Dictation is transcribed by VibeVoice, so the keyboard needs an account to talk to. It is free, and linking takes a browser tab.</string>
-    <string name="setup_step4_link">Link an account</string>
-    <string name="setup_step4_linked">Account linked</string>
+    <string name="setup_continue_action">Set up dictation</string>
+    <string name="setup_link_title">"Connect your VibeVoice account"</string>
+    <string name="setup_link_instruction">The free minutes are nearly the only thing that runs without an account. Link one and you get 30 minutes a month at no cost, on this device and any other. It takes a browser tab.</string>
+    <string name="setup_link_action">Link an account</string>
+    <string name="setup_link_done">Account linked</string>
     <string name="setup_next_action">Next</string>
-    <string name="setup_step5_title">"Let it hear you"</string>
-    <string name="setup_step5_instruction">Tap the V in the top row to start. It glows while the keyboard is listening, and tapping it again stops. A long press on the space bar does the same without leaving the keys \u2014 press once, let go, keep talking.</string>
-    <string name="setup_step5_mic">Allow the microphone</string>
-    <string name="setup_step5_mic_granted">Microphone allowed</string>
-    <string name="setup_step6_title">"Two extras, if you want them"</string>
-    <string name="setup_step6_instruction">Dictation normally stops when the keyboard closes. Turn this on and it carries on, so you can start talking here and finish in another app.</string>
-    <string name="setup_step6_background">Keep transcribing after the keyboard closes (optional)</string>
-    <string name="setup_step6_overlay">Show the mark while it runs \u2014 opens system settings (optional)</string>
-    <string name="setup_step6_overlay_granted">The mark will be shown</string>
+    <string name="setup_mic_title">"Let it hear you"</string>
+    <string name="setup_mic_instruction">Tap the V at the top right. It lights up while the keyboard is listening, and another tap ends it. Holding the space bar does the same without leaving the keys — press once, let go, keep talking.</string>
+    <string name="setup_mic_grant">Allow the microphone</string>
+    <string name="setup_mic_granted">Microphone allowed</string>
+    <string name="setup_extras_title">"Two extras, if you want them"</string>
+    <string name="setup_extras_instruction">Dictation normally stops when the keyboard closes. Turn the first one on and it carries on, so you can start talking here and finish in another app — and then the second one becomes available.</string>
+    <string name="setup_extras_background">Keep transcribing after the keyboard closes (optional)</string>
+    <string name="setup_extras_overlay">Show the mark while it runs \u2014 opens system settings (optional)</string>
+    <string name="setup_extras_overlay_granted">The mark will be shown</string>
 
     <!-- The brand, shown on the wizard's first page. The wordmark and the slogan are the same two
          lines the landing page opens with, and they stay English everywhere: a slogan is a name for
@@ -745,8 +745,18 @@ language, hence "No language". -->
     <string name="brand_subline">Speech to text for everywhere you type.</string>
 
     <!-- The practice field, step 5. Shown only once the microphone has been granted. -->
-    <string name="setup_step5_try_label">Try it now</string>
-    <string name="setup_step5_try_hint">Tap here, then start dictating…</string>
+    <string name="setup_try_label">Try it now</string>
+    <string name="setup_try_hint">Tap here, then start dictating…</string>
+    <string name="setup_try_skip">Skip this</string>
+    <!-- %d is the number of minutes the server granted, never typed here: it is server config and
+         a copy in the app would drift the moment it changes. -->
+    <string name="setup_trial_note">%d free minutes to try, no account needed.</string>
+    <string name="setup_trial_unavailable">Couldn\'t reach VibeVoice for the free minutes. Link an account in the next step and dictation works straight away.</string>
+    <string name="setup_extras_overlay_locked">Show the mark — needs the option above</string>
+    <string name="setup_finish_without">Finish without these</string>
+
+    <!-- Shown when the free trial minutes have been spent. Not an error: an invitation. -->
+    <string name="vibevoice_trial_over">Your free minutes are used up. Link a VibeVoice account to keep dictating — 30 minutes a month, no cost.</string>
     <string name="setup_finish_action">Finished</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
