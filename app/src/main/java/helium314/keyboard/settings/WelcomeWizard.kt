@@ -392,8 +392,13 @@ fun WelcomeWizard(
                             }
                         ) { linked = true; step = 6 }
                         Spacer(Modifier.height(8.dp))
-                        // The trial does not last forever, but nobody has to link today.
-                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_try_skip), false) {
+                        // Its own label, not the practice step's "Skip this". On the account step
+                        // that word promises the wrong thing -- it reads as "no thanks" when what
+                        // is on offer is "not now", and the free minutes are still there either
+                        // way. Somebody who has just heard their own voice come out as text is the
+                        // likeliest person in the world to link an account tomorrow; telling them
+                        // they have declined it makes that less likely, not more.
+                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_link_later), false) {
                             step = 6
                         }
                     }

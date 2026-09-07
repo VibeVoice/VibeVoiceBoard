@@ -127,6 +127,7 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_try_label">Probier es gleich aus</string>
     <string name="setup_try_hint">Hier tippen und losdiktieren…</string>
     <string name="setup_try_skip">Überspringen</string>
+    <string name="setup_link_later">Später verknüpfen – die Gratis-Minuten laufen weiter</string>
     <string name="setup_trial_note">%d Gratis-Minuten zum Ausprobieren, ganz ohne Konto.</string>
     <string name="setup_trial_unavailable">VibeVoice war für die Gratis-Minuten nicht erreichbar. Verknüpf im nächsten Schritt ein Konto, dann geht das Diktat sofort.</string>
     <string name="setup_extras_overlay_locked">Marke anzeigen – braucht die Option darüber</string>

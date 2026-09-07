@@ -748,6 +748,7 @@ language, hence "No language". -->
     <string name="setup_try_label">Try it now</string>
     <string name="setup_try_hint">Tap here, then start dictating…</string>
     <string name="setup_try_skip">Skip this</string>
+    <string name="setup_link_later">Link later — the free minutes still work</string>
     <!-- %d is the number of minutes the server granted, never typed here: it is server config and
          a copy in the app would drift the moment it changes. -->
     <string name="setup_trial_note">%d free minutes to try, no account needed.</string>
