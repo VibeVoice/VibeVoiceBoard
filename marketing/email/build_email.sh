@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Render the email cards from the raw captures and cards.json.
 #
-# Output: 1200x900 PNG in marketing/email/images/, named by card id. Landscape, because an email is
+# Output: 1400x1280 PNG in marketing/email/images/, named by card id. Landscape, because an email is
 # read in a ~600px column where the 9:16 store images are a thousand pixels tall.
 #
 # Same Chrome-headless approach as build_overlays.sh; see the note at the top of card.html for why
@@ -44,7 +44,7 @@ PY
     # the crop is computed from the image's laid-out height, so a race here is a visible mis-crop.
     "$CHROME" --headless --disable-gpu --hide-scrollbars \
       --allow-file-access-from-files \
-      --force-device-scale-factor=2 --window-size=600,450 \
+      --force-device-scale-factor=2 --window-size=700,640 \
       --virtual-time-budget=4000 \
       --screenshot="$TMP/$id.png" "$url" >/dev/null 2>&1
 

@@ -2,9 +2,10 @@
   "_comment": [
     "The two images in the tester-invitation email.",
     "",
-    "`crop` is the fraction cut from the top of the capture. The captures are 1440x3120 and their",
-    "top third is chat history; what carries the argument is the dictated paragraph and the keyboard",
-    "below it. Cutting there is what lets the type inside the phone stay readable at email size.",
+    "Both cards show the whole capture. `crop`, `zoom` and `focusx` are available per card and both",
+    "of these use none of them: cropping the top off the WhatsApp shot also crops off the fact that",
+    "it is WhatsApp, and a home screen zoomed until the floating mark is large stops reading as a",
+    "home screen. Recognition is the argument, so the frame grew instead.",
     "",
     "The captions are not the store captions. The store speaks to strangers and has to explain that",
     "punctuation is automatic. These readers already dictate with VibeVoice every day -- to them that",
@@ -14,15 +15,11 @@
     {
       "id": "1-punctuation",
       "shot": "WhatsApp.jpg",
-      "crop": 0.32,
       "en": { "lead": "No ‘comma’.", "rest": "No ‘full stop’. Just talk." }
     },
     {
       "id": "2-background",
       "shot": "Homescreen.jpg",
-      "crop": 0.24,
-      "zoom": 1.45,
-      "focusx": 0.80,
       "en": { "lead": "Leave the app.", "rest": "It’s still listening." }
     }
   ]

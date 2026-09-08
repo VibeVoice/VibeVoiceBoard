@@ -87,10 +87,10 @@ dictation needs yours.*
 | Slot | File | Size |
 |---|---|---|
 | Header | `fastlane/metadata/android/en-US/images/featureGraphic.png` | 1024 × 500 |
-| Card 1 | `marketing/email/images/1-punctuation.png` | 1200 × 900 |
-| Card 2 | `marketing/email/images/2-background.png` | 1200 × 900 |
+| Card 1 | `marketing/email/images/1-punctuation.png` | 1400 × 1280 |
+| Card 2 | `marketing/email/images/2-background.png` | 1400 × 1280 |
 
-* Both cards are authored for a ~600 px column; ship them at `width="600"` and let the 2× file serve
+* Both cards display at 600 × 549 in a 600 px column; ship them at `width="600"` and let the 2× file serve
   retina.
 * `<OPT_IN_URL>` is the closed-test opt-in link from **Play Console → Test → Closed testing → alpha
   → Testers**. It does not exist until a build is live on that track, and an address on the tester

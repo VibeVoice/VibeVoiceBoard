@@ -10,16 +10,19 @@
   a column roughly 600px wide, where a 9:16 image is a thousand pixels tall and nobody scrolls it.
   So the card is landscape and the phone lies beside the words rather than under them.
 
-  WHY THE PHONE IS CROPPED
+  WHY THE PHONE IS SHOWN WHOLE
 
-  The full capture is 1440x3120 and the top third is chat history -- someone else's messages, which
-  prove nothing. What proves something is the dictated paragraph and the keyboard underneath it with
-  the waves running and the timer counting. `crop` is the fraction of the capture to cut from the
-  top; the device window then shows the rest at full width, so the type inside stays readable at the
-  size an email actually renders.
+  An earlier version cropped hard, on the theory that the top of a capture is chat history and the
+  argument lives in the dictated paragraph and the keyboard. That was wrong for a reason worth
+  writing down: cropping away the header also crops away WhatsApp. A screenshot that could be any
+  messaging app proves nothing about dictating in the apps people actually use, and the same goes for
+  a home screen that no longer reads as a home screen. Recognition IS the argument here.
 
-  Authored at 600x450 and shot at device scale 2, giving 1200x900 -- same trick as caption.html, and
-  for the same reason: every number in the stylesheet stays round.
+  So the frame grew instead of the picture shrinking. `crop`, `zoom` and `focusx` still exist for a
+  capture that genuinely needs them; both current cards use none of them.
+
+  Authored at 700x640 and shot at device scale 2, giving 1400x1280 -- which displays at 600x549 in an
+  email column, tall enough for a whole phone and short enough that nobody has to scroll it.
 -->
 <style>
   @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_thin.ttf') format('truetype'); font-weight: 100; }
@@ -28,7 +31,7 @@
 
   html, body { margin: 0; padding: 0; }
   body {
-    width: 600px; height: 450px; overflow: hidden;
+    width: 700px; height: 640px; overflow: hidden;
     background: #000;
     font-family: 'Ubuntu Sans', sans-serif;
     color: #fff;
@@ -40,25 +43,27 @@
      re-tuned for a landscape frame: the purple anchors the text side, the green lifts the phone. */
   .blob {
     position: absolute; border-radius: 50%;
-    width: 630px; height: 630px;                /* 140vmin of a 450px min side */
+    width: 896px; height: 896px;                /* 140vmin of a 640px min side */
     mix-blend-mode: screen; opacity: 0.30;
     pointer-events: none;
   }
-  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -230px; top: -140px; }
-  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -190px; top:  150px; }
-  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left:  150px; top:  240px; }
+  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -330px; top: -230px; }
+  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -280px; top:  260px; }
+  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left:  170px; top:  430px; }
 
-  .copy { position: relative; z-index: 2; flex: 1 1 auto; padding: 0 30px 0 52px; }
-  h1 { margin: 0; font-size: 30px; line-height: 1.2; font-weight: 100; text-wrap: balance; }
-  h1 b { font-weight: 600; }
-  .note { margin: 18px 0 0; font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.5); }
+  .copy { position: relative; z-index: 2; flex: 1 1 auto; padding: 0 28px 0 56px; }
+  h1 { margin: 0; font-size: 34px; line-height: 1.2; font-weight: 100; text-wrap: balance; }
+  /* The lead sits on its own line. Inline, the weight change lands mid-sentence and the phrase that
+     is supposed to hit first gets swallowed by the wrap. */
+  h1 b { font-weight: 600; display: block; }
+  .note { margin: 20px 0 0; font-size: 15px; font-weight: 400; color: rgba(255,255,255,0.5); }
 
   /* Same treatment as the store images: an outline and a radius, not a drawn handset. A device
      frame dates the picture to whatever phone it copies. */
   .device {
     position: relative; z-index: 2; flex: 0 0 auto;
-    width: 236px; height: 348px; margin-right: 52px;
-    border-radius: 22px; overflow: hidden;
+    width: 258px; height: 560px; margin-right: 52px;
+    border-radius: 26px; overflow: hidden;
     border: 1px solid rgba(255,255,255,0.14);
     box-shadow: 0 20px 56px rgba(0,0,0,0.7);
   }

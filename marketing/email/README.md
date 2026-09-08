@@ -6,10 +6,10 @@ captures, the typography and the blob background.
 | | |
 |---|---|
 | `tester-invite.en.md` | The closed-test invitation: subject, body, and notes for whoever builds the HTML |
-| `card.html` | Landscape card template, authored at 600 × 450 and shot at 2× |
-| `cards.json` | Which capture, which crop, which words |
+| `card.html` | Landscape card template, authored at 700 × 640 and shot at 2× |
+| `cards.json` | Which capture, which words, and any crop or zoom |
 | `build_email.sh` | Chrome headless → `images/*.png` |
-| `images/` | The rendered cards, 1200 × 900 |
+| `images/` | The rendered cards, 1400 × 1280 |
 
 ```bash
 ./build_email.sh
