@@ -171,14 +171,16 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         // scrolled out of reach whenever the tools were open; among the pinned keys it sat inside
         // the region that shrinks, so a strip of long suggestions at a high display zoom pushed it
         // past the right edge. Neither is acceptable for the control that stops a recording.
-        for (key in getEnabledToolbarKeys(context.prefs())) {
+        val enabledKeys = getEnabledToolbarKeys(context.prefs())
+        val pinnedKeyList = getPinnedToolbarKeys(context.prefs())
+        for (key in enabledKeys) {
             if (key == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, key)
             button.layoutParams = toolbarKeyLayoutParams
             setupKey(button, colors)
             toolbar.addView(button)
         }
-        for (pinnedKey in getPinnedToolbarKeys(context.prefs())) {
+        for (pinnedKey in pinnedKeyList) {
             if (pinnedKey == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, pinnedKey)
             button.layoutParams = toolbarKeyLayoutParams
@@ -188,12 +190,24 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
                 pinnedKeyInToolbar.background = enabledToolKeyBackground
         }
-        createToolbarKey(context, ToolbarKey.VOICE).also { button ->
-            button.layoutParams = toolbarKeyLayoutParams
+        // Anchored, but still the user's to switch off. Creating it unconditionally made the
+        // toolbar customiser lie: turning VOICE off there changed nothing, because this bypassed
+        // the preference that screen writes. Anchoring is about where the key sits when it exists,
+        // not about overruling somebody who does not want it.
+        if (ToolbarKey.VOICE in enabledKeys || ToolbarKey.VOICE in pinnedKeyList) {
+            val button = createToolbarKey(context, ToolbarKey.VOICE)
+            // Its own params, not the shared toolbarKeyLayoutParams. That is a single instance
+            // handed to every key, and LinearLayout stores the reference rather than copying it, so
+            // setting weight through it here set the weight of every toolbar and pinned key at once
+            // -- zeroing the very weight that spreads them across the bar, and then having it
+            // flipped back to 1 by the next setupKey call from setExternalSuggestionView. The
+            // anchor is wrap_content, so its child's weight does nothing anyway; what matters is
+            // not reaching through a shared object to say so.
+            button.layoutParams = LinearLayout.LayoutParams(
+                resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width),
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
             setupKey(button, colors)
-            // setupKey gives every key weight 1, which is right inside a stretching container and
-            // wrong here: the anchor is wrap_content and its child must keep its own width.
-            (button.layoutParams as LinearLayout.LayoutParams).weight = 0f
             voiceAnchor.addView(button)
         }
         toolbarContainer.doOnNextLayout {
@@ -328,7 +342,12 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     override fun onVisibilityChanged(view: View, visibility: Int) {
         super.onVisibilityChanged(view, visibility)
         // workaround for a bug with inline suggestions views that just keep showing up otherwise, https://github.com/HeliBorg/HeliBoard/pull/386
-        if (view === this)
+        //
+        // Guarded the way clear() guards the same invariant. Both the toolbar and the suggestion
+        // strip carry weight now, so showing them together splits the row in half instead of one
+        // simply covering the other. That state was reachable: open the toolbar, tap emoji or
+        // clipboard and come back, and this line forced the strip visible underneath it.
+        if (view === this && !toolbarContainer.isVisible)
             suggestionsStrip.visibility = visibility
     }
 
@@ -396,7 +415,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     private fun onLongClickToolbarKey(view: View) {
         val tag = view.tag as? ToolbarKey ?: return
-        if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys) {
+        // voiceAnchor belongs with pinnedKeys here: neither is a key you can pin or unpin, so a
+        // long press on one is an ordinary long press. Without it the anchored voice key consumed
+        // the gesture and did nothing -- no haptic, and any custom long-press code configured for
+        // VOICE stopped firing -- but only when quick-pin was on, which is the default.
+        if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys || view.parent === voiceAnchor) {
             onLongClickToolbarKey(view) { code, isRepeat -> listener.onCodeInput(code, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, isRepeat) }
         } else if (view.parent === toolbar) {
             AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
