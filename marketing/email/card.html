@@ -1,0 +1,114 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>email card</title>
+<!--
+  One landscape card for the tester-invitation email.
+
+  WHY A SEPARATE TEMPLATE FROM caption.html
+
+  The store screenshots are 9:16 portrait, because that is the shape Play shows. An email is read in
+  a column roughly 600px wide, where a 9:16 image is a thousand pixels tall and nobody scrolls it.
+  So the card is landscape and the phone lies beside the words rather than under them.
+
+  WHY THE PHONE IS CROPPED
+
+  The full capture is 1440x3120 and the top third is chat history -- someone else's messages, which
+  prove nothing. What proves something is the dictated paragraph and the keyboard underneath it with
+  the waves running and the timer counting. `crop` is the fraction of the capture to cut from the
+  top; the device window then shows the rest at full width, so the type inside stays readable at the
+  size an email actually renders.
+
+  Authored at 600x450 and shot at device scale 2, giving 1200x900 -- same trick as caption.html, and
+  for the same reason: every number in the stylesheet stays round.
+-->
+<style>
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_thin.ttf') format('truetype'); font-weight: 100; }
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_regular.ttf') format('truetype'); font-weight: 400; }
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_semibold.ttf') format('truetype'); font-weight: 600; }
+
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 600px; height: 450px; overflow: hidden;
+    background: #000;
+    font-family: 'Ubuntu Sans', sans-serif;
+    color: #fff;
+    position: relative;
+    display: flex; flex-direction: row; align-items: center;
+  }
+
+  /* The same three blobs as the store images and the app's wizard, held still. Arrangement is
+     re-tuned for a landscape frame: the purple anchors the text side, the green lifts the phone. */
+  .blob {
+    position: absolute; border-radius: 50%;
+    width: 630px; height: 630px;                /* 140vmin of a 450px min side */
+    mix-blend-mode: screen; opacity: 0.30;
+    pointer-events: none;
+  }
+  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -230px; top: -140px; }
+  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -190px; top:  150px; }
+  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left:  150px; top:  240px; }
+
+  .copy { position: relative; z-index: 2; flex: 1 1 auto; padding: 0 30px 0 52px; }
+  h1 { margin: 0; font-size: 30px; line-height: 1.2; font-weight: 100; text-wrap: balance; }
+  h1 b { font-weight: 600; }
+  .note { margin: 18px 0 0; font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.5); }
+
+  /* Same treatment as the store images: an outline and a radius, not a drawn handset. A device
+     frame dates the picture to whatever phone it copies. */
+  .device {
+    position: relative; z-index: 2; flex: 0 0 auto;
+    width: 236px; height: 348px; margin-right: 52px;
+    border-radius: 22px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 20px 56px rgba(0,0,0,0.7);
+  }
+  .device img { display: block; height: auto; max-width: none; }
+</style>
+
+<div class="blob purple"></div>
+<div class="blob green"></div>
+<div class="blob blue"></div>
+
+<div class="copy">
+  <h1><b id="lead">No &lsquo;comma&rsquo;.</b> <span id="rest">No &lsquo;full stop&rsquo;. Just talk.</span></h1>
+  <p class="note" id="note" hidden></p>
+</div>
+
+<div class="device"><img id="shot" alt=""></div>
+
+<script>
+  const q = new URLSearchParams(location.search);
+  const shot = q.get('shot');
+  const lead = q.get('lead');
+  const rest = q.get('rest');
+  const note = q.get('note');
+  const crop   = parseFloat(q.get('crop')   || '0');
+  const zoom   = parseFloat(q.get('zoom')   || '1');
+  const focusx = parseFloat(q.get('focusx') || '0.5');
+
+  if (lead !== null) document.getElementById('lead').textContent = lead;
+  if (rest !== null) document.getElementById('rest').textContent = rest;
+  if (note) {
+    const el = document.getElementById('note');
+    el.textContent = note;
+    el.hidden = false;
+  }
+
+  // The capture is laid out at `zoom` times the device width, then pulled left and up so the window
+  // lands on the part that carries the argument. Both offsets are clamped, so the window can never
+  // run off the image and leave a black band -- which also means zoom=1 needs no special case: the
+  // horizontal clamp collapses to zero on its own.
+  const img = document.getElementById('shot');
+  if (shot) {
+    img.addEventListener('load', () => {
+      const dev = img.parentElement;
+      const w = dev.clientWidth * zoom;
+      const h = w * img.naturalHeight / img.naturalWidth;
+      img.style.width = `${w}px`;
+      const clamp = (v, lo) => Math.min(0, Math.max(lo, v));
+      img.style.marginLeft = `${clamp(-(focusx * w - dev.clientWidth / 2), -(w - dev.clientWidth))}px`;
+      img.style.marginTop  = `${clamp(-(crop * h), -(h - dev.clientHeight))}px`;
+    });
+    img.src = shot;
+  }
+</script>
