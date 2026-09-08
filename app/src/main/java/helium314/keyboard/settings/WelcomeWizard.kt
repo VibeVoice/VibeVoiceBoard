@@ -373,6 +373,15 @@ fun WelcomeWizard(
                             style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark))
                         )
                     }
+                    // Prominent disclosure, and prominent is the requirement: Play wants what leaves
+                    // the device stated in the foreground before the first microphone access, not
+                    // only in a policy the user would have to go and find. Full ink, not the dimmed
+                    // body colour -- a disclosure set as fine print is not one.
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.setup_mic_disclosure),
+                        style = MaterialTheme.typography.bodyMedium.merge(color = textColor)
+                    )
                     Spacer(Modifier.height(8.dp))
                     ActionRow(
                         if (mic) R.drawable.ic_setup_check else R.drawable.ic_setup_key,
@@ -511,6 +520,27 @@ fun WelcomeWizard(
                             } catch (_: android.content.ActivityNotFoundException) {
                                 // Some builds have no such screen. Nothing else breaks.
                             }
+                        }
+                    }
+                    if (background) {
+                        // Show the thing before asking permission for it. "Show the mark" is an
+                        // abstraction until you have seen the mark; the picture is the same artwork
+                        // that will appear on screen, lifted off the black it was shot on.
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                painterResource(R.drawable.floating_mark_preview),
+                                null,
+                                Modifier.size(72.dp)
+                            )
+                            Text(
+                                stringResource(R.string.setup_extras_overlay_preview),
+                                style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
+                                modifier = Modifier.padding(start = 12.dp)
+                            )
                         }
                     }
                     Spacer(Modifier.height(8.dp))

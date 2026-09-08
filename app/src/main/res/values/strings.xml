@@ -747,6 +747,11 @@ language, hence "No language". -->
     <!-- The practice field, step 5. Shown only once the microphone has been granted. -->
     <string name="setup_try_label">Try it now</string>
     <string name="setup_try_hint">Tap here, then start dictating…</string>
+    <!-- Prominent disclosure. Play requires this to be visible in the foreground, before the
+         first microphone access, and not only in the privacy policy. It sits on the step that
+         asks for the permission, above the button that asks. -->
+    <string name="setup_mic_disclosure">While you dictate, what you say is sent to vibevoice.net to be transcribed. The recording is deleted as soon as the transcript exists or the attempt fails, and nothing is sent at any other time.</string>
+    <string name="setup_extras_overlay_preview">This is the mark. It pulses with your voice, and you drag it onto the X to stop.</string>
     <string name="setup_try_skip">Skip this</string>
     <string name="setup_link_later">Link later — the free minutes still work</string>
     <!-- %d is the number of minutes the server granted, never typed here: it is server config and
