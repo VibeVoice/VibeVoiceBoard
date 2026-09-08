@@ -46,7 +46,7 @@ So you've been doing what everybody does: dictating in VibeVoice, typing everywh
 
 **That split is over.**
 
-![No 'comma'. No 'full stop'. Just talk.](images/1-punctuation.png)
+![No 'comma'. No 'full stop'. Just talk.](../out/web/en-US/punctuation.png)
 
 ### VibeVoice Keyboard
 
@@ -56,7 +56,7 @@ you mean, and it lands in whatever field you were already in.
 It's a keyboard first. Everything else about typing works exactly as before, offline, with no
 account.
 
-![Leave the app. It's still listening.](images/2-background.png)
+![Leave the app. It's still listening.](../out/web/en-US/background.png)
 
 ### It doesn't stop when the keyboard does
 
@@ -87,8 +87,8 @@ dictation needs yours.*
 | Slot | File | Size |
 |---|---|---|
 | Header | `fastlane/metadata/android/en-US/images/featureGraphic.png` | 1024 × 500 |
-| Card 1 | `marketing/email/images/1-punctuation.png` | 1400 × 1280 |
-| Card 2 | `marketing/email/images/2-background.png` | 1400 × 1280 |
+| Card 1 | `marketing/out/web/en-US/punctuation.png` | 1400 × 1280 |
+| Card 2 | `marketing/out/web/en-US/background.png` | 1400 × 1280 |
 
 * Both cards display at 600 × 549 in a 600 px column; ship them at `width="600"` and let the 2× file serve
   retina.

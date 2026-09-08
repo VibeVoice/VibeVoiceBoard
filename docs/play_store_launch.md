@@ -44,7 +44,7 @@ Hero abfotografieren, *Get started* tippen, Schritt 1 abfotografieren, Tastatur 
 
 ### 1b. Die Textbanner — HTML, nicht Bildbearbeitung
 
-Neu: **`marketing/overlays/`**
+Neu: **`marketing/render/`**
 
 Jeder Screenshot bekommt oben eine Textzeile im Markenlila. Gebaut als **eine HTML-Datei mit
 einem Template**, gerendert über Chrome headless auf exakte Pixelmaße, kompositiert per ffmpeg.
@@ -55,11 +55,13 @@ Textänderung ist eine Textänderung, kein neuer Export. Und die Feature-Grafik 
 derselben Datei.
 
 ```
-marketing/overlays/
-  caption.html          ein Template, per URL-Parameter befüllt
-  captions.json         die Texte, en und de
-  build_overlays.sh     Chrome headless → PNG → ffmpeg-Komposit → fastlane/
-  fonts/                Symlink auf app/src/main/res/font
+marketing/render/
+  frame.html            ein Template für alle Bilder mit Telefon; die Anordnung
+                        kippt am Seitenverhältnis
+  feature.html          die Feature-Grafik, eigene Komposition ohne Telefon
+  captions.json         die Texte, nach Zielgruppe gruppiert
+  targets.json          welches Maß wohin
+  build.sh / plan.py    Chrome headless → PNG → fastlane/ bzw. marketing/out/
 ```
 
 **Aufbau je Bild:** Der Screenshot ist 1440 × 3120. Das Banner sitzt als eigene Fläche **über**
@@ -176,7 +178,7 @@ gegen die Zahlungsrichtlinie.
 
 | Datei | Änderung |
 |---|---|
-| `marketing/overlays/*` | neu — Template, Texte, Build-Skript |
+| `marketing/render/*` | neu — Template, Texte, Ziele, Build-Skript |
 | `marketing/assets/*` | die gerenderten Banner und die Feature-Grafik |
 | `fastlane/metadata/android/{en-US,de-DE}/images/*` | die fertigen Store-Bilder |
 | `fastlane/metadata/android/*/changelogs/` | HeliBoards Codes weg, einer neu |

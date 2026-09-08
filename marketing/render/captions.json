@@ -1,0 +1,59 @@
+{
+  "_comment": [
+    "The words on the images, grouped by who is reading them.",
+    "",
+    "`lead` is set semibold on its own line and `rest` thin, which is the weight contrast the landing",
+    "page's hero uses and the only thing that makes these read as ours rather than as generic store",
+    "furniture. `note` is optional and appears small and muted underneath.",
+    "",
+    "The two sets exist because the audiences differ, not because the formats do. The store speaks to",
+    "strangers and has to say that punctuation is automatic. `insider` goes to people who already",
+    "dictate with VibeVoice every day, to whom that is a premise rather than news -- so those captions",
+    "name the thing they have been putting up with instead. Neither set names a competitor or claims a",
+    "multiple: accuracy.js is explicit that nothing has been benchmarked.",
+    "",
+    "`shot` is a file in marketing/raw/. `crop`, `zoom` and `focusx` are optional per image and",
+    "nothing uses them today; see the note at the top of frame.html for why cropping these captures",
+    "turned out to cost more than it bought."
+  ],
+  "sets": {
+    "store": [
+      {
+        "id": "whatsapp", "shot": "WhatsApp.jpg",
+        "en": { "lead": "Speak.", "rest": "The punctuation writes itself." },
+        "de": { "lead": "Sprich.", "rest": "Die Satzzeichen kommen von selbst." }
+      },
+      {
+        "id": "gmail", "shot": "Gmail_2.jpg",
+        "en": { "lead": "Terminology,", "rest": "spelled right." },
+        "de": { "lead": "Fachbegriffe,", "rest": "richtig geschrieben." }
+      },
+      {
+        "id": "languages", "shot": "Google_mark_down.jpg",
+        "en": { "lead": "Three languages.", "rest": "One sentence.", "note": "9.31% word error rate · over fifty languages" },
+        "de": { "lead": "Drei Sprachen.", "rest": "Ein Satz.", "note": "9,31 % Wortfehlerrate · über fünfzig Sprachen" }
+      },
+      {
+        "id": "floating", "shot": "Homescreen.jpg",
+        "en": { "lead": "It keeps listening", "rest": "after you leave the app." },
+        "de": { "lead": "Es hört weiter zu,", "rest": "wenn du die App verlässt." }
+      },
+      {
+        "_comment": "The hero deliberately has no caption: the slogan is already inside the capture.",
+        "id": "hero", "shot": "WizardHero.jpg",
+        "en": { "lead": "", "rest": "" },
+        "de": { "lead": "", "rest": "" }
+      }
+    ],
+    "insider": [
+      {
+        "id": "punctuation", "shot": "WhatsApp.jpg",
+        "en": { "lead": "No ‘comma’.", "rest": "No ‘full stop’. Just talk." }
+      },
+      {
+        "id": "background", "shot": "Homescreen.jpg",
+        "en": { "lead": "Leave the app.", "rest": "It’s still listening." }
+      }
+    ]
+  }
+}

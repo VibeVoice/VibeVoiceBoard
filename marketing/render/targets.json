@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Where the images go and how big. A channel is an entry here, not a directory of its own -- the",
+    "template, the captions and the captures are shared, and splitting by channel is what previously",
+    "produced two renderers that drifted apart.",
+    "",
+    "`width`/`height` are the authored CSS size; everything is shot at scale 2, so the file is twice",
+    "that. Round numbers in the stylesheet, retina in the output.",
+    "",
+    "store: 720x1280 -> 1440x2560, which is 9:16 -- the tallest ratio Play accepts, and the one that",
+    "  leaves the most width for a 9:19.5 phone. See the arithmetic at the top of frame.html.",
+    "web:   700x640  -> 1400x1280, which displays at 600x549 in an email or a content column: room",
+    "  for a whole phone, short enough that nobody scrolls past it.",
+    "",
+    "`clear` is emptied before a target renders. Writing 1..N over whatever is there leaves anything",
+    "higher in place, and what was there once was fourteen HeliBoard screenshots: the listing would",
+    "have published four of ours followed by ten of theirs. A locale whose captures are not all taken",
+    "yet must come out short, not padded with someone else's app."
+  ],
+  "targets": [
+    {
+      "name": "store",
+      "set": "store",
+      "width": 720, "height": 1280,
+      "locales": { "en-US": "en", "de-DE": "de" },
+      "clear": "fastlane/metadata/android/{locale}/images/phoneScreenshots",
+      "out": "fastlane/metadata/android/{locale}/images/phoneScreenshots/{index}.png"
+    },
+    {
+      "name": "web",
+      "set": "insider",
+      "width": 700, "height": 640,
+      "locales": { "en-US": "en" },
+      "out": "marketing/out/web/{locale}/{id}.png"
+    }
+  ],
+  "feature": {
+    "template": "feature.html",
+    "width": 512, "height": 250,
+    "locales": [ "en-US", "de-DE" ],
+    "out": "fastlane/metadata/android/{locale}/images/featureGraphic.png"
+  }
+}
