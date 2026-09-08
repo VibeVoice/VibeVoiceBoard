@@ -136,10 +136,19 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val enabledToolKeyBackground = GradientDrawable()
     private var direction = 1 // 1 if LTR, -1 if RTL
 
-    private val toolbarKeyLayoutParams = LinearLayout.LayoutParams(
-        resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width),
-        LinearLayout.LayoutParams.MATCH_PARENT
-    )
+    private val toolbarKeyWidth = resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width)
+
+    /**
+     * Fresh params per key, never one instance shared between them.
+     *
+     * It used to be a single `val` handed to every key, and LinearLayout keeps the reference rather
+     * than copying it -- so setting a width or a weight through any one key set it for all of them,
+     * including the pinned row and the close button. That already produced one bug. It would
+     * produce another immediately below, where [fitToolbarKeys] narrows the carousel's keys and
+     * must not narrow anything else.
+     */
+    private fun newToolbarKeyParams() =
+        LinearLayout.LayoutParams(toolbarKeyWidth, LinearLayout.LayoutParams.MATCH_PARENT)
 
     init {
         val colors = Settings.getValues().mColors
@@ -176,14 +185,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         for (key in enabledKeys) {
             if (key == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, key)
-            button.layoutParams = toolbarKeyLayoutParams
+            button.layoutParams = newToolbarKeyParams()
             setupKey(button, colors)
             toolbar.addView(button)
         }
         for (pinnedKey in pinnedKeyList) {
             if (pinnedKey == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, pinnedKey)
-            button.layoutParams = toolbarKeyLayoutParams
+            button.layoutParams = newToolbarKeyParams()
             setupKey(button, colors)
             pinnedKeys.addView(button)
             val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
@@ -196,17 +205,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         // not about overruling somebody who does not want it.
         if (ToolbarKey.VOICE in enabledKeys || ToolbarKey.VOICE in pinnedKeyList) {
             val button = createToolbarKey(context, ToolbarKey.VOICE)
-            // Its own params, not the shared toolbarKeyLayoutParams. That is a single instance
-            // handed to every key, and LinearLayout stores the reference rather than copying it, so
-            // setting weight through it here set the weight of every toolbar and pinned key at once
-            // -- zeroing the very weight that spreads them across the bar, and then having it
-            // flipped back to 1 by the next setupKey call from setExternalSuggestionView. The
-            // anchor is wrap_content, so its child's weight does nothing anyway; what matters is
-            // not reaching through a shared object to say so.
-            button.layoutParams = LinearLayout.LayoutParams(
-                resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width),
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
+            button.layoutParams = newToolbarKeyParams()
             setupKey(button, colors)
             voiceAnchor.addView(button)
         }
@@ -214,6 +213,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // set min width of the toolbar so the weight of the toolbar keys actually does something
             // todo: results in requestLayout() improperly called by android.widget.LinearLayout during layout: running second layout pass
             toolbarContainer.post {
+                fitToolbarKeys()
                 if (toolbar.minimumWidth != toolbarContainer.width) {
                     toolbar.minimumWidth = toolbarContainer.width
                 }
@@ -309,7 +309,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             suggestionsStrip.addView(wrapper)
 
             val closeButton = createToolbarKey(context, ToolbarKey.CLOSE_HISTORY)
-            closeButton.layoutParams = toolbarKeyLayoutParams
+            closeButton.layoutParams = newToolbarKeyParams()
             setupKey(closeButton, Settings.getValues().mColors)
             closeButton.setOnClickListener {
                 listener.removeExternalSuggestions()
@@ -668,6 +668,40 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         pinnedKeys.addView(copy)
     }
 
+    /**
+     * Narrows the carousel's keys when a small overflow can be absorbed, so nothing has to scroll.
+     *
+     * The best affordance for hidden content is not having any. One key over the edge is the common
+     * case -- somebody enabled a tenth tool -- and taking a few dp off each key makes the whole set
+     * visible, which beats any amount of signalling that there is more.
+     *
+     * It stops at [MIN_KEY_WIDTH_FRACTION]. Past that the icons get too small to hit reliably, and
+     * a scrolling toolbar with a permanent scrollbar is the better trade: the bar then says both
+     * that there is more and how much, which is more than a fading edge could.
+     *
+     * All or nothing. Shrinking as far as the floor and still overflowing would leave keys that are
+     * both cramped and scrolling, which is the worst of each.
+     */
+    private fun fitToolbarKeys() {
+        val count = toolbar.childCount
+        if (count == 0) return
+        val available = toolbarContainer.width
+        if (available <= 0) return
+
+        val target = if (count * toolbarKeyWidth <= available) toolbarKeyWidth
+            else (available / count).takeIf { it >= toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION }
+                ?: toolbarKeyWidth
+
+        for (i in 0 until count) {
+            val child = toolbar.getChildAt(i)
+            val params = child.layoutParams
+            if (params.width != target) {
+                params.width = target
+                child.layoutParams = params
+            }
+        }
+    }
+
     private fun setupKey(view: ImageButton, colors: Colors) {
         view.setOnClickListener(this)
         view.setOnLongClickListener(this)
@@ -682,6 +716,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         private const val DEBUG_INFO_TEXT_SIZE_IN_DIP = 6.5f
         private val TAG = SuggestionStripView::class.java.simpleName
         /** The box the glowing mark is rendered at; FIT_CENTER scales it to whatever the key is. */
+        /**
+         * How far a toolbar key may be squeezed before scrolling is the better answer.
+         *
+         * 0.75 of 36dp is 27dp. Below that the touch target is smaller than anyone can reliably hit
+         * on a strip this short, and a key too small to press is worse than one you have to scroll to.
+         */
+        private const val MIN_KEY_WIDTH_FRACTION = 0.75f
+
         private const val VOICE_GLOW_BOX_DP = 40f
     }
 }

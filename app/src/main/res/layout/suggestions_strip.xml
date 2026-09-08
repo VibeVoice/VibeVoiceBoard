@@ -38,6 +38,9 @@
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:scrollbarThumbHorizontal="@color/toolbar_scrollbar"
+            android:scrollbars="horizontal"
+            android:scrollbarSize="@dimen/config_toolbar_scrollbar_size"
+            android:fadeScrollbars="false"
             android:visibility="gone">
             <LinearLayout
                 android:id="@+id/toolbar"
