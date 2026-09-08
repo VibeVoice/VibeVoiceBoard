@@ -4,40 +4,50 @@
     "template, the captions and the captures are shared, and splitting by channel is what previously",
     "produced two renderers that drifted apart.",
     "",
+    "Everything renders into marketing/shots/<id>/, beside the capture it came from, named",
+    "<layout>.<set>.<language>.png. One motif is one directory: the raw, both layouts, both languages",
+    "and every wording, in one listing. Nothing is written into fastlane/ -- the store screenshots are",
+    "read straight from here at upload time, in the order the `store` set lists them.",
+    "",
+    "That also retires the old `clear` step. Numbered output (1.png, 2.png...) meant a shorter set",
+    "left the previous run's higher numbers in place; once fourteen inherited HeliBoard screenshots",
+    "survived that way and the listing would have published four of ours followed by ten of theirs.",
+    "Stable names cannot do that.",
+    "",
     "`width`/`height` are the authored CSS size; everything is shot at scale 2, so the file is twice",
     "that. Round numbers in the stylesheet, retina in the output.",
     "",
-    "store: 720x1280 -> 1440x2560, which is 9:16 -- the tallest ratio Play accepts, and the one that",
+    "tall: 720x1280 -> 1440x2560, which is 9:16 -- the tallest ratio Play accepts, and the one that",
     "  leaves the most width for a 9:19.5 phone. See the arithmetic at the top of frame.html.",
-    "web:   700x640  -> 1400x1280, which displays at 600x549 in an email or a content column: room",
-    "  for a whole phone, short enough that nobody scrolls past it.",
-    "",
-    "`clear` is emptied before a target renders. Writing 1..N over whatever is there leaves anything",
-    "higher in place, and what was there once was fourteen HeliBoard screenshots: the listing would",
-    "have published four of ours followed by ten of theirs. A locale whose captures are not all taken",
-    "yet must come out short, not padded with someone else's app."
+    "wide: 700x640  -> 1400x1280, which displays at 600x549 in an email or a content column: room",
+    "  for a whole phone, short enough that nobody scrolls past it."
   ],
   "targets": [
     {
-      "name": "store",
-      "set": "store",
+      "name": "tall-store",
+      "set": "store", "layout": "tall",
       "width": 720, "height": 1280,
-      "locales": { "en-US": "en", "de-DE": "de" },
-      "clear": "fastlane/metadata/android/{locale}/images/phoneScreenshots",
-      "out": "fastlane/metadata/android/{locale}/images/phoneScreenshots/{index}.png"
+      "locales": { "en": "en", "de": "de" }
     },
     {
-      "name": "web",
-      "set": "insider",
+      "name": "wide-store",
+      "set": "store", "layout": "wide",
       "width": 700, "height": 640,
-      "locales": { "en-US": "en" },
-      "out": "marketing/out/web/{locale}/{id}.png"
+      "locales": { "en": "en", "de": "de" }
+    },
+    {
+      "_comment": "The tester email only. Two images, English only, written for people who already dictate.",
+      "name": "wide-insider",
+      "set": "insider", "layout": "wide",
+      "width": 700, "height": 640,
+      "locales": { "en": "en" }
     }
   ],
+  "out": "marketing/shots/{id}/{layout}.{set}.{locale}.png",
   "feature": {
     "template": "feature.html",
     "width": 512, "height": 250,
-    "locales": [ "en-US", "de-DE" ],
-    "out": "fastlane/metadata/android/{locale}/images/featureGraphic.png"
+    "out": "fastlane/metadata/android/{locale}/images/featureGraphic.png",
+    "locales": [ "en-US", "de-DE" ]
   }
 }

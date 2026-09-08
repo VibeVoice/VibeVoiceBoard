@@ -12,46 +12,48 @@
     "name the thing they have been putting up with instead. Neither set names a competitor or claims a",
     "multiple: accuracy.js is explicit that nothing has been benchmarked.",
     "",
-    "`shot` is a file in marketing/raw/. `crop`, `zoom` and `focusx` are optional per image and",
+    "The capture for an image is shots/<id>/raw.jpg, and everything rendered from it lands beside",
+    "it in the same directory -- so one motif is one folder and the raw, both layouts and both",
+    "languages are read side by side. `crop`, `zoom` and `focusx` are optional per image and",
     "nothing uses them today; see the note at the top of frame.html for why cropping these captures",
     "turned out to cost more than it bought."
   ],
   "sets": {
     "store": [
       {
-        "id": "whatsapp", "shot": "WhatsApp.jpg",
+        "id": "whatsapp",
         "en": { "lead": "Speak.", "rest": "The punctuation writes itself." },
         "de": { "lead": "Sprich.", "rest": "Die Satzzeichen kommen von selbst." }
       },
       {
-        "id": "gmail", "shot": "Gmail_2.jpg",
+        "id": "gmail",
         "en": { "lead": "Terminology,", "rest": "spelled right." },
         "de": { "lead": "Fachbegriffe,", "rest": "richtig geschrieben." }
       },
       {
-        "id": "languages", "shot": "Google_mark_down.jpg",
+        "id": "languages",
         "en": { "lead": "Three languages.", "rest": "One sentence.", "note": "9.31% word error rate · over fifty languages" },
         "de": { "lead": "Drei Sprachen.", "rest": "Ein Satz.", "note": "9,31 % Wortfehlerrate · über fünfzig Sprachen" }
       },
       {
-        "id": "floating", "shot": "Homescreen.jpg",
+        "id": "floating",
         "en": { "lead": "It keeps listening", "rest": "after you leave the app." },
         "de": { "lead": "Es hört weiter zu,", "rest": "wenn du die App verlässt." }
       },
       {
         "_comment": "The hero deliberately has no caption: the slogan is already inside the capture.",
-        "id": "hero", "shot": "WizardHero.jpg",
+        "id": "hero",
         "en": { "lead": "", "rest": "" },
         "de": { "lead": "", "rest": "" }
       }
     ],
     "insider": [
       {
-        "id": "punctuation", "shot": "WhatsApp.jpg",
+        "id": "whatsapp",
         "en": { "lead": "No ‘comma’.", "rest": "No ‘full stop’. Just talk." }
       },
       {
-        "id": "background", "shot": "Homescreen.jpg",
+        "id": "floating",
         "en": { "lead": "Leave the app.", "rest": "It’s still listening." }
       }
     ]

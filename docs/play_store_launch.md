@@ -55,13 +55,18 @@ Textänderung ist eine Textänderung, kein neuer Export. Und die Feature-Grafik 
 derselben Datei.
 
 ```
+marketing/shots/<motiv>/
+  raw.jpg               die Aufnahme
+  tall.store.{en,de}.png    1440×2560, das Play-Bild
+  wide.store.{en,de}.png    1400×1280, für Web und Mail
 marketing/render/
   frame.html            ein Template für alle Bilder mit Telefon; die Anordnung
                         kippt am Seitenverhältnis
   feature.html          die Feature-Grafik, eigene Komposition ohne Telefon
-  captions.json         die Texte, nach Zielgruppe gruppiert
+  captions.json         die Texte, nach Zielgruppe gruppiert; die Reihenfolge
+                        des Satzes `store` ist die Reihenfolge im Store
   targets.json          welches Maß wohin
-  build.sh / plan.py    Chrome headless → PNG → fastlane/ bzw. marketing/out/
+  build.sh / plan.py    Chrome headless → PNG neben die Aufnahme
 ```
 
 **Aufbau je Bild:** Der Screenshot ist 1440 × 3120. Das Banner sitzt als eigene Fläche **über**
@@ -178,9 +183,10 @@ gegen die Zahlungsrichtlinie.
 
 | Datei | Änderung |
 |---|---|
-| `marketing/render/*` | neu — Template, Texte, Ziele, Build-Skript |
+| `marketing/shots/*` | Aufnahmen und alles daraus Gerenderte, je Motiv ein Verzeichnis |
+| `marketing/render/*` | Template, Texte, Ziele, Build-Skript |
 | `marketing/assets/*` | die gerenderten Banner und die Feature-Grafik |
-| `fastlane/metadata/android/{en-US,de-DE}/images/*` | die fertigen Store-Bilder |
+| `fastlane/metadata/android/{en-US,de-DE}/images/*` | nur noch Feature-Grafik und Icon; die Screenshots liest der Uploader aus `marketing/shots/` |
 | `fastlane/metadata/android/*/changelogs/` | HeliBoards Codes weg, einer neu |
 | `app/src/main/AndroidManifest.xml` | `READ_CONTACTS` raus |
 | `app/src/main/res/values/strings.xml` | Prominent Disclosure in Schritt 4 schärfen |

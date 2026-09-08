@@ -46,7 +46,7 @@ while IFS=$'\t' read -r verb a b c d; do
   case "$verb" in
     CLEAR)  rm -f "$a"/*.png 2>/dev/null || true ;;
     HEAD)   echo "$a:" ;;
-    SKIP)   echo "  skip $a: $b not in marketing/raw yet" ;;
+    SKIP)   echo "  skip $a: $b not taken yet" ;;
     RENDER) shoot "$a" "$b" "$c" "$d"; n=$((n + 1)) ;;
   esac
 done < <(python3 "$HERE/plan.py" "$HERE" "$ROOT" "$ONLY")

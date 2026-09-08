@@ -11,7 +11,7 @@ HERE, ROOT, ONLY = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 e
 
 targets  = json.load(open(f"{HERE}/targets.json"))
 captions = json.load(open(f"{HERE}/captions.json"))["sets"]
-raw      = f"{ROOT}/marketing/raw"
+shots    = f"{ROOT}/marketing/shots"
 
 out = []
 def emit(*fields):
@@ -26,15 +26,14 @@ for t in targets["targets"]:
         continue
     emit("HEAD", t["name"])
     for locale, short in t["locales"].items():
-        if "clear" in t:
-            emit("CLEAR", f"{ROOT}/" + t["clear"].format(locale=locale))
-        for index, img in enumerate(captions[t["set"]], start=1):
-            shot = f"{raw}/{img['shot']}"
+        for img in captions[t["set"]]:
+            shot = f"{shots}/{img['id']}/raw.jpg"
             if not os.path.exists(shot):
-                emit("SKIP", img["id"], img["shot"])
+                emit("SKIP", img["id"], f"shots/{img['id']}/raw.jpg")
                 continue
             c = img.get(short, {})
-            dest = f"{ROOT}/" + t["out"].format(locale=locale, index=index, id=img["id"])
+            dest = f"{ROOT}/" + targets["out"].format(
+                id=img["id"], layout=t["layout"], set=t["set"], locale=locale)
             emit("RENDER", t["width"], t["height"], dest,
                  url(t.get("template", "frame.html"),
                      shot=f"file://{shot}",
