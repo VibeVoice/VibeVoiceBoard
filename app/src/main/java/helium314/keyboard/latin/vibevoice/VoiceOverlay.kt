@@ -97,7 +97,7 @@ class VoiceOverlay(context: Context) : View(context) {
     /** Both from the keyboard's own theme, so the mark reads as part of it. */
     var discColor = Color.argb(235, 20, 20, 24)
         private set
-    var barColor = Color.rgb(0x62, 0x9D, 0xF6)
+    var barColor = VoiceGlow.FALLBACK_ACCENT
         private set
 
     private fun readThemeColors() {

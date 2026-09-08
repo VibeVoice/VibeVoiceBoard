@@ -48,7 +48,7 @@ class VoiceWaveView @JvmOverloads constructor(
     @Volatile private var client: WeakReference<VibeVoiceClient>? = null
 
     /** The wave colour, resolved once per session rather than per frame. */
-    private var baseColor = Color.GRAY
+    private var baseColor = VoiceGlow.FALLBACK_ACCENT
     private var phase = 0f
     private var level = 0f
     private var running = false
@@ -108,7 +108,7 @@ class VoiceWaveView @JvmOverloads constructor(
         baseColor = try {
             Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
         } catch (e: Exception) {
-            Color.GRAY
+            VoiceGlow.FALLBACK_ACCENT
         }
         if (running) return
         running = true

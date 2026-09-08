@@ -33,6 +33,17 @@ import helium314.keyboard.latin.utils.prefs
  * hardware-canvas draw.
  */
 object VoiceGlow {
+    /**
+     * The accent to draw with when the keyboard's colours cannot be read.
+     *
+     * Everything VibeVoice draws takes ColorType.GESTURE_TRAIL -- the glow behind the toolbar key,
+     * the floating mark's bars and its glow, the waves behind the keys -- so that a user who picks
+     * a colour scheme gets one answer everywhere. The fallbacks disagreed: the mark had this blue
+     * and the waves had Color.GRAY, so on the one path where Settings has not loaded yet the two
+     * halves of the same effect were different colours on screen at the same moment.
+     */
+    const val FALLBACK_ACCENT = 0xFF629DF6.toInt()
+
 
     private const val MIN_BLUR_PX = 1.5f
 
