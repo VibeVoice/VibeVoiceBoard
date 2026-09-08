@@ -1,0 +1,46 @@
+{
+  "_comment": [
+    "The store captions. One entry per screenshot, per locale.",
+    "",
+    "`shot` is a file in marketing/raw/. `lead` is set semibold and `rest` thin, which is the same",
+    "weight contrast the landing page's hero uses and the only thing that makes these read as ours",
+    "rather than as generic store furniture. `note` is optional and appears small and muted under",
+    "the caption; only one image carries one, because a number is worth more when it is the only",
+    "number in the set.",
+    "",
+    "The hero screenshot deliberately has no caption. It is the brand image and the slogan is",
+    "already in it."
+  ],
+  "images": [
+    {
+      "id": "1-whatsapp",
+      "shot": "WhatsApp.jpg",
+      "en": { "lead": "Speak.", "rest": "The punctuation writes itself." },
+      "de": { "lead": "Sprich.", "rest": "Die Satzzeichen kommen von selbst." }
+    },
+    {
+      "id": "2-gmail",
+      "shot": "Gmail_2.jpg",
+      "en": { "lead": "Terminology,", "rest": "spelled right." },
+      "de": { "lead": "Fachbegriffe,", "rest": "richtig geschrieben." }
+    },
+    {
+      "id": "3-languages",
+      "shot": "Google_mark_down.jpg",
+      "en": { "lead": "Three languages.", "rest": "One sentence.", "note": "9.31% word error rate · over fifty languages" },
+      "de": { "lead": "Drei Sprachen.", "rest": "Ein Satz.", "note": "9,31 % Wortfehlerrate · über fünfzig Sprachen" }
+    },
+    {
+      "id": "4-floating",
+      "shot": "Homescreen.jpg",
+      "en": { "lead": "It keeps listening", "rest": "after you leave the app." },
+      "de": { "lead": "Es hört weiter zu,", "rest": "wenn du die App verlässt." }
+    },
+    {
+      "id": "5-hero",
+      "shot": "WizardHero.jpg",
+      "en": { "lead": "", "rest": "" },
+      "de": { "lead": "", "rest": "" }
+    }
+  ]
+}

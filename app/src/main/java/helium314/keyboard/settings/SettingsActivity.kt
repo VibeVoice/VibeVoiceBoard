@@ -110,7 +110,10 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                                         BackButton { this@SettingsActivity.finish() }
                                     },
                                 )
-                                settingsContainer[Settings.PREF_USE_CONTACTS]!!.Preference()
+                                // No contacts row: READ_CONTACTS is not declared, so the switch
+                                // could never turn on. Hiding it from one list was not enough --
+                                // this screen rendered it by key, and settings search indexes every
+                                // Setting in the container regardless of which list shows it.
                                 settingsContainer[Settings.PREF_USE_APPS]!!.Preference()
                                 settingsContainer[Settings.PREF_BLOCK_POTENTIALLY_OFFENSIVE]!!.Preference()
                                 settingsContainer[Settings.PREF_SPELLCHECK_SUGGEST]!!.Preference()

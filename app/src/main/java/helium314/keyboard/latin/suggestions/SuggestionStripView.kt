@@ -10,11 +10,18 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.graphics.Color
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.OvalShape
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.Gravity
+import androidx.core.content.ContextCompat
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.LayoutInflater
@@ -46,6 +53,7 @@ import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.ToolbarMode
 import helium314.keyboard.latin.utils.addPinnedKey
@@ -118,6 +126,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val toolbar: ViewGroup = findViewById(R.id.toolbar)
     private val toolbarContainer: View = findViewById(R.id.toolbar_container)
     private val pinnedKeys: ViewGroup = findViewById(R.id.pinned_keys)
+    /** The fixed right edge. Holds the VibeVoice key, never scrolls, never shrinks. */
+    private val voiceAnchor: ViewGroup = findViewById(R.id.voice_anchor)
     private val suggestionsStrip: ViewGroup = findViewById(R.id.suggestions_strip)
     private val toolbarExpandKey = findViewById<ImageButton>(R.id.suggestions_strip_toolbar_key)
     private val incognitoIcon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.INCOGNITO.name, context)
@@ -156,13 +166,22 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
 
         // toolbar keys setup (no need to hide them any more when locked, because then suggestion strip is gone anyway
-        for (key in getEnabledToolbarKeys(context.prefs())) {
+        //
+        // VOICE is filtered out of both lists and given its own anchor instead. In the carousel it
+        // scrolled out of reach whenever the tools were open; among the pinned keys it sat inside
+        // the region that shrinks, so a strip of long suggestions at a high display zoom pushed it
+        // past the right edge. Neither is acceptable for the control that stops a recording.
+        val enabledKeys = getEnabledToolbarKeys(context.prefs())
+        val pinnedKeyList = getPinnedToolbarKeys(context.prefs())
+        for (key in enabledKeys) {
+            if (key == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, key)
             button.layoutParams = toolbarKeyLayoutParams
             setupKey(button, colors)
             toolbar.addView(button)
         }
-        for (pinnedKey in getPinnedToolbarKeys(context.prefs())) {
+        for (pinnedKey in pinnedKeyList) {
+            if (pinnedKey == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, pinnedKey)
             button.layoutParams = toolbarKeyLayoutParams
             setupKey(button, colors)
@@ -170,6 +189,26 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
             if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
                 pinnedKeyInToolbar.background = enabledToolKeyBackground
+        }
+        // Anchored, but still the user's to switch off. Creating it unconditionally made the
+        // toolbar customiser lie: turning VOICE off there changed nothing, because this bypassed
+        // the preference that screen writes. Anchoring is about where the key sits when it exists,
+        // not about overruling somebody who does not want it.
+        if (ToolbarKey.VOICE in enabledKeys || ToolbarKey.VOICE in pinnedKeyList) {
+            val button = createToolbarKey(context, ToolbarKey.VOICE)
+            // Its own params, not the shared toolbarKeyLayoutParams. That is a single instance
+            // handed to every key, and LinearLayout stores the reference rather than copying it, so
+            // setting weight through it here set the weight of every toolbar and pinned key at once
+            // -- zeroing the very weight that spreads them across the bar, and then having it
+            // flipped back to 1 by the next setupKey call from setExternalSuggestionView. The
+            // anchor is wrap_content, so its child's weight does nothing anyway; what matters is
+            // not reaching through a shared object to say so.
+            button.layoutParams = LinearLayout.LayoutParams(
+                resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width),
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+            setupKey(button, colors)
+            voiceAnchor.addView(button)
         }
         toolbarContainer.doOnNextLayout {
             // set min width of the toolbar so the weight of the toolbar keys actually does something
@@ -303,7 +342,12 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     override fun onVisibilityChanged(view: View, visibility: Int) {
         super.onVisibilityChanged(view, visibility)
         // workaround for a bug with inline suggestions views that just keep showing up otherwise, https://github.com/HeliBorg/HeliBoard/pull/386
-        if (view === this)
+        //
+        // Guarded the way clear() guards the same invariant. Both the toolbar and the suggestion
+        // strip carry weight now, so showing them together splits the row in half instead of one
+        // simply covering the other. That state was reachable: open the toolbar, tap emoji or
+        // clipboard and come back, and this line forced the strip visible underneath it.
+        if (view === this && !toolbarContainer.isVisible)
             suggestionsStrip.visibility = visibility
     }
 
@@ -371,7 +415,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     private fun onLongClickToolbarKey(view: View) {
         val tag = view.tag as? ToolbarKey ?: return
-        if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys) {
+        // voiceAnchor belongs with pinnedKeys here: neither is a key you can pin or unpin, so a
+        // long press on one is an ordinary long press. Without it the anchored voice key consumed
+        // the gesture and did nothing -- no haptic, and any custom long-press code configured for
+        // VOICE stopped firing -- but only when quick-pin was on, which is the default.
+        if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys || view.parent === voiceAnchor) {
             onLongClickToolbarKey(view) { code, isRepeat -> listener.onCodeInput(code, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, isRepeat) }
         } else if (view.parent === toolbar) {
             AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
@@ -505,11 +553,33 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
+    /**
+     * The glow drawable that sits behind the active microphone key.
+     *
+     * Centred and not stretched: a BitmapDrawable used as a background is scaled to the view by
+     * default, which would pull the light out of shape as the key's size changes.
+     */
+    private fun buildVoiceGlow(mark: Drawable, box: Int, accent: Int, prefs: SharedPreferences): Drawable? {
+        val margin = IntArray(1)
+        val bitmap = VoiceGlow.render(
+            mark, box, accent,
+            prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE),
+            prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN),
+            margin
+        ) ?: return null
+        return BitmapDrawable(resources, bitmap).apply { gravity = Gravity.CENTER }
+    }
+
+    /** The rendered pieces, and what they were rendered for. */
+    private var voiceActiveMark: android.graphics.Bitmap? = null
+    private var voiceActiveGlow: Drawable? = null
+    private var voiceActiveKey: String? = null
+
     fun updateVoiceKey() {
         val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
-        // VibeVoice key is always visible — it is not gated on system voice IME availability
-        updateVoiceKeyButton(toolbar.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
-        updateVoiceKeyButton(pinnedKeys.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+        // VibeVoice key is always visible — it is not gated on system voice IME availability, and
+        // it lives in the anchor rather than in either of the two containers that can move it.
+        updateVoiceKeyButton(voiceAnchor.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
     }
 
     private fun updateVoiceKeyButton(view: View?, show: Boolean, isActivated: Boolean) {
@@ -517,20 +587,47 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         button.isVisible = show
         button.isActivated = isActivated
         if (isActivated) {
-            button.setImageResource(R.drawable.ic_vibevoice_active)
-            button.background = null
+            // The full VibeVoice logo while recording -- the two-tone one with the dark backing
+            // shape, the same artwork the floating mark uses. Not tinted: TOOL_BAR_KEY would
+            // flatten both tones into one and throw away the thing that makes it read as the logo
+            // rather than as a glyph.
+            val plain = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
+            val inkPx = plain?.intrinsicWidth?.takeIf { it > 0 }
+                ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
+            // Built once and kept. updateVoiceKey runs on every recording state change and on every
+            // window show, and rebuilding here meant a software blur and several bitmap
+            // allocations on the UI thread each time -- during a rotation, exactly when there is
+            // least room for it.
+            val prefs = context.prefs()
+            val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
+            val key = "$inkPx|$accent|" +
+                    prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE) + "|" +
+                    prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN)
+            if (key != voiceActiveKey) {
+                val logo = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+                // Sized by its ink, not its viewport: the launcher artwork carries an adaptive
+                // icon's padding, so drawn at its own bounds it would sit a third smaller than the
+                // key it replaces.
+                voiceActiveMark = logo?.let { VoiceGlow.renderMark(it, inkPx) }
+                voiceActiveGlow = voiceActiveMark?.let {
+                    buildVoiceGlow(BitmapDrawable(resources, it), inkPx, accent, prefs)
+                }
+                voiceActiveKey = key
+            }
+            val mark = voiceActiveMark
             button.clearColorFilter()
-            button.scaleType = ImageView.ScaleType.FIT_CENTER
+            if (mark != null) button.setImageBitmap(mark) else button.setImageDrawable(plain)
+            button.scaleType = ImageView.ScaleType.CENTER
+            // The glow goes on the layer underneath as the view's background, which is also what
+            // keeps it out of any tint: a colour filter on an ImageView applies to its image and
+            // not to its background.
+            button.background = voiceActiveGlow
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
-            // VOICE is pinned by default, and the toolbar copy of a pinned key carries the "pinned"
-            // highlight. Restoring the plain background unconditionally used to strip that highlight
-            // from VOICE alone, both at startup and again after every recording.
-            val isPinnedInToolbar = button.parent === toolbar
-                    && Settings.getValues().mQuickPinToolbarKeys
-                    && pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE) != null
-            button.background = if (isPinnedInToolbar) enabledToolKeyBackground
-                else defaultToolbarBackground.constantState?.newDrawable(resources)
+            // No "pinned" highlight to preserve any more: the key is not in the toolbar and not in
+            // the pinned row, it is the anchor's only child, so the plain background is always the
+            // right one.
+            button.background = defaultToolbarBackground.constantState?.newDrawable(resources)
             Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
             button.scaleType = ImageView.ScaleType.CENTER
             view.rotation = 0f // an older build left the key tilted; clear it once
@@ -584,5 +681,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         var DEBUG_SUGGESTIONS = false
         private const val DEBUG_INFO_TEXT_SIZE_IN_DIP = 6.5f
         private val TAG = SuggestionStripView::class.java.simpleName
+        /** The box the glowing mark is rendered at; FIT_CENTER scales it to whatever the key is. */
+        private const val VOICE_GLOW_BOX_DP = 40f
     }
 }

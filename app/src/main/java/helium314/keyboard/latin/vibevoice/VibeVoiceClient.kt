@@ -8,6 +8,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -29,6 +30,22 @@ import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
 
+/**
+ * What `POST /api/trial/key` can answer. The three failures are not interchangeable: 409 means show
+ * the account step, 429 means try again later, and anything else is a fault. Collapsing any two
+ * either invites somebody to register when it should have retried, or shows an error when it should
+ * have invited. See P-058 R4 in the VibeVoice repository.
+ *
+ * Top level rather than inside the companion: `VibeVoiceClient.TrialResult` is how every caller
+ * wants to write it, and a class nested in a companion is `VibeVoiceClient.Companion.TrialResult`.
+ */
+sealed class TrialResult {
+    data class Granted(val key: String, val minutesGranted: Double) : TrialResult()
+    object AlreadyUsed : TrialResult()
+    object RateLimited : TrialResult()
+    object Failed : TrialResult()
+}
+
 interface VibeVoiceListener {
     fun onPartial(text: String, isNewSegment: Boolean)
     fun onFinal(text: String, isNewSegment: Boolean)
@@ -39,6 +56,14 @@ interface VibeVoiceListener {
      * Unlike [onError] this must not tear the session down — wait for the final result.
      */
     fun onWarning(code: String)
+    /**
+     * The link became too poor to stream into, or recovered.
+     *
+     * Not an error and not a warning: the session is still running and still recording into the
+     * rolling buffer. The keyboard uses it to say so on the space bar, which is where the user is
+     * already looking, and to stop saying so when it clears.
+     */
+    fun onLinkQualityChanged(degraded: Boolean)
     fun onClosed()
     fun onCommitComposing()
 }
@@ -88,6 +113,28 @@ class VibeVoiceClient(
     @Volatile private var framesAppliedThisConnection = 0
     @Volatile private var isReconnecting = false
     @Volatile private var retryCount = 0
+
+    /**
+     * When the current outage began, or 0 when there is none.
+     *
+     * Owned by the outage and nothing else. It used to be cleared by [setLinkDegraded], which made
+     * the thirty-second window collapse to a single retry: during a backoff the socket is closed,
+     * so the watchdog saw a healthy link, cleared the flag and zeroed this -- and the next attempt
+     * measured the outage from zero, got the device's uptime, and gave up. The rule this replaced
+     * was three retries; the bug made it one.
+     */
+    @Volatile private var outageStartedAt = 0L
+    private var watchdogJob: Job? = null
+
+    /**
+     * Whether the link is currently too poor to be streaming into.
+     *
+     * Read by the keyboard to change what the space bar says. Deliberately not an error: a tunnel
+     * is a normal thing to drive through, and the session survives it as long as the unsent audio
+     * still fits in the rolling buffer.
+     */
+    @Volatile var isLinkDegraded = false
+        private set
     @Volatile private var isWsOpen = false
     @Volatile private var pendingEndStream = false
     private val preOpenBuffer = ArrayDeque<okio.ByteString>()
@@ -147,8 +194,16 @@ class VibeVoiceClient(
     private fun triggerReconnect() {
         if (!isStreaming) return
         isReconnecting = true
+        if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
+        // What OkHttp took from us and never put on the wire has not been received, however much
+        // the socket appeared to accept. Resuming from totalRead declared all of it delivered, and
+        // on the forced-reconnect path that is thirty seconds of speech by construction -- the
+        // reconnect would succeed and the words would simply be gone. The overshoot in the other
+        // direction is the auth frame, about three milliseconds of audio, which is the right way to
+        // be wrong.
+        val queuedNow = try { webSocket?.queueSize() ?: 0L } catch (_: Exception) { 0L }
         synchronized(preOpenBuffer) {
-            if (isWsOpen) disconnectedAtBytes = totalRead
+            if (isWsOpen) disconnectedAtBytes = (totalRead - queuedNow).coerceAtLeast(0L)
             isWsOpen = false
         }
         
@@ -157,12 +212,28 @@ class VibeVoiceClient(
         val delayMs = when (retryCount) {
             0 -> 500L
             1 -> 1000L
-            else -> 2000L
+            2 -> 2000L
+            else -> 3000L
         }
         retryCount++
-        
-        if (retryCount <= MAX_RETRIES) {
-            VibeVoiceDebugLogger.log("Reconnecting in ${delayMs}ms (attempt $retryCount/$MAX_RETRIES)...")
+
+        // Keep trying while the audio nobody has received still fits in the buffer.
+        //
+        // Three attempts over three and a half seconds was the old rule, and it threw away tolerance
+        // we had already paid for: the rolling buffer holds thirty seconds, so anything shorter than
+        // that is recoverable without losing a word. Three and a half seconds is not a tunnel, a
+        // lift, or a train between stations, which are exactly the situations this is for.
+        //
+        // Two bounds, because either alone can run away. The buffer bound stops mattering once
+        // capture has been torn down and totalRead stops growing; the clock bound stops a permanent
+        // outage from retrying for ever.
+        val unsent = totalRead - disconnectedAtBytes
+        val outageMs = SystemClock.elapsedRealtime() - outageStartedAt
+        if (unsent < rollingBuffer.size && outageMs < RECONNECT_WINDOW_MS) {
+            // No ceiling to print any more: the decision is about recoverable audio and elapsed
+            // outage, not about a count. "attempt 9/3" in the log people read to diagnose exactly
+            // these outages would have been worse than no number at all.
+            VibeVoiceDebugLogger.log("Reconnecting in ${delayMs}ms (attempt $retryCount, unsent=$unsent, outageMs=$outageMs)")
             scope.launch {
                 delay(delayMs)
                 // The session can end inside that delay -- the user stops it, or the microphone is
@@ -175,11 +246,72 @@ class VibeVoiceClient(
                 connectWebSocket()
             }
         } else {
-            VibeVoiceDebugLogger.log("Max reconnect retries reached. Stopping stream.")
+            VibeVoiceDebugLogger.log("Giving up: unsent=$unsent outageMs=$outageMs")
             isStreaming = false
+            setLinkDegraded(false)
             cleanupAudioCapture()
-            listener.onError("Connection lost")
+            // A code, not a sentence. What the user reads is the keyboard's business, and "Dictation
+            // error: Connection lost" framed a tunnel as a fault in the product.
+            listener.onError(ERR_LINK_LOST)
         }
+    }
+
+    /**
+     * Watches the link while a session runs, once a second.
+     *
+     * ONE SYMPTOM, NOT TWO
+     *
+     * `queueSize()` is what OkHttp has accepted from us and not yet put on the wire. It grows when
+     * the radio cannot keep up with 32 kB/s, which is the honest definition of "too poor to stream
+     * into" and the earliest thing visible from here. Six seconds' worth is the threshold: below
+     * that it is ordinary jitter, above it the backlog is not coming back on its own.
+     *
+     * There was a second rule here, on how long the server had been silent, and it was built on a
+     * claim I never checked. `docs/vibevoice_integration_guide.md` §5 lists exactly two frames the
+     * server ever sends -- a content frame and an end-of-stream marker -- and §"Resend on Reconnect"
+     * says outright "if the server ever does acknowledge processed seconds". There is no heartbeat.
+     * Silence therefore proves nothing: a user who taps dictate and thinks for ten seconds before
+     * speaking produces no frames at all, and the space bar would have told them their connection
+     * was broken. The socket that is up but answering nobody is caught by the ten-second ping
+     * instead, which is what a ping is for.
+     *
+     * A reconnect counts as degraded on its own. The flag used to be gated on `isWsOpen`, so it
+     * switched off for the whole backoff -- the timer came back and counted cheerfully upward
+     * during the one stretch when nothing could possibly be reaching the server, which is precisely
+     * the display this exists to prevent.
+     */
+    private fun startLinkWatchdog() {
+        watchdogJob?.cancel()
+        watchdogJob = scope.launch {
+            while (isActive && isStreaming) {
+                delay(LINK_CHECK_INTERVAL_MS)
+                if (!isStreaming) break
+                val ws = webSocket
+                val queued = try { ws?.queueSize() ?: 0L } catch (_: Exception) { 0L }
+                val bad = isReconnecting || (isWsOpen && queued > LINK_QUEUE_STALL_BYTES)
+                if (bad && outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
+                if (bad != isLinkDegraded) {
+                    VibeVoiceDebugLogger.log("Link ${if (bad) "degraded" else "recovered"}: queued=$queued reconnecting=$isReconnecting")
+                    setLinkDegraded(bad)
+                }
+                // Recovered means open, drained and not mid-reconnect. Only then is the outage over
+                // and only then may the clock be reset, because that clock is what decides whether
+                // another attempt is still worth making.
+                if (!bad) outageStartedAt = 0L
+                // A backlog bigger than the rolling buffer can never be made good by waiting: the
+                // audio behind it has already been overwritten. Cut the socket and let the normal
+                // reconnect path resend what is still held.
+                if (isLinkDegraded && queued > rollingBuffer.size) {
+                    VibeVoiceDebugLogger.log("Send queue past the buffer; forcing a reconnect")
+                    try { ws?.cancel() } catch (_: Exception) { }
+                }
+            }
+        }
+    }
+
+    private fun setLinkDegraded(degraded: Boolean) {
+        isLinkDegraded = degraded
+        listener.onLinkQualityChanged(degraded)
     }
 
     private fun createWebSocketListener(): WebSocketListener {
@@ -325,7 +457,9 @@ class VibeVoiceClient(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 VibeVoiceDebugLogger.log("WS Failure: ${t.message}")
-                if (isStreaming && retryCount < MAX_RETRIES) {
+                if (isStreaming) {
+                    // The decision whether another attempt is worth making lives in one place now,
+                    // and it is about how much audio is still recoverable rather than about a count.
                     triggerReconnect()
                 } else {
                     isStreaming = false
@@ -367,6 +501,9 @@ class VibeVoiceClient(
     fun startStreaming() {
         if (isStreaming) return
         isStreaming = true
+        isLinkDegraded = false
+        outageStartedAt = 0L
+        startLinkWatchdog()
         closureJob?.cancel()
         closureJob = null
         isReconnecting = false
@@ -698,6 +835,12 @@ class VibeVoiceClient(
     }
 
     private fun cleanupAudioCapture() {
+        // Reached by every path that ends a session, abnormal ones included, which is why the
+        // watchdog is torn down here rather than in stopStreaming alone.
+        watchdogJob?.cancel()
+        watchdogJob = null
+        outageStartedAt = 0L
+        if (isLinkDegraded) setLinkDegraded(false)
         audioJob?.cancel()
         audioJob = null
         try {
@@ -715,18 +858,78 @@ class VibeVoiceClient(
         private val JSON = "application/json".toMediaType()
         private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
+
+        /**
+         * The trial key, deliberately NOT in [VIBEVOICE_API_KEY_PREF].
+         *
+         * `getApiKey() != null` is what four call sites read as "this user has an account": the
+         * link panel hides itself, the wizard skips its account step, the settings screen shows a
+         * quota. A trial key stored there would silently answer yes to all of them, and the one
+         * screen whose entire job is to turn a trial into an account would never appear.
+         *
+         * So the two live apart, and [getApiKey] falls back from one to the other. Streaming, bug
+         * reports and every other consumer of a key keep working on a trial without knowing it is
+         * one; only [isLinked] can tell the difference, and only the places that must.
+         */
+        private const val VIBEVOICE_TRIAL_KEY_PREF = "vibevoice_trial_key"
+
+        /**
+         * The install this device presents to `POST /api/trial/key`, generated once.
+         *
+         * A random UUID and nothing derived from the device: P-058 requires an id that does not
+         * identify the phone across apps, and the server cannot check that, so the client is the
+         * whole of the contract. 36 characters, inside the server's 32..128 window.
+         */
+        private const val VIBEVOICE_INSTALL_ID_PREF = "vibevoice_install_id"
+
+        /**
+         * Set once the server has refused a session for a spent trial.
+         *
+         * Without it every tap on the microphone opens a socket, sends the auth frame and is
+         * refused -- a round trip and a second of dead air to learn something already known.
+         */
+        private const val VIBEVOICE_TRIAL_SPENT_PREF = "vibevoice_trial_spent"
+
+        /**
+         * The stream's refusal when the free minutes are gone.
+         *
+         * Distinct from an invalid key on purpose, and the distinction is the whole point: one is
+         * an invitation to link an account, the other is a fault. See P-058 R4.
+         */
+        const val ERR_TRIAL_EXHAUSTED = "trial_exhausted"
         private const val TAG = "VibeVoiceClient"
-        private const val MAX_RETRIES = 3
+        private const val LINK_CHECK_INTERVAL_MS = 1000L
+        /** Six seconds of audio at 16 kHz, 16-bit mono. Below this it is jitter; above it, a backlog. */
+        private const val LINK_QUEUE_STALL_BYTES = 6 * 32000L
+        /**
+         * How long an outage may last before the session ends.
+         *
+         * Matched to the rolling buffer: thirty seconds of audio is what a reconnect can resend, so
+         * waiting longer would mean coming back with a gap in the middle of a sentence.
+         */
+        private const val RECONNECT_WINDOW_MS = 30_000L
         /** RMS that counts as a full-scale level for the waves; see where currentLevel is written. */
         private const val LEVEL_FULL_SCALE = 0.15
+
+        /**
+         * The link stayed down long enough that the audio behind it could not be recovered.
+         *
+         * A code rather than a message: what the user reads belongs to the keyboard, and it should
+         * not read like a fault in the product. Driving into a tunnel is not a bug.
+         */
+        const val ERR_LINK_LOST = "link_lost"
 
         /** Another app won the concurrent-capture arbitration and the system is feeding us silence. */
         const val WARN_MIC_BUSY = "mic_busy"
         /** The recorder stopped delivering usable audio and restarting it did not help. */
         const val WARN_MIC_UNAVAILABLE = "mic_unavailable"
 
+        // Ten seconds, not thirty. The ping is the backstop that notices a socket which is dead but
+        // has not been told so, and at thirty it took up to a minute -- long enough to lose a whole
+        // dictation into a link that had already gone. The watchdog usually gets there first now,
+        // but the two answer different questions and both are cheap.
         @JvmField val sharedHttpClient = OkHttpClient.Builder()
-            .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
+            .pingInterval(10, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
         @Volatile private var cachedPrefs: SharedPreferences? = null
@@ -753,14 +956,123 @@ class VibeVoiceClient(
             context.getSharedPreferences("vibevoice_prefs", MODE_PRIVATE)
         }
 
+        /**
+         * A key to transcribe with: the account's if there is one, otherwise the trial's.
+         *
+         * Callers that need to know which they got should ask [isLinked]. Callers that only need
+         * to send audio -- which is nearly all of them -- must not, and do not.
+         */
         @JvmStatic
         fun getApiKey(context: Context): String? =
             vibeVoicePrefs(context).getString(VIBEVOICE_API_KEY_PREF, null)
+                ?: vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null)
 
-        suspend fun requestDeviceCode(deviceName: String, clientVersion: String): JSONObject? = withContext(Dispatchers.IO) {
+        /** Whether an account has been linked. A trial key is not an account. */
+        @JvmStatic
+        fun isLinked(context: Context): Boolean =
+            vibeVoicePrefs(context).getString(VIBEVOICE_API_KEY_PREF, null) != null
+
+        @JvmStatic
+        fun hasTrialKey(context: Context): Boolean =
+            vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null) != null
+
+        /** Whether the server has already refused a session because the trial is spent. */
+        @JvmStatic
+        fun isTrialSpent(context: Context): Boolean =
+            vibeVoicePrefs(context).getBoolean(VIBEVOICE_TRIAL_SPENT_PREF, false)
+
+        @JvmStatic
+        fun markTrialSpent(context: Context) {
+            vibeVoicePrefs(context).edit().putBoolean(VIBEVOICE_TRIAL_SPENT_PREF, true).apply()
+        }
+
+        /**
+         * This install's id, generated on first use and never regenerated.
+         *
+         * Reinstalling produces a new one and therefore a new trial. That is the accepted abuse
+         * ceiling -- ten minutes per reinstall -- and P-058 says so out loud rather than reaching
+         * for attestation to close it.
+         */
+        @JvmStatic
+        fun installId(context: Context): String {
+            val prefs = vibeVoicePrefs(context)
+            prefs.getString(VIBEVOICE_INSTALL_ID_PREF, null)?.let { return it }
+            return synchronized(VibeVoiceClient::class.java) {
+                prefs.getString(VIBEVOICE_INSTALL_ID_PREF, null) ?: java.util.UUID.randomUUID().toString()
+                    .also { prefs.edit().putString(VIBEVOICE_INSTALL_ID_PREF, it).apply() }
+            }
+        }
+
+        /**
+         * Asks for this install's free minutes and stores the key it gets.
+         *
+         * Returns without asking if an account is already linked -- a linked device spending a
+         * trial would burn it for nothing -- or if one has already been stored.
+         */
+        suspend fun requestTrialKey(context: Context): TrialResult = withContext(Dispatchers.IO) {
+            val prefs = vibeVoicePrefs(context)
+            if (isLinked(context)) return@withContext TrialResult.AlreadyUsed
+            prefs.getString(VIBEVOICE_TRIAL_KEY_PREF, null)?.let {
+                return@withContext TrialResult.Granted(it, 0.0)
+            }
+            val body = JSONObject().put("install_id", installId(context)).toString().toRequestBody(JSON)
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/trial/key")
+                .post(body)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    when (response.code) {
+                        409 -> return@use TrialResult.AlreadyUsed
+                        429 -> return@use TrialResult.RateLimited
+                    }
+                    if (!response.isSuccessful) return@use TrialResult.Failed
+                    val json = response.body?.string()?.let { JSONObject(it) } ?: return@use TrialResult.Failed
+                    val key = json.optString("api_key").takeIf { it.isNotBlank() }
+                        ?: return@use TrialResult.Failed
+                    prefs.edit().putString(VIBEVOICE_TRIAL_KEY_PREF, key).apply()
+                    VibeVoiceDebugLogger.log("Trial key granted")
+                    TrialResult.Granted(key, json.optDouble("minutes_granted", 0.0))
+                }
+            } catch (e: Exception) {
+                VibeVoiceDebugLogger.log("Trial key request failed: ${e.message}")
+                TrialResult.Failed
+            }
+        }
+
+        /**
+         * How much of the trial is left. Null when there is no trial key, when the key is not a
+         * trial (the server answers 404 for that), or when the request failed.
+         */
+        suspend fun trialStatus(context: Context): JSONObject? = withContext(Dispatchers.IO) {
+            val key = vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null) ?: return@withContext null
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/trial/status")
+                .header("X-API-Key", key)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) response.body?.string()?.let { JSONObject(it) } else null
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        /**
+         * [installId] is optional on the wire and carried here always: the server stores it on the
+         * device-code row and burns this install's trial when the token is collected, so unlinking
+         * and relinking cannot hand the free minutes back (P-058 R7). An older server ignores it.
+         */
+        suspend fun requestDeviceCode(
+            deviceName: String,
+            clientVersion: String,
+            installId: String? = null
+        ): JSONObject? = withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("device_name", deviceName)
                 .put("client_version", clientVersion)
+                .apply { if (installId != null) put("install_id", installId) }
                 .toString().toRequestBody(JSON)
             val request = Request.Builder()
                 .url("https://vibevoice.net/api/oauth/device/code")

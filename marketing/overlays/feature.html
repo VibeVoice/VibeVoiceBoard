@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>feature graphic</title>
+<!--
+  The Play feature graphic, 1024x500.
+
+  Play only displays it when a promo video exists, so it is not urgent — but it costs one more
+  Chrome pass on the ground the screenshots already establish, and having it means the video can
+  ship the day it is cut rather than waiting on artwork.
+
+  Authored at 512x250 and rendered at device scale 2. The composition is the landing page's hero
+  turned on its side: mark on the left, wordmark and slogan on the right, same weight contrast,
+  same blobs. Landscape, so the hero's stacked three lines would not fit -- the slogan sits beside
+  the name instead of under it.
+-->
+<style>
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_thin.ttf') format('truetype'); font-weight: 100; }
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_semibold.ttf') format('truetype'); font-weight: 600; }
+
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 512px; height: 250px; overflow: hidden; background: #000;
+    font-family: 'Ubuntu Sans', sans-serif; color: #fff;
+    display: flex; align-items: center; gap: 34px;
+    padding: 0 54px; box-sizing: border-box; position: relative;
+  }
+  .blob {
+    position: absolute; border-radius: 50%;
+    width: 350px; height: 350px;          /* 140vmin of the 250px short side */
+    mix-blend-mode: screen; opacity: 0.34; pointer-events: none;
+  }
+  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -80px;  bottom: -150px; }
+  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -60px; bottom:   60px; }
+  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left:  230px; bottom:  -90px; }
+
+  img { width: 118px; position: relative; z-index: 2; filter: drop-shadow(0 0 26px rgba(168,85,247,0.45)); }
+  .words { position: relative; z-index: 2; }
+  .mark { font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: 0.01em; }
+  /* 29px, measured rather than chosen: "START SPEAKING." costs 7.6px of width per px of size, and
+     the words column is 512 minus 108 of padding, 118 of mark and 34 of gap = 252px. At 34px it
+     wanted 258 and broke onto a third line, which unbalances the whole composition. */
+  .slogan { font-size: 29px; font-weight: 100; line-height: 1.2; margin-top: 10px; white-space: nowrap; }
+</style>
+
+<div class="blob purple"></div>
+<div class="blob green"></div>
+<div class="blob blue"></div>
+
+<img src="../assets/logo_white.svg" alt="">
+<div class="words">
+  <div class="mark">VIBEVOICE</div>
+  <div class="slogan">STOP TYPING.<br>START SPEAKING.</div>
+</div>

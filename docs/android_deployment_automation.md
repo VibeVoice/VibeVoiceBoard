@@ -36,7 +36,7 @@ To compile the application and upload it to Nextcloud, you can run the automated
 # 2. Deploy to Local Nextcloud Sync Folder
 DEST_DIR="/home/schneider/nextcloud/Documents/Shared Documents/VibeVoiceBoard"
 mkdir -p "$DEST_DIR"
-cp app/build/outputs/apk/debug/VibeVoiceBoard_3.9-debug.apk "$DEST_DIR/"
+cp app/build/outputs/apk/debug/VibeVoiceKeyboard_<version>-debug.apk "$DEST_DIR/"
 ```
 
 ---
@@ -51,7 +51,7 @@ DEVICE_IP="192.168.178.70:5555"
 # Query adb to see if the device is connected
 if adb devices | grep -q "$DEVICE_IP.*device"; then
   echo "Device $DEVICE_IP is online. Installing APK..."
-  adb -s "$DEVICE_IP" install -r app/build/outputs/apk/debug/VibeVoiceBoard_3.9-debug.apk
+  adb -s "$DEVICE_IP" install -r app/build/outputs/apk/debug/VibeVoiceKeyboard_<version>-debug.apk
 else
   echo "Device $DEVICE_IP is offline/unavailable. Skipping installation."
 fi

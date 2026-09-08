@@ -1,5 +1,5 @@
 #!/bin/bash
-# Automated Build, WebDAV Upload, and ADB Install script for VibeVoiceBoard
+# Automated Build, WebDAV Upload, and ADB Install script for VibeVoice Keyboard
 set -e
 
 # 1. Environment Setup & Paths
@@ -47,7 +47,16 @@ echo "Compiling Android debug APK using JAVA_HOME=$JAVA_HOME..."
 ./gradlew assembleDebug -q --no-configuration-cache
 
 # 3. Locate Compiled APK
-APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+# Newest, not first. `find | head -n 1` returns whatever the filesystem lists first, which was
+# harmless while exactly one APK name ever existed there -- and stopped being harmless the day
+# the app was renamed and the directory held both VibeVoiceBoard_* and VibeVoiceKeyboard_*.
+# Uploading a stale build is the kind of failure that costs an hour of confusion on the phone.
+# A plain glob, not find|xargs. GNU xargs without -r runs `ls -t` even on empty input, which
+# lists the working directory instead -- so the "not found" guard below passed and the script
+# went on to upload and adb-install something that was not an APK. macOS xargs does not do
+# this, which is exactly why it survived local testing; the CI documented in
+# docs/android_deployment_automation.md is Linux.
+APK_PATH=$(ls -t app/build/outputs/apk/debug/*.apk 2>/dev/null | head -n 1)
 if [ -z "$APK_PATH" ]; then
   echo "Error: Compiled APK not found!"
   exit 1

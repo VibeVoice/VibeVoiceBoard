@@ -27,9 +27,15 @@
             android:background="@drawable/toolbar_expand_key_background"
             style="?attr/suggestionWordStyle"
             android:contentDescription="@string/more_keys_strip_description" />
+        <!-- 0dp + weight, not match_parent. A match_parent child with no weight in a horizontal
+             LinearLayout claims the parent's whole width and pushes every later sibling off the
+             right edge; it only ever looked right because the siblings after it were hidden
+             whenever it was shown. With the voice key now anchored to the right in both modes,
+             the carousel has to end where the anchor begins. -->
         <HorizontalScrollView
             android:id="@+id/toolbar_container"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="match_parent"
             android:scrollbarThumbHorizontal="@color/toolbar_scrollbar"
             android:visibility="gone">
@@ -41,11 +47,16 @@
                 style="?attr/suggestionWordStyle">
             </LinearLayout>
         </HorizontalScrollView>
+        <!-- 0dp, not wrap_content. A weighted child sized wrap_content is measured at its natural
+             width first and only then given a share of what is left, so a strip of long
+             suggestions took its space before the keys to its right were measured at all. At a
+             higher display zoom that was enough to push the voice key past the edge. At 0dp the
+             strip gets exactly the remainder and can never do that. -->
         <LinearLayout
             android:id="@+id/suggestions_strip"
             android:orientation="horizontal"
             android:maxWidth="100dp"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center_horizontal"
@@ -56,6 +67,25 @@
             android:orientation="horizontal"
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
+            android:minWidth="0dp"
+            style="?attr/suggestionWordStyle">
+        </LinearLayout>
+        <!--
+            The right anchor. It holds the VibeVoice key and nothing else, it carries no weight, and
+            it is measured before anything that can stretch.
+
+            The key used to live in pinned_keys, which is inside the part of the strip that shrinks,
+            and in the toolbar, which scrolls. So it could be squeezed off the edge by long
+            suggestions and it scrolled out of reach when the tools were open. It is the one control
+            that must never be missing: it is how a dictation starts and, more importantly, how one
+            stops.
+        -->
+        <LinearLayout
+            android:id="@+id/voice_anchor"
+            android:orientation="horizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="0"
             android:minWidth="0dp"
             style="?attr/suggestionWordStyle">
         </LinearLayout>

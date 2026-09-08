@@ -1,9 +1,18 @@
 package helium314.keyboard.settings.screens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import helium314.keyboard.latin.vibevoice.VoiceOverlay
 import android.net.Uri
+import android.provider.Settings as AndroidProviderSettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
@@ -20,13 +29,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,6 +47,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,6 +60,7 @@ import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import helium314.keyboard.settings.VibeVoiceLinkPanel
 import helium314.keyboard.settings.preferences.SliderPreference
 import java.util.Locale
 import helium314.keyboard.settings.SearchSettingsScreen
@@ -57,6 +73,46 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import helium314.keyboard.latin.vibevoice.VibeVoiceBugReporter
 
+/**
+ * A heading that folds its contents away. The screen has grown a tuning block per feature and they
+ * are all things one goes looking for deliberately, so they start closed rather than pushing
+ * everything else off the bottom.
+ */
+@Composable
+private fun CollapsibleSection(
+    title: String,
+    subtitle: String? = null,
+    initiallyOpen: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var open by rememberSaveable(title) { mutableStateOf(initiallyOpen) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (open) "\u2013" else "+",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        if (subtitle != null) {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        if (open) {
+            Spacer(modifier = Modifier.size(8.dp))
+            content()
+        }
+    }
+}
+
 @Composable
 fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     val context = LocalContext.current
@@ -64,15 +120,47 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     val prefs = remember(context) { VibeVoiceClient.vibeVoicePrefs(context) }
 
     var apiKey by remember { mutableStateOf(prefs.getString(VIBEVOICE_API_KEY_PREF, null)) }
-    var userCode by remember { mutableStateOf<String?>(null) }
-    var verificationUri by remember { mutableStateOf<String?>(null) }
-    var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var showBugReportDialog by remember { mutableStateOf(false) }
     var bugDescription by remember { mutableStateOf("") }
     var isSubmittingBugReport by remember { mutableStateOf(false) }
     var bugReportStatus by remember { mutableStateOf<String?>(null) }
+
+    val appPrefs = remember(context) { context.prefs() }
+    var backgroundDictation by remember {
+        mutableStateOf(appPrefs.getBoolean(Settings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
+    }
+    var overlayEnabled by remember {
+        mutableStateOf(appPrefs.getBoolean(Settings.PREF_OVERLAY_ENABLED, Defaults.PREF_OVERLAY_ENABLED))
+    }
+    // Only this screen can ask: an input method has no way to request a runtime permission itself,
+    // which is why the keyboard sends the user here for the microphone too.
+    fun notificationsAllowed() = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+    var notificationsGranted by remember { mutableStateOf(notificationsAllowed()) }
+    var overlayAllowed by remember { mutableStateOf(VoiceOverlay.isAllowed(context)) }
+    val overlaySettings = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { overlayAllowed = VoiceOverlay.isAllowed(context) }
+    // Re-read on resume, not only on the launcher's result. This permission lives in the system
+    // settings and the user can perfectly well walk there themselves, in which case there is no
+    // result to tell us and the screen would keep offering a button for something already granted.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                overlayAllowed = VoiceOverlay.isAllowed(context)
+                notificationsGranted = notificationsAllowed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val askForNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> notificationsGranted = granted }
     var isBugReportSuccess by remember { mutableStateOf(false) }
 
     var quotaInfo by remember { mutableStateOf<org.json.JSONObject?>(null) }
@@ -97,75 +185,9 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
         }
     }
 
-    fun startLinking() {
-        isLoading = true
-        errorMessage = null
-        scope.launch {
-            val res = VibeVoiceClient.requestDeviceCode("VibeVoiceBoard Android", BuildConfig.VERSION_NAME)
-            isLoading = false
-            if (res != null) {
-                // A body without these keys -- an error payload, an API change, a captive portal
-                // answering 200 with HTML -- used to throw JSONException out of the coroutine and
-                // take the settings activity down with it.
-                val code = res.optString("user_code").takeIf { it.isNotBlank() }
-                val uri = res.optString("verification_uri").takeIf { it.isNotBlank() }
-                val deviceCode = res.optString("device_code").takeIf { it.isNotBlank() }
-                if (code == null || uri == null || deviceCode == null) {
-                    errorMessage = context.getString(R.string.vibevoice_failed_request_device_code)
-                    return@launch
-                }
-                userCode = code
-                verificationUri = uri
-                val interval = res.optInt("interval", 5).coerceAtLeast(1)
-                // RFC 8628 device codes expire; without this the loop below polls forever whenever
-                // pollForToken keeps returning null (offline, or the user never finishes in the browser).
-                val expiresAt = System.currentTimeMillis() + res.optInt("expires_in", 600).coerceAtLeast(30) * 1000L
-
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$verificationUri?code=$userCode"))
-                    context.startActivity(intent)
-                } catch (_: android.content.ActivityNotFoundException) {
-                    // Nothing can approve the code without a browser, so polling for ten minutes
-                    // would only hide the message behind a spinner: the error is rendered by the
-                    // branch that userCode being set takes the screen out of.
-                    errorMessage = context.getString(R.string.vibevoice_no_browser)
-                    userCode = null
-                    verificationUri = null
-                    return@launch
-                }
-
-                // Poll
-                var polling = true
-                while (polling && isActive) {
-                    delay(interval * 1000L)
-                    if (System.currentTimeMillis() > expiresAt) {
-                        polling = false
-                        userCode = null
-                        errorMessage = context.getString(R.string.vibevoice_linking_failed, "expired_token")
-                        break
-                    }
-                    val tokenRes = VibeVoiceClient.pollForToken(deviceCode)
-                    if (tokenRes != null) {
-                        if (tokenRes.has("api_key")) {
-                            apiKey = tokenRes.getString("api_key")
-                            prefs.edit().putString(VIBEVOICE_API_KEY_PREF, apiKey).apply()
-                            polling = false
-                        } else if (tokenRes.optString("error") != "authorization_pending") {
-                            polling = false
-                            errorMessage = context.getString(R.string.vibevoice_linking_failed, tokenRes.optString("error"))
-                        }
-                    }
-                }
-            } else {
-                errorMessage = context.getString(R.string.vibevoice_failed_request_device_code)
-            }
-        }
-    }
-
     fun unlink() {
         prefs.edit().remove(VIBEVOICE_API_KEY_PREF).apply()
         apiKey = null
-        userCode = null
     }
 
     fun submitBugReport() {
@@ -293,30 +315,9 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                         Text(stringResource(R.string.vibevoice_unlink_device))
                     }
                 }
-            } else if (userCode != null) {
-                Text(stringResource(R.string.vibevoice_waiting_for_approval), style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(stringResource(R.string.vibevoice_enter_code_in_browser), style = MaterialTheme.typography.bodyMedium)
-                Text(userCode ?: "", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-
-                Spacer(modifier = Modifier.size(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(stringResource(R.string.vibevoice_polling_for_token))
-                }
             } else {
-                Button(onClick = { startLinking() }, enabled = !isLoading, modifier = Modifier.fillMaxWidth()) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
-                    } else {
-                        Text(stringResource(R.string.vibevoice_link_account))
-                    }
-                }
-                if (errorMessage != null) {
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
-                }
+                // One implementation of the device flow, shared with the setup wizard.
+                VibeVoiceLinkPanel { apiKey = prefs.getString(VIBEVOICE_API_KEY_PREF, null) }
             }
 
             Spacer(modifier = Modifier.size(24.dp))
@@ -352,6 +353,105 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 )
             }
 
+            Spacer(modifier = Modifier.size(24.dp))
+
+            Text(
+                stringResource(R.string.vibevoice_background_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.size(4.dp))
+            Text(
+                stringResource(R.string.vibevoice_background_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.vibevoice_background_switch))
+                Switch(
+                    checked = backgroundDictation,
+                    onCheckedChange = {
+                        backgroundDictation = it
+                        appPrefs.edit().putBoolean(Settings.PREF_VOICE_BACKGROUND, it).apply()
+                        // Asked here and not at the first session: a session that runs on in the
+                        // background with notifications denied is an open microphone with nothing
+                        // showing it and no button to stop it.
+                        if (it && !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            askForNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                )
+            }
+            if (backgroundDictation) {
+                Spacer(modifier = Modifier.size(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.vibevoice_overlay_show))
+                    Switch(
+                        checked = overlayEnabled,
+                        onCheckedChange = {
+                            overlayEnabled = it
+                            appPrefs.edit().putBoolean(Settings.PREF_OVERLAY_ENABLED, it).apply()
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.size(12.dp))
+                Text(
+                    stringResource(R.string.vibevoice_overlay_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    stringResource(R.string.vibevoice_overlay_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                if (overlayAllowed) {
+                    Text(
+                        stringResource(R.string.vibevoice_overlay_granted),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    // A button and not a switch: this one really is a trip to the system settings,
+                    // the only permission here that cannot be granted from a dialog.
+                    Button(
+                        onClick = {
+                            val intent = Intent(
+                                AndroidProviderSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:" + context.packageName)
+                            )
+                            try {
+                                overlaySettings.launch(intent)
+                            } catch (_: android.content.ActivityNotFoundException) {
+                                // Its own message: this opens the system settings, not a browser,
+                                // and telling someone no browser was found sends them looking for
+                                // the wrong thing.
+                                errorMessage = context.getString(R.string.vibevoice_no_overlay_settings)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.vibevoice_overlay_grant))
+                    }
+                }
+            }
+            if (backgroundDictation && !notificationsGranted) {
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    stringResource(R.string.vibevoice_background_needs_notifications),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
             // Developer tuning, debug builds only. Deliberately not a preference: a toggle is
             // something a Play Store user can find and switch on, and these ranges are for finding
             // a look, not for shipping. BuildConfig.DEBUG is false in release and nouserlib, so the
@@ -360,18 +460,101 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
 
-            Text(
-                stringResource(R.string.vibevoice_waves_title),
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.size(4.dp))
-            Text(
-                stringResource(R.string.vibevoice_waves_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-            Spacer(modifier = Modifier.size(8.dp))
+            CollapsibleSection(
+                title = stringResource(R.string.vibevoice_glow_title),
+                subtitle = stringResource(R.string.vibevoice_glow_desc),
+                initiallyOpen = true
+            ) {
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_glow_size),
+                    key = Settings.PREF_GLOW_SIZE,
+                    default = Defaults.PREF_GLOW_SIZE,
+                    range = 0.02f..0.45f,
+                    description = { "${(100 * it).toInt()}% of the mark" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_glow_gain),
+                    key = Settings.PREF_GLOW_GAIN,
+                    default = Defaults.PREF_GLOW_GAIN,
+                    range = 1f..5f,
+                    description = { String.format("%.1fx", it) }
+                ) { }
+            }
 
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            CollapsibleSection(
+                title = stringResource(R.string.vibevoice_overlay_tuning_title),
+                subtitle = stringResource(R.string.vibevoice_overlay_tuning_desc),
+                initiallyOpen = true
+            ) {
+                // Read once per session in VoiceOverlay.show, like the wave tuning: a change takes
+                // effect the next time the mark appears.
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_icon),
+                    key = Settings.PREF_OVERLAY_ICON,
+                    default = Defaults.PREF_OVERLAY_ICON,
+                    range = 12f..64f,
+                    description = { "${it.toInt()} dp" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_padding),
+                    key = Settings.PREF_OVERLAY_PADDING,
+                    default = Defaults.PREF_OVERLAY_PADDING,
+                    range = 0f..40f,
+                    description = { "${it.toInt()} dp around the mark" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_bars),
+                    key = Settings.PREF_OVERLAY_BARS,
+                    default = Defaults.PREF_OVERLAY_BARS,
+                    range = 2f..48f,
+                    description = { "${it.toInt()} dp at full excursion" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_bar_width),
+                    key = Settings.PREF_OVERLAY_BAR_WIDTH,
+                    default = Defaults.PREF_OVERLAY_BAR_WIDTH,
+                    range = 0.8f..8f,
+                    description = { String.format("%.1f dp", it) }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_bar_count),
+                    key = Settings.PREF_OVERLAY_BAR_COUNT,
+                    default = Defaults.PREF_OVERLAY_BAR_COUNT,
+                    range = 8f..96f,
+                    description = { "${it.toInt()} bars" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_glow_size),
+                    key = Settings.PREF_OVERLAY_GLOW_SIZE,
+                    default = Defaults.PREF_OVERLAY_GLOW_SIZE,
+                    range = 0.02f..0.45f,
+                    description = { "${(100 * it).toInt()}% of the mark" }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_glow_gain),
+                    key = Settings.PREF_OVERLAY_GLOW_GAIN,
+                    default = Defaults.PREF_OVERLAY_GLOW_GAIN,
+                    range = 0.1f..3f,
+                    description = { String.format("%.2fx", it) }
+                ) { }
+                SliderPreference(
+                    name = stringResource(R.string.vibevoice_overlay_rest),
+                    key = Settings.PREF_OVERLAY_REST,
+                    default = Defaults.PREF_OVERLAY_REST,
+                    range = 0f..0.6f,
+                    description = { "${(100 * it).toInt()}% in silence" }
+                ) { }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            CollapsibleSection(
+                title = stringResource(R.string.vibevoice_waves_title),
+                subtitle = stringResource(R.string.vibevoice_waves_desc),
+                initiallyOpen = true
+            ) {
             // VoiceWaveView reads these once per dictation session, in start(), so a change takes
             // effect at the next session rather than under a moving slider -- reading them per frame
             // meant eight synchronized SharedPreferences lookups thirty times a second on the UI
@@ -446,6 +629,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 range = 0f..1f,
                 description = { if (it < 0.02f) "none" else "${(100 * it).toInt()}%" }
             ) { }
+            }
             }
         }
 

@@ -42,6 +42,8 @@ import helium314.keyboard.latin.vibevoice.PermissionActivity;
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient;
 import helium314.keyboard.latin.vibevoice.VibeVoiceDebugLogger;
 import helium314.keyboard.latin.vibevoice.VibeVoiceListener;
+import helium314.keyboard.latin.vibevoice.VoiceOverlay;
+import helium314.keyboard.latin.vibevoice.VoiceSessionService;
 import helium314.keyboard.latin.vibevoice.VoiceWaveView;
 import helium314.keyboard.event.HapticEvent;
 import helium314.keyboard.keyboard.KeyboardActionListener;
@@ -726,6 +728,8 @@ public class LatinIME extends InputMethodService implements
         if (mVibeVoiceClient != null) {
             mVibeVoiceClient.cancel();
             mVibeVoiceClient = null;
+            VoiceOverlay.hide(this);
+            VoiceSessionService.detach(this);
         }
         // onDestroy does not go through finishVoiceSession, so it is the one teardown path that
         // never reaches updateVoiceInputState. onDetachedFromWindow normally catches this, but the
@@ -1083,6 +1087,9 @@ public class LatinIME extends InputMethodService implements
         if (hasSuggestionStripView() && mIsRecordingVoice) {
             mSuggestionStripView.updateVoiceKey();
         }
+        // The keyboard is back, so the stand-in is not needed. Removed here rather than only at the
+        // end of a session, or it would sit over the keyboard that replaced it.
+        VoiceOverlay.hide(this);
         syncVoiceWaves();
     }
 
@@ -1090,13 +1097,47 @@ public class LatinIME extends InputMethodService implements
     public void onWindowHidden() {
         super.onWindowHidden();
         Log.i(TAG, "onWindowHidden");
-        // Deliberately does NOT end a dictation session. Hiding the keyboard is not the user
-        // saying they are done talking, and the intended behaviour is that a session survives it.
-        // What survives today is only the session object: with the input view gone this process has
-        // no visible window, so from Android 11 on the platform hands AudioRecord zeroed buffers
-        // instead of audio. The capture loop notices after two seconds and goes into recovery.
-        // Making this actually work needs a foreground service with a microphone type; see
-        // docs/background_dictation.md.
+        // Hiding the keyboard is not the user saying they are done talking, so with background
+        // dictation on the session simply carries on -- VoiceSessionService is already in the
+        // foreground and keeps the microphone from being silenced.
+        //
+        // With it off, this is where a session ends, and it ends gracefully rather than being
+        // dropped: the input connection is still usable for the moment it takes the pending final
+        // to arrive, so the words spoken before the keyboard went away still get committed.
+        if (mIsRecordingVoice && !mIsStoppingVoice && mVibeVoiceClient != null) {
+            if (mSettings.getCurrent().mVoiceBackgroundEnabled) {
+                // The keyboard is gone but the session is not, and nothing on screen would say so.
+                // The mark takes its place: same statement, a fraction of the room. It is ended by
+                // dragging it onto the X rather than by tapping it -- getting it out of the way and
+                // ending the session are both done in a hurry, and a tap that ended it kept costing
+                // transcripts to a slip of the thumb. This callback is that drop, and it goes
+                // through the same path as the space key.
+                if (mSettings.getCurrent().mVoiceOverlayEnabled) {
+                    final int sessionId = mVoiceSessionId;
+                    VoiceOverlay.show(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
+                        if (sessionId == mVoiceSessionId) handleVoiceInput();
+                    }));
+                }
+            } else {
+                VibeVoiceDebugLogger.log("Keyboard hidden and background dictation is off: stopping");
+                mIsStoppingVoice = true;
+                VoiceSessionService.showFinishing();
+                mVibeVoiceClient.stopStreaming();
+                // Said once, here, and not in the setup wizard: nobody understands what background
+                // dictation is for until the first time a session ends because they closed the
+                // keyboard. A wizard is read once and never again -- this is the moment the
+                // question actually occurs to someone.
+                final android.content.SharedPreferences prefs =
+                        helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this);
+                if (!prefs.getBoolean(Settings.PREF_BG_HINT_SHOWN,
+                        helium314.keyboard.latin.settings.Defaults.PREF_BG_HINT_SHOWN)) {
+                    prefs.edit().putBoolean(Settings.PREF_BG_HINT_SHOWN, true).apply();
+                    android.widget.Toast
+                            .makeText(this, R.string.vibevoice_background_hint, android.widget.Toast.LENGTH_LONG)
+                            .show();
+                }
+            }
+        }
         final MainKeyboardView mainKeyboardView = mKeyboardSwitcher.getMainKeyboardView();
         if (mainKeyboardView != null) {
             mainKeyboardView.closing();
@@ -1549,9 +1590,46 @@ public class LatinIME extends InputMethodService implements
      *  one -- a null check on mVibeVoiceClient does not catch that, because by the time a stale
      *  callback runs the field may already hold a newly started session. */
     private int mVoiceSessionId = 0;
+    private long mVoiceStartedAt = 0L;
+    private volatile boolean mVoiceLinkDegraded = false;
+
+    /** Whether the link is currently too poor to stream into. Read by the space bar. */
+    public boolean isVoiceLinkDegraded() {
+        return mVoiceLinkDegraded;
+    }
+
+    /** Seconds since this dictation session started, for the count on the space bar. */
+    public long getVoiceElapsedSeconds() {
+        if (mVoiceStartedAt == 0L) return 0L;
+        return (android.os.SystemClock.elapsedRealtime() - mVoiceStartedAt) / 1000L;
+    }
+
+    /**
+     * Redraws the space bar once a second while recording, which is what makes the count move.
+     * Only that key: invalidateAllKeys redraws every one of them, and a clock is no reason for
+     * that.
+     */
+    private final Runnable mVoiceTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!mIsRecordingVoice) return;
+            final MainKeyboardView view = mKeyboardSwitcher == null ? null : mKeyboardSwitcher.getMainKeyboardView();
+            if (view != null) view.invalidateSpaceKey();
+            mUiHandler.postDelayed(this, 1000L);
+        }
+    };
 
     private void updateVoiceInputState(boolean isRecording) {
         mIsRecordingVoice = isRecording;
+        if (isRecording) {
+            if (mVoiceStartedAt == 0L) mVoiceStartedAt = android.os.SystemClock.elapsedRealtime();
+            mUiHandler.removeCallbacks(mVoiceTick);
+            mUiHandler.postDelayed(mVoiceTick, 1000L);
+        } else {
+            mVoiceStartedAt = 0L;
+            mVoiceLinkDegraded = false;
+            mUiHandler.removeCallbacks(mVoiceTick);
+        }
         mUiHandler.post(() -> {
             if (mSuggestionStripView != null) {
                 mSuggestionStripView.updateVoiceKey();
@@ -1582,6 +1660,8 @@ public class LatinIME extends InputMethodService implements
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
         if (client != null) client.cancel();
+        VoiceOverlay.hide(this);
+        VoiceSessionService.detach(this);
         updateVoiceInputState(false);
     }
 
@@ -1632,14 +1712,24 @@ public class LatinIME extends InputMethodService implements
                     return;
                 }
                 mIsStoppingVoice = true;
+                VoiceSessionService.showFinishing();
                 mVibeVoiceClient.stopStreaming();
                 return;
             }
 
-            String apiKey = helium314.keyboard.latin.vibevoice.VibeVoiceClient.getApiKey(this);
+            String apiKey = VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
                 android.widget.Toast
                         .makeText(this, R.string.vibevoice_not_linked, android.widget.Toast.LENGTH_LONG).show();
+                launchSettings("vibevoice");
+                return;
+            }
+            // A trial the server has already refused will refuse this one too. Asking again means a
+            // connection, an auth frame and a second of dead air to learn something we were told
+            // last time, so the invitation comes straight away instead.
+            if (!VibeVoiceClient.isLinked(this) && VibeVoiceClient.isTrialSpent(this)) {
+                android.widget.Toast
+                        .makeText(this, R.string.vibevoice_trial_over, android.widget.Toast.LENGTH_LONG).show();
                 launchSettings("vibevoice");
                 return;
             }
@@ -1648,7 +1738,6 @@ public class LatinIME extends InputMethodService implements
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
             VibeVoiceDebugLogger.log("Starting new session");
-            android.widget.Toast.makeText(this, R.string.vibevoice_listening, android.widget.Toast.LENGTH_SHORT).show();
             updateVoiceInputState(true);
 
             mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
@@ -1675,6 +1764,7 @@ public class LatinIME extends InputMethodService implements
                             }
                         }
                         mVoiceComposingText = text;
+                        VoiceSessionService.showTranscript(text);
                         mInputLogic.mConnection.setComposingText(text, 1);
                     });
                 }
@@ -1713,10 +1803,52 @@ public class LatinIME extends InputMethodService implements
                 public void onError(@NonNull String error) {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
+                        // Not a fault: the free minutes ran out. The server keeps this code
+                        // distinct from invalid_api_key precisely so this branch can exist -- one
+                        // is an invitation to link an account, the other is something broken, and
+                        // showing "Dictation error: trial_exhausted" would make the first look like
+                        // the second.
+                        if (VibeVoiceClient.ERR_LINK_LOST.equals(error)) {
+                            // Not a fault in the product. The session is over because the radio
+                            // went away for longer than the buffer could cover, and everything
+                            // transcribed before that is committed rather than dropped.
+                            mVoiceLinkDegraded = false;
+                            finishVoiceSession(mVoiceComposingText, false);
+                            android.widget.Toast
+                                    .makeText(LatinIME.this, R.string.vibevoice_connection_lost, android.widget.Toast.LENGTH_LONG)
+                                    .show();
+                            return;
+                        }
+                        if (VibeVoiceClient.ERR_TRIAL_EXHAUSTED.equals(error)) {
+                            VibeVoiceClient.markTrialSpent(LatinIME.this);
+                            finishVoiceSession(mVoiceComposingText, false);
+                            android.widget.Toast
+                                    .makeText(LatinIME.this, R.string.vibevoice_trial_over, android.widget.Toast.LENGTH_LONG)
+                                    .show();
+                            launchSettings("vibevoice");
+                            return;
+                        }
                         android.widget.Toast
                                 .makeText(LatinIME.this, getString(R.string.vibevoice_error, error), android.widget.Toast.LENGTH_SHORT)
                                 .show();
                         finishVoiceSession(mVoiceComposingText, false);
+                    });
+                }
+
+                @Override
+                public void onLinkQualityChanged(boolean degraded) {
+                    mUiHandler.post(() -> {
+                        if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
+                        if (mVoiceLinkDegraded == degraded) return;
+                        mVoiceLinkDegraded = degraded;
+                        // The space bar, not a toast. It already carries the running timer, so the
+                        // user is looking at it; a toast would cover the text being dictated and
+                        // would still be on screen after the connection came back. Redrawn at once
+                        // rather than waiting for the next per-second tick: the point of the message
+                        // is that it arrives while the user is still talking.
+                        final MainKeyboardView spaceView =
+                                mKeyboardSwitcher == null ? null : mKeyboardSwitcher.getMainKeyboardView();
+                        if (spaceView != null) spaceView.invalidateSpaceKey();
                     });
                 }
 
@@ -1746,6 +1878,20 @@ public class LatinIME extends InputMethodService implements
                     });
                 }
             });
+            // Only when background dictation is on. With it off the session ends with the keyboard
+            // anyway, so the service would buy nothing and the notification would announce a
+            // capability the user has switched off.
+            //
+            // Before startStreaming, and while the keyboard is on screen: a microphone-typed
+            // foreground service cannot be started from the background, and the whole point of it
+            // is to already be running by the time the keyboard is dismissed. The stop callback
+            // comes back through handleVoiceInput so the notification's button and the space key
+            // end a session by exactly the same path.
+            if (mSettings.getCurrent().mVoiceBackgroundEnabled) {
+                VoiceSessionService.attach(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
+                    if (sessionId == mVoiceSessionId) handleVoiceInput();
+                }));
+            }
             mVibeVoiceClient.startStreaming();
         } catch (Exception e) {
             android.widget.Toast.makeText(this, getString(R.string.vibevoice_error, e.getMessage()), android.widget.Toast.LENGTH_LONG)
@@ -1756,6 +1902,8 @@ public class LatinIME extends InputMethodService implements
             if (mVibeVoiceClient != null) {
                 mVibeVoiceClient.cancel();
                 mVibeVoiceClient = null;
+                VoiceOverlay.hide(this);
+                VoiceSessionService.detach(this);
             }
         }
     }
@@ -1784,6 +1932,8 @@ public class LatinIME extends InputMethodService implements
         mVibeVoiceClient.stopStreaming();
         mVibeVoiceClient = null;
         mIsStoppingVoice = false;
+        VoiceOverlay.hide(this);
+        VoiceSessionService.detach(this);
         updateVoiceInputState(false);
         mKeyboardSwitcher.requestUpdatingShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
     }

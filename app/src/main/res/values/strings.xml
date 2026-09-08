@@ -9,11 +9,11 @@
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2"
     tools:ignore="MissingTranslation">
     <!-- Name of Android spell checker service. The app name should not be translated. -->
-    <string name="spell_checker_service_name">VibeVoiceBoard Spell Checker</string>
+    <string name="spell_checker_service_name">VibeVoice Keyboard Spell Checker</string>
     <!-- Title for IME settings screen. The app name should not be translated. -->
-    <string name="ime_settings">VibeVoiceBoard Settings</string>
+    <string name="ime_settings">VibeVoice Keyboard Settings</string>
     <!-- Title for the spell checking service settings screen. The app name should not be translated. -->
-    <string name="android_spell_checker_settings">VibeVoiceBoard Spell Checker Settings</string>
+    <string name="android_spell_checker_settings">VibeVoice Keyboard Spell Checker Settings</string>
     <!-- Option to provide vibrate/haptic feedback on keypress -->
     <string name="vibrate_on_keypress">Vibrate on keypress</string>
     <!-- Option to provide vibrate/haptic feedback on keypress even in do not disturb mode -->
@@ -75,8 +75,39 @@
     <!-- Shown when the microphone stopped delivering audio and restarting it did not help -->
     <string name="vibevoice_mic_unavailable">Microphone stopped working. Transcription stopped.</string>
     <!-- Section heading for the sliders that shape the sound waves drawn behind the keys -->
+    <!-- Background dictation -->
+    <string name="vibevoice_background_hint">Dictation stopped because the keyboard closed. It can keep running instead \u2014 see \"Keep listening in the background\" in VibeVoice settings.</string>
+    <string name="vibevoice_background_title">Keep listening in the background</string>
+    <string name="vibevoice_background_desc">Off, dictation ends when the keyboard closes and whatever was said until then is committed. On, it carries on while you switch apps, and a notification shows what is being heard with a button to stop it.</string>
+    <string name="vibevoice_background_switch">Carry on after the keyboard closes</string>
+    <string name="vibevoice_session_channel">Dictation session</string>
+    <string name="vibevoice_session_title">VibeVoice is listening</string>
+    <string name="vibevoice_session_listening">Waiting for speech\u2026</string>
+    <string name="vibevoice_session_stop">Stop</string>
+    <string name="vibevoice_overlay_title">Floating mark</string>
+    <string name="vibevoice_overlay_show">Show the floating mark</string>
+    <string name="vibevoice_overlay_tuning_title">Floating mark</string>
+    <string name="vibevoice_overlay_tuning_desc">Size and shape of the mark. It is built from the inside out, so each of these moves one thing: a change applies the next time the mark appears.</string>
+    <string name="vibevoice_overlay_icon">Mark size</string>
+    <string name="vibevoice_overlay_padding">Padding</string>
+    <string name="vibevoice_overlay_bars">Waveform length</string>
+    <string name="vibevoice_overlay_bar_width">Bar width</string>
+    <string name="vibevoice_overlay_bar_count">Bar count</string>
+    <string name="vibevoice_overlay_rest">Resting height</string>
+    <string name="vibevoice_overlay_glow_size">Glow size (mark)</string>
+    <string name="vibevoice_overlay_glow_gain">Glow strength (mark)</string>
+    <string name="vibevoice_glow_title">Microphone key glow</string>
+    <string name="vibevoice_glow_desc">The light behind the microphone key in the keyboard\'s top row while a session is running. The floating mark has its own glow, tuned separately.</string>
+    <string name="vibevoice_glow_size">Glow size</string>
+    <string name="vibevoice_glow_gain">Glow strength</string>
+    <string name="vibevoice_overlay_desc">While a session runs without the keyboard, show the VibeVoice mark on screen. It pulses with what is being heard, and it is dragged onto the X at the bottom to end the session.</string>
+    <string name="vibevoice_overlay_grant">Allow drawing over other apps</string>
+    <string name="vibevoice_no_overlay_settings">This device has no screen for the permission. Look for \"Display over other apps\" in the system settings under VibeVoice Keyboard.</string>
+    <string name="vibevoice_overlay_granted">Allowed</string>
+    <string name="vibevoice_session_finishing">Finishing the last sentence\u2026</string>
+    <string name="vibevoice_background_needs_notifications">Allow notifications, or a session running in the background has no visible indicator and no way to stop it.</string>
     <string name="vibevoice_waves_title">Sound waves</string>
-    <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. Changes apply immediately \u2014 open a chat next to this screen and hold space to watch them.</string>
+    <string name="vibevoice_waves_desc">Shape the waves drawn behind the keys while dictating. A change takes effect the next time you start dictating.</string>
     <string name="vibevoice_waves_amplitude">Size</string>
     <string name="vibevoice_waves_reaction">Reaction to your voice</string>
     <string name="vibevoice_waves_attack">Attack (how fast it rises)</string>
@@ -88,7 +119,14 @@
     <string name="vibevoice_waves_jitter">Roughness</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
-    <string name="vibevoice_hold_to_transcribe">Hold to Transcribe</string>
+    <!-- On the space bar while a session runs. %s is the elapsed time, m:ss. -->
+    <string name="vibevoice_transcribing_timer">Transcribing… %s</string>
+    <!-- Shown on the space bar while the link is too poor to stream into. Not an error: the
+         session is still recording, and this disappears when the connection comes back. -->
+    <string name="vibevoice_waiting_for_connection">Waiting for connection…</string>
+    <!-- Shown when an outage lasted longer than the buffered audio could survive. -->
+    <string name="vibevoice_connection_lost">The connection dropped. What was transcribed up to that point has been inserted.</string>
+    <string name="vibevoice_hold_to_transcribe">Long-press to dictate</string>
     <string name="privacy_policy">Privacy Policy</string>
     <!-- Bug reporting strings -->
     <string name="vibevoice_report_bug_title">Report a Bug</string>
@@ -684,6 +722,53 @@ language, hence "No language". -->
     <!-- The label of the button that triggers the settings screen for the keyboard. -->
     <string name="setup_step3_action">Configure the keyboard</string>
     <!-- The label of the button that finishes the setup wizard. -->
+    <!-- Replaces upstream's "you're all set" at step 3: this wizard has two more steps after it. -->
+    <string name="setup_step3_typing_ready">"Typing works"</string>
+    <string name="setup_continue_action">Set up dictation</string>
+    <string name="setup_link_title">"Connect your VibeVoice account"</string>
+    <string name="setup_link_instruction">The free minutes are nearly the only thing that runs without an account. Link one and you get 30 minutes a month at no cost, on this device and any other. It takes a browser tab.</string>
+    <string name="setup_link_action">Link an account</string>
+    <string name="setup_link_done">Account linked</string>
+    <string name="setup_next_action">Next</string>
+    <string name="setup_mic_title">"Let it hear you"</string>
+    <string name="setup_mic_instruction">Tap the V at the top right. It lights up while the keyboard is listening, and another tap ends it. Holding the space bar does the same without leaving the keys — press once, let go, keep talking.</string>
+    <string name="setup_mic_grant">Allow the microphone</string>
+    <string name="setup_mic_granted">Microphone allowed</string>
+    <string name="setup_extras_title">"Two extras, if you want them"</string>
+    <string name="setup_extras_instruction">Dictation normally stops when the keyboard closes. Turn the first one on and it carries on, so you can start talking here and finish in another app — and then the second one becomes available.</string>
+    <string name="setup_extras_background">Keep transcribing after the keyboard closes (optional)</string>
+    <string name="setup_extras_overlay">Show the mark while it runs \u2014 opens system settings (optional)</string>
+    <string name="setup_extras_overlay_granted">The mark will be shown</string>
+
+    <!-- The brand, shown on the wizard's first page. The wordmark and the slogan are the same two
+         lines the landing page opens with, and they stay English everywhere: a slogan is a name for
+         a thing, not a sentence about it, and a translated one is a different slogan. The line
+         below them is an ordinary sentence and is translated. -->
+    <string name="brand_wordmark" translatable="false">VibeVoice</string>
+    <string name="brand_slogan_line1" translatable="false">Stop typing.</string>
+    <string name="brand_slogan_line2" translatable="false">Start speaking.</string>
+    <string name="brand_subline">Speech to text for everywhere you type.</string>
+
+    <!-- The practice field, step 5. Shown only once the microphone has been granted. -->
+    <string name="setup_try_label">Try it now</string>
+    <string name="setup_try_hint">Tap here, then start dictating…</string>
+    <!-- Prominent disclosure. Play requires this to be visible in the foreground, before the
+         first microphone access, and not only in the privacy policy. It sits on the step that
+         asks for the permission, above the button that asks. -->
+    <string name="setup_mic_disclosure">While you dictate, what you say is sent to vibevoice.net to be transcribed. The recording is deleted as soon as the transcript exists or the attempt fails, and nothing is sent at any other time.</string>
+    <string name="vibevoice_mic_disclosure_title">Before the microphone</string>
+    <string name="setup_extras_overlay_preview">This is the mark. It pulses with your voice, and you drag it onto the X to stop.</string>
+    <string name="setup_try_skip">Skip this</string>
+    <string name="setup_link_later">Link later — the free minutes still work</string>
+    <!-- %d is the number of minutes the server granted, never typed here: it is server config and
+         a copy in the app would drift the moment it changes. -->
+    <string name="setup_trial_note">%d free minutes to try, no account needed.</string>
+    <string name="setup_trial_unavailable">Couldn\'t reach VibeVoice for the free minutes. Link an account in the next step and dictation works straight away.</string>
+    <string name="setup_extras_overlay_locked">Show the mark — needs the option above</string>
+    <string name="setup_finish_without">Finish without these</string>
+
+    <!-- Shown when the free trial minutes have been spent. Not an error: an invitation. -->
+    <string name="vibevoice_trial_over">Your free minutes are used up. Link a VibeVoice account to keep dictating — 30 minutes a month, no cost.</string>
     <string name="setup_finish_action">Finished</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
@@ -1074,7 +1159,7 @@ New dictionary:
         Submitted data will be downloaded and deleted from the ProtonMail mailbox where it is stored at our earliest convenience.
         After the gesture data gathering phase has ended, the accumulated data set from all users will be published under the Creative Commons BY-SA 4.0 license.\n\n
 
-        As part of trying to protect your privacy, you won\'t be listed explicitly as an author. Your credit will be as \"The VibeVoiceBoard Gesture Data Project Contributors.\" It should not be possible to connect the data you generate in this screen to your identity. However, it might be possible to determine which gestures were made by the same person.
+        As part of trying to protect your privacy, you won\'t be listed explicitly as an author. Your credit will be as \"The VibeVoice Keyboard Gesture Data Project Contributors.\" It should not be possible to connect the data you generate in this screen to your identity. However, it might be possible to determine which gestures were made by the same person.
         This can be done e.g. from a custom keyboard layout, keyboard dimensions, language, or individual gesturing style.\n\n
     </string>
     <!-- Button text for showing gesture_data_description_privacy
@@ -1103,7 +1188,7 @@ New dictionary:
     <!-- Text requesting the user to gesture a word
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="gesture_data_please_type">Please gesture type:</string>
-    <!-- Text requesting the user to switch to VibeVoiceBoard, in case a different keyboard app is active
+    <!-- Text requesting the user to switch to VibeVoice Keyboard, in case a different keyboard app is active
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="gesture_data_please_switch_keyboard">Please switch to %s</string>
     <!-- Button for saving data and go to next word (now only shows up when the word %s is not in suggestions)
@@ -1189,7 +1274,7 @@ New dictionary:
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="gesture_data_promotion_message">
         Hey there!\n
-        Since you installed the gesture typing library, you might be interested in VibeVoiceBoard\'s project for creating a fully open gesture typing library.
+        Since you installed the gesture typing library, you might be interested in VibeVoice Keyboard\'s project for creating a fully open gesture typing library.
         You can help by contributing gesture data. For more information visit the gesture data gathering screen.
     </string>
     <!-- Message asking the user to contribute to gesture data gathering again (dialog in main settings)
@@ -1223,7 +1308,7 @@ New dictionary:
     <!-- Info dialog main message (other sections in different strings)
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="gesture_data_background_gathering_info_message">
-        Turning on background data collection allows VibeVoiceBoard to record gestures you type in other apps.
+        Turning on background data collection allows VibeVoice Keyboard to record gestures you type in other apps.
         This is very useful for the gesture typing project as it can produce a considerable amount of data, albeit at lower quality than active gathering.
         Background data collection is not a replacement for actively gathered data, it is meant to be an addition, as data quality is more important than quantity.\n\n
         Background gathering has high potential of collecting data that you may consider too private to share, even when published anonymously.

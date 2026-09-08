@@ -16,6 +16,11 @@ tools/*.txt
 *.diff
 *.sh
 !tools/build-and-deploy.sh
+
+# The store-asset renderers. The blanket *.sh above swallowed build_overlays.sh, so the pipeline
+# every store image is built by was never committed: a fresh clone got caption.html and captions.json
+# and no way to render them. extract_mark.py survived only because it happens to be Python.
+!marketing/**/*.sh
 !tools/hooks/*.sh
 tools/make-emoji-keys/bin/
 tools/make-emoji-keys/build/
@@ -37,5 +42,9 @@ tools/.build.lock
 # Release signing material - never commit
 keystore.properties
 *.jks
+
+# The Play service-account key. It can publish to the store as us, so it is the one file in this
+# tree whose leak would be worse than the signing key's: that one only signs, this one ships.
+play-service-account.json
 *.keystore
 .wt/

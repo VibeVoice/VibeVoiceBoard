@@ -92,7 +92,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
         }
-        base.archivesBaseName = "VibeVoiceBoard_$versionString"
+        base.archivesBaseName = "VibeVoiceKeyboard_$versionString"
         androidComponents.onVariants { variant: ApplicationVariant ->
             if (variant.buildType == "debug") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
@@ -104,7 +104,7 @@ android {
             }
             variant.outputs.forEach { output ->
                 if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
-                    output.outputFileName = "VibeVoiceBoard_$versionString-${variant.buildType}.apk"
+                    output.outputFileName = "VibeVoiceKeyboard_$versionString-${variant.buildType}.apk"
                 }
             }
         }

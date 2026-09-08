@@ -1,0 +1,141 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>store caption</title>
+<!--
+  One Play screenshot, rendered whole.
+
+  WHY THE WHOLE IMAGE AND NOT JUST A BANNER
+
+  The first design put a caption strip above the phone screenshot and composited the two with
+  ffmpeg. Two tools, two coordinate systems, and a seam to keep aligned every time a caption grew a
+  line. Chrome can lay out the caption AND place the screenshot, so it does, and the output is the
+  finished file.
+
+  WHY 720x1280 AND A SCALE FACTOR OF TWO
+
+  The source screenshots are 1440x3120, which is 9:19.5 -- taller than the 9:16 Play documents.
+  Rather than gamble on whether it is accepted, the canvas is 9:16 and the phone sits inside it,
+  letterboxed against the brand background. That is also the shape most store listings use, so it
+  costs nothing and removes a question.
+
+  The CSS is authored at 720x1280 and rendered at device scale 2, which gives exactly 1440x2560 and
+  keeps every number in the stylesheet a round one.
+
+  USAGE: build_overlays.sh passes everything through the query string. Opened directly, with no
+  parameters, the caption shows its placeholder text and the phone frame is empty -- enough to check
+  the layout, not enough to check an image.
+-->
+<style>
+  @font-face {
+    font-family: 'Ubuntu Sans';
+    src: url('../../app/src/main/res/font/ubuntu_sans_thin.ttf') format('truetype');
+    font-weight: 100;
+  }
+  @font-face {
+    font-family: 'Ubuntu Sans';
+    src: url('../../app/src/main/res/font/ubuntu_sans_regular.ttf') format('truetype');
+    font-weight: 400;
+  }
+  @font-face {
+    font-family: 'Ubuntu Sans';
+    src: url('../../app/src/main/res/font/ubuntu_sans_semibold.ttf') format('truetype');
+    font-weight: 600;
+  }
+
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 720px; height: 1280px; overflow: hidden;
+    /* --bg-color from the site's dark theme. The blobs are calibrated against black. */
+    background: #000;
+    font-family: 'Ubuntu Sans', sans-serif;
+    color: #fff;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+
+  /* The three drifting blobs of AnimatedPageBackground.css, held still.
+     Same colours, same 70% stop, same screen blend at 0.165. Arrangement c-v, which is what the
+     hero uses, so a viewer who saw the app recognises the ground. */
+  .blob {
+    position: absolute; border-radius: 50%;
+    width: 1008px; height: 1008px;              /* 140vmin of a 720px min side */
+    /* 0.30, not the app's 0.165. In the app the blobs sit behind text that has to stay readable;
+       here they are the only thing separating a marketing image from a black rectangle, and at the
+       size Play shows these, 0.165 disappears entirely. */
+    mix-blend-mode: screen; opacity: 0.30;
+    pointer-events: none;
+  }
+  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -216px; bottom: -504px; }
+  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -216px; bottom:  380px; }
+  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left:  252px; bottom:  180px; }
+
+  .caption {
+    position: relative; z-index: 2; flex: 0 0 auto;
+    padding: 74px 64px 30px; text-align: center;
+  }
+  h1 {
+    margin: 0; font-size: 42px; line-height: 1.16; font-weight: 100;
+    text-wrap: balance;
+  }
+  h1 b { font-weight: 600; }
+  .note {
+    margin: 22px 0 0; font-size: 17px; font-weight: 400;
+    color: rgba(255,255,255,0.5);
+  }
+
+  /* The phone. A border and a radius rather than a drawn device frame: a real frame dates the
+     image to whatever handset it copies, and Play shows these small enough that the outline is
+     all that reads anyway. */
+  .stage {
+    position: relative; z-index: 2; flex: 1 1 auto; min-height: 0;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-bottom: 44px;
+  }
+  .device {
+    height: 100%; aspect-ratio: 1440 / 3120;
+    border-radius: 30px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 24px 70px rgba(0,0,0,0.65);
+  }
+  .device img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+
+  /* No caption on the hero: the slogan is already inside the screenshot. The phone takes the
+     height the caption would have used instead of leaving a hole where text should be. */
+  body.bare .caption { display: none; }
+  body.bare .stage { padding: 96px 0 60px; }
+</style>
+
+<div class="blob purple"></div>
+<div class="blob green"></div>
+<div class="blob blue"></div>
+
+<div class="caption">
+  <h1><b id="lead">Speak.</b> <span id="rest">The punctuation writes itself.</span></h1>
+  <p class="note" id="note" hidden></p>
+</div>
+
+<div class="stage"><div class="device"><img id="shot" alt=""></div></div>
+
+<script>
+  const q = new URLSearchParams(location.search);
+  const lead = q.get('lead') || '';
+  const rest = q.get('rest') || '';
+  const note = q.get('note') || '';
+  const shot = q.get('shot');
+
+  if (shot) document.getElementById('shot').src = shot;
+
+  // An empty caption is a deliberate state, not a missing parameter: the hero carries its own
+  // words. `bare` gives the phone the room instead of leaving a gap.
+  if (!lead && !rest) {
+    document.body.classList.add('bare');
+  } else {
+    document.getElementById('lead').textContent = lead;
+    document.getElementById('rest').textContent = rest;
+    if (note) {
+      const el = document.getElementById('note');
+      el.textContent = note;
+      el.hidden = false;
+    }
+  }
+</script>

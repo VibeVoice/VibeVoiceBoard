@@ -44,6 +44,23 @@ The correct package name for the local debug keyboard app is `org.vibevoice.boar
 For more information, see [VIBEVOICE_DEBUGGING.md](file:///Users/schneider/repos/VibeVoiceBoard/VIBEVOICE_DEBUGGING.md).
 
 
+## Strings and translations
+
+The fork's own user-facing strings — every `vibevoice_*` key, plus the wizard's `setup_step4_*`,
+`setup_step5_*` and `setup_next_action` — are ours. Upstream has never heard of them.
+
+- **English originals** go in `app/src/main/res/values/strings.xml`, alongside upstream's.
+- **Translations of them** go in `values-<locale>/strings_vibevoice.xml`, a separate file per locale.
+- **Never** put a fork string in `values-<locale>/strings.xml`. Those files are Weblate's; they are
+  overwritten from upstream, and a fork string in one is a string that will silently disappear on the
+  next sync — or, worse, survive in a file nobody owns.
+
+Adding a key means editing `values/strings.xml` first; a translation file only translates keys that
+already exist there, and a key in a translation file with no English original is a build that
+compiles and a string nobody can reach.
+
+Currently translated: German, complete.
+
 ## Versioning
 
 Version is managed automatically via the [`VERSION`](./VERSION) file at the repo root. This is the **single source of truth** — `build.gradle.kts` reads it at build time.

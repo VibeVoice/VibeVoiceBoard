@@ -90,7 +90,9 @@ fun TextCorrectionScreen(
         if (prefs.getBoolean(Settings.PREF_SUGGEST_PUNCTUATION, Defaults.PREF_SUGGEST_PUNCTUATION))
             Settings.PREF_PUNCTUATION_SUGGESTIONS else null,
         Settings.PREF_SUGGEST_CLIPBOARD_CONTENT,
-        Settings.PREF_USE_CONTACTS,
+        // PREF_USE_CONTACTS is not listed: READ_CONTACTS is no longer declared in the
+        // manifest, so the request behind this switch returns denied and it can never turn
+        // on. The Setting itself stays defined below, to keep the diff against upstream small.
         Settings.PREF_USE_APPS,
         if (prefs.getBoolean(Settings.PREF_KEY_USE_PERSONALIZED_DICTS, Defaults.PREF_KEY_USE_PERSONALIZED_DICTS))
             Settings.PREF_ADD_TO_PERSONAL_DICTIONARY else null,
@@ -243,25 +245,10 @@ fun createCorrectionSettings(context: Context) = listOf(
     ) {
         SwitchPreference(it, Defaults.PREF_SUGGEST_CLIPBOARD_CONTENT)
     },
-    Setting(context, Settings.PREF_USE_CONTACTS,
-        R.string.use_contacts_dict, R.string.use_contacts_dict_summary
-    ) { setting ->
-        val activity = LocalContext.current.getActivity() ?: return@Setting
-        var granted by remember { mutableStateOf(PermissionsUtil.checkAllPermissionsGranted(activity, Manifest.permission.READ_CONTACTS)) }
-        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-            granted = it
-            if (granted)
-                activity.prefs().edit { putBoolean(setting.key, true) }
-        }
-        SwitchPreference(setting, Defaults.PREF_USE_CONTACTS,
-            allowCheckedChange = {
-                if (it && !granted) {
-                    launcher.launch(Manifest.permission.READ_CONTACTS)
-                    false
-                } else true
-            }
-        )
-    },
+    // PREF_USE_CONTACTS has no Setting at all now. Leaving the definition and dropping it from
+    // the list still left it reachable: SettingsActivity rendered it by key on the spell-checker
+    // screen, and SettingsContainer indexes every Setting for search whether or not a list shows
+    // it. A switch that can never be granted is worse than no switch, so there is no switch.
     Setting(context, Settings.PREF_USE_APPS,
         R.string.use_apps_dict, R.string.use_apps_dict_summary
     ) { setting ->
