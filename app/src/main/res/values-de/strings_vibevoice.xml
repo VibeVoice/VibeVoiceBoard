@@ -33,6 +33,8 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_mic_unavailable">Das Mikrofon liefert nichts mehr. Diktat beendet.</string>
     <string name="vibevoice_transcribing">Transkribiere…</string>
     <string name="vibevoice_transcribing_timer">Transkribiere… %s</string>
+    <string name="vibevoice_waiting_for_connection">Warte auf Verbindung…</string>
+    <string name="vibevoice_connection_lost">Die Verbindung ist abgerissen. Das bis dahin Erkannte wurde eingefügt.</string>
     <string name="vibevoice_hold_to_transcribe">Diktat: lang drücken</string>
 
     <!-- Background dictation -->

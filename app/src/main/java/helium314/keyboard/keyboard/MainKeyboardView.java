@@ -870,9 +870,16 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         if (latinIME != null && latinIME.isRecordingVoice()) {
             // Counting up, because "Transcribing…" on its own says nothing about whether anything
             // is still happening -- a stalled session and a working one look identical.
-            final long seconds = latinIME.getVoiceElapsedSeconds();
-            spaceText = getContext().getString(R.string.vibevoice_transcribing_timer,
-                    String.format(java.util.Locale.US, "%d:%02d", seconds / 60, seconds % 60));
+            if (latinIME.isVoiceLinkDegraded()) {
+                // The timer would keep counting up through a tunnel and say that everything is
+                // fine. It is not: nothing is reaching the server. The session is still recording,
+                // so this is a status and not an error, and it goes away by itself.
+                spaceText = getContext().getString(R.string.vibevoice_waiting_for_connection);
+            } else {
+                final long seconds = latinIME.getVoiceElapsedSeconds();
+                spaceText = getContext().getString(R.string.vibevoice_transcribing_timer,
+                        String.format(java.util.Locale.US, "%d:%02d", seconds / 60, seconds % 60));
+            }
         } else {
             spaceText = getContext().getString(R.string.vibevoice_hold_to_transcribe);
         }

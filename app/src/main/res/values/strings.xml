@@ -121,6 +121,11 @@
     <string name="vibevoice_transcribing">Transcribing…</string>
     <!-- On the space bar while a session runs. %s is the elapsed time, m:ss. -->
     <string name="vibevoice_transcribing_timer">Transcribing… %s</string>
+    <!-- Shown on the space bar while the link is too poor to stream into. Not an error: the
+         session is still recording, and this disappears when the connection comes back. -->
+    <string name="vibevoice_waiting_for_connection">Waiting for connection…</string>
+    <!-- Shown when an outage lasted longer than the buffered audio could survive. -->
+    <string name="vibevoice_connection_lost">The connection dropped. What was transcribed up to that point has been inserted.</string>
     <string name="vibevoice_hold_to_transcribe">Long-press to dictate</string>
     <string name="privacy_policy">Privacy Policy</string>
     <!-- Bug reporting strings -->

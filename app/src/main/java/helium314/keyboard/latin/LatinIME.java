@@ -1591,6 +1591,12 @@ public class LatinIME extends InputMethodService implements
      *  callback runs the field may already hold a newly started session. */
     private int mVoiceSessionId = 0;
     private long mVoiceStartedAt = 0L;
+    private volatile boolean mVoiceLinkDegraded = false;
+
+    /** Whether the link is currently too poor to stream into. Read by the space bar. */
+    public boolean isVoiceLinkDegraded() {
+        return mVoiceLinkDegraded;
+    }
 
     /** Seconds since this dictation session started, for the count on the space bar. */
     public long getVoiceElapsedSeconds() {
@@ -1621,6 +1627,7 @@ public class LatinIME extends InputMethodService implements
             mUiHandler.postDelayed(mVoiceTick, 1000L);
         } else {
             mVoiceStartedAt = 0L;
+            mVoiceLinkDegraded = false;
             mUiHandler.removeCallbacks(mVoiceTick);
         }
         mUiHandler.post(() -> {
@@ -1801,6 +1808,17 @@ public class LatinIME extends InputMethodService implements
                         // is an invitation to link an account, the other is something broken, and
                         // showing "Dictation error: trial_exhausted" would make the first look like
                         // the second.
+                        if (VibeVoiceClient.ERR_LINK_LOST.equals(error)) {
+                            // Not a fault in the product. The session is over because the radio
+                            // went away for longer than the buffer could cover, and everything
+                            // transcribed before that is committed rather than dropped.
+                            mVoiceLinkDegraded = false;
+                            finishVoiceSession(mVoiceComposingText, false);
+                            android.widget.Toast
+                                    .makeText(LatinIME.this, R.string.vibevoice_connection_lost, android.widget.Toast.LENGTH_LONG)
+                                    .show();
+                            return;
+                        }
                         if (VibeVoiceClient.ERR_TRIAL_EXHAUSTED.equals(error)) {
                             VibeVoiceClient.markTrialSpent(LatinIME.this);
                             finishVoiceSession(mVoiceComposingText, false);
@@ -1814,6 +1832,23 @@ public class LatinIME extends InputMethodService implements
                                 .makeText(LatinIME.this, getString(R.string.vibevoice_error, error), android.widget.Toast.LENGTH_SHORT)
                                 .show();
                         finishVoiceSession(mVoiceComposingText, false);
+                    });
+                }
+
+                @Override
+                public void onLinkQualityChanged(boolean degraded) {
+                    mUiHandler.post(() -> {
+                        if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
+                        if (mVoiceLinkDegraded == degraded) return;
+                        mVoiceLinkDegraded = degraded;
+                        // The space bar, not a toast. It already carries the running timer, so the
+                        // user is looking at it; a toast would cover the text being dictated and
+                        // would still be on screen after the connection came back. Redrawn at once
+                        // rather than waiting for the next per-second tick: the point of the message
+                        // is that it arrives while the user is still talking.
+                        final MainKeyboardView spaceView =
+                                mKeyboardSwitcher == null ? null : mKeyboardSwitcher.getMainKeyboardView();
+                        if (spaceView != null) spaceView.invalidateSpaceKey();
                     });
                 }
 

@@ -8,6 +8,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -55,6 +56,14 @@ interface VibeVoiceListener {
      * Unlike [onError] this must not tear the session down — wait for the final result.
      */
     fun onWarning(code: String)
+    /**
+     * The link became too poor to stream into, or recovered.
+     *
+     * Not an error and not a warning: the session is still running and still recording into the
+     * rolling buffer. The keyboard uses it to say so on the space bar, which is where the user is
+     * already looking, and to stop saying so when it clears.
+     */
+    fun onLinkQualityChanged(degraded: Boolean)
     fun onClosed()
     fun onCommitComposing()
 }
@@ -104,6 +113,28 @@ class VibeVoiceClient(
     @Volatile private var framesAppliedThisConnection = 0
     @Volatile private var isReconnecting = false
     @Volatile private var retryCount = 0
+
+    /**
+     * When the server was last heard from, and when the current outage started.
+     *
+     * A dead radio does not usually kill the socket. TCP retransmits, OkHttp's ping was thirty
+     * seconds apart, and in between the client cheerfully wrote audio into a send buffer that never
+     * drained while the user went on talking into nothing. The socket-is-dead signal we had is the
+     * *last* symptom of a bad link, not the first.
+     */
+    @Volatile private var lastServerMessageAt = 0L
+    @Volatile private var degradedSinceMs = 0L
+    private var watchdogJob: Job? = null
+
+    /**
+     * Whether the link is currently too poor to be streaming into.
+     *
+     * Read by the keyboard to change what the space bar says. Deliberately not an error: a tunnel
+     * is a normal thing to drive through, and the session survives it as long as the unsent audio
+     * still fits in the rolling buffer.
+     */
+    @Volatile var isLinkDegraded = false
+        private set
     @Volatile private var isWsOpen = false
     @Volatile private var pendingEndStream = false
     private val preOpenBuffer = ArrayDeque<okio.ByteString>()
@@ -173,11 +204,25 @@ class VibeVoiceClient(
         val delayMs = when (retryCount) {
             0 -> 500L
             1 -> 1000L
-            else -> 2000L
+            2 -> 2000L
+            else -> 3000L
         }
         retryCount++
-        
-        if (retryCount <= MAX_RETRIES) {
+        if (retryCount == 1) degradedSinceMs = SystemClock.elapsedRealtime()
+
+        // Keep trying while the audio nobody has received still fits in the buffer.
+        //
+        // Three attempts over three and a half seconds was the old rule, and it threw away tolerance
+        // we had already paid for: the rolling buffer holds thirty seconds, so anything shorter than
+        // that is recoverable without losing a word. Three and a half seconds is not a tunnel, a
+        // lift, or a train between stations, which are exactly the situations this is for.
+        //
+        // Two bounds, because either alone can run away. The buffer bound stops mattering once
+        // capture has been torn down and totalRead stops growing; the clock bound stops a permanent
+        // outage from retrying for ever.
+        val unsent = totalRead - disconnectedAtBytes
+        val outageMs = SystemClock.elapsedRealtime() - degradedSinceMs
+        if (unsent < rollingBuffer.size && outageMs < RECONNECT_WINDOW_MS) {
             VibeVoiceDebugLogger.log("Reconnecting in ${delayMs}ms (attempt $retryCount/$MAX_RETRIES)...")
             scope.launch {
                 delay(delayMs)
@@ -191,11 +236,63 @@ class VibeVoiceClient(
                 connectWebSocket()
             }
         } else {
-            VibeVoiceDebugLogger.log("Max reconnect retries reached. Stopping stream.")
+            VibeVoiceDebugLogger.log("Giving up: unsent=$unsent outageMs=$outageMs")
             isStreaming = false
+            setLinkDegraded(false)
             cleanupAudioCapture()
-            listener.onError("Connection lost")
+            // A code, not a sentence. What the user reads is the keyboard's business, and "Dictation
+            // error: Connection lost" framed a tunnel as a fault in the product.
+            listener.onError(ERR_LINK_LOST)
         }
+    }
+
+    /**
+     * Watches the link while a session runs, once a second.
+     *
+     * Two independent symptoms, because they fail in different directions:
+     *
+     * `queueSize()` is what OkHttp has accepted from us and not yet put on the wire. It grows when
+     * the radio cannot keep up with 32 kB/s, which is the honest definition of "too poor to stream
+     * into" and the earliest thing we can see. Six seconds' worth is the threshold: below that it
+     * is ordinary jitter, above it the backlog is not coming back on its own.
+     *
+     * Server silence catches the other case, where the socket is fine in our direction and dead in
+     * theirs. The server acknowledges continuously, so eight seconds without a word means the round
+     * trip is broken even though nothing has thrown.
+     *
+     * Neither ends the session. They raise a flag the keyboard reads, and a reconnect is only
+     * triggered once the queue has grown past what the buffer could resend anyway.
+     */
+    private fun startLinkWatchdog() {
+        watchdogJob?.cancel()
+        lastServerMessageAt = SystemClock.elapsedRealtime()
+        watchdogJob = scope.launch {
+            while (isActive && isStreaming) {
+                delay(LINK_CHECK_INTERVAL_MS)
+                if (!isStreaming) break
+                val ws = webSocket
+                val queued = try { ws?.queueSize() ?: 0L } catch (_: Exception) { 0L }
+                val silentFor = SystemClock.elapsedRealtime() - lastServerMessageAt
+                val bad = isWsOpen && (queued > LINK_QUEUE_STALL_BYTES || silentFor > LINK_SILENCE_STALL_MS)
+                if (bad != isLinkDegraded) {
+                    VibeVoiceDebugLogger.log("Link ${if (bad) "degraded" else "recovered"}: queued=$queued silentMs=$silentFor")
+                    setLinkDegraded(bad)
+                }
+                // A backlog bigger than the rolling buffer can never be made good by waiting: the
+                // audio behind it has already been overwritten. Cut the socket and let the normal
+                // reconnect path resend what is still held.
+                if (isLinkDegraded && queued > rollingBuffer.size) {
+                    VibeVoiceDebugLogger.log("Send queue past the buffer; forcing a reconnect")
+                    try { ws?.cancel() } catch (_: Exception) { }
+                }
+            }
+        }
+    }
+
+    private fun setLinkDegraded(degraded: Boolean) {
+        isLinkDegraded = degraded
+        degradedSinceMs = if (degraded) SystemClock.elapsedRealtime() else 0L
+        listener.onLinkQualityChanged(degraded)
     }
 
     private fun createWebSocketListener(): WebSocketListener {
@@ -246,6 +343,11 @@ class VibeVoiceClient(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                // Any frame at all, not just a transcript: a link that carries anything back is a
+                // link that is working, and the server sends acknowledgements even while nobody is
+                // speaking.
+                lastServerMessageAt = SystemClock.elapsedRealtime()
+                if (isLinkDegraded) setLinkDegraded(false)
                 try {
                     val json = JSONObject(text)
                     if (json.has("text")) {
@@ -341,7 +443,9 @@ class VibeVoiceClient(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 VibeVoiceDebugLogger.log("WS Failure: ${t.message}")
-                if (isStreaming && retryCount < MAX_RETRIES) {
+                if (isStreaming) {
+                    // The decision whether another attempt is worth making lives in one place now,
+                    // and it is about how much audio is still recoverable rather than about a count.
                     triggerReconnect()
                 } else {
                     isStreaming = false
@@ -383,6 +487,8 @@ class VibeVoiceClient(
     fun startStreaming() {
         if (isStreaming) return
         isStreaming = true
+        isLinkDegraded = false
+        startLinkWatchdog()
         closureJob?.cancel()
         closureJob = null
         isReconnecting = false
@@ -714,6 +820,11 @@ class VibeVoiceClient(
     }
 
     private fun cleanupAudioCapture() {
+        // Reached by every path that ends a session, abnormal ones included, which is why the
+        // watchdog is torn down here rather than in stopStreaming alone.
+        watchdogJob?.cancel()
+        watchdogJob = null
+        if (isLinkDegraded) setLinkDegraded(false)
         audioJob?.cancel()
         audioJob = null
         try {
@@ -772,16 +883,41 @@ class VibeVoiceClient(
         const val ERR_TRIAL_EXHAUSTED = "trial_exhausted"
         private const val TAG = "VibeVoiceClient"
         private const val MAX_RETRIES = 3
+
+        private const val LINK_CHECK_INTERVAL_MS = 1000L
+        /** Six seconds of audio at 16 kHz, 16-bit mono. Below this it is jitter; above it, a backlog. */
+        private const val LINK_QUEUE_STALL_BYTES = 6 * 32000L
+        /** The server acknowledges continuously, so this much silence means the round trip is broken. */
+        private const val LINK_SILENCE_STALL_MS = 8000L
+        /**
+         * How long an outage may last before the session ends.
+         *
+         * Matched to the rolling buffer: thirty seconds of audio is what a reconnect can resend, so
+         * waiting longer would mean coming back with a gap in the middle of a sentence.
+         */
+        private const val RECONNECT_WINDOW_MS = 30_000L
         /** RMS that counts as a full-scale level for the waves; see where currentLevel is written. */
         private const val LEVEL_FULL_SCALE = 0.15
+
+        /**
+         * The link stayed down long enough that the audio behind it could not be recovered.
+         *
+         * A code rather than a message: what the user reads belongs to the keyboard, and it should
+         * not read like a fault in the product. Driving into a tunnel is not a bug.
+         */
+        const val ERR_LINK_LOST = "link_lost"
 
         /** Another app won the concurrent-capture arbitration and the system is feeding us silence. */
         const val WARN_MIC_BUSY = "mic_busy"
         /** The recorder stopped delivering usable audio and restarting it did not help. */
         const val WARN_MIC_UNAVAILABLE = "mic_unavailable"
 
+        // Ten seconds, not thirty. The ping is the backstop that notices a socket which is dead but
+        // has not been told so, and at thirty it took up to a minute -- long enough to lose a whole
+        // dictation into a link that had already gone. The watchdog usually gets there first now,
+        // but the two answer different questions and both are cheap.
         @JvmField val sharedHttpClient = OkHttpClient.Builder()
-            .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
+            .pingInterval(10, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
         @Volatile private var cachedPrefs: SharedPreferences? = null
