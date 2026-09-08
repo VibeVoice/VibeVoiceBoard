@@ -31,5 +31,5 @@ If you send a bug report from the settings, the diagnostic log goes with it, and
 VibeVoice Keyboard is built on HeliBoard, itself derived from AOSP and OpenBoard, and it keeps what that gives you: multilingual typing with per-language layouts, glide typing, clipboard history, one-handed and split modes, a customisable toolbar, adjustable key height and spacing, themes with your own colours, and a layout editor. No ads, no tracking, and no account needed for any of it.
 
 Free software under the GNU General Public License v3.0.
-Source: https://github.com/VibeVoice/VibeVoice Keyboard
+Source: https://github.com/VibeVoice/VibeVoiceBoard
 Service and privacy policy: https://vibevoice.net

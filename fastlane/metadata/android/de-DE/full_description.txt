@@ -31,5 +31,5 @@ Wenn du aus den Einstellungen einen Fehlerbericht schickst, geht das Diagnosepro
 VibeVoice Keyboard baut auf HeliBoard auf, das seinerseits von AOSP und OpenBoard abstammt, und behält, was das mitbringt: mehrsprachiges Tippen mit eigenen Layouts je Sprache, Wischtippen, Zwischenablage-Verlauf, Einhand- und geteilter Modus, anpassbare Werkzeugleiste, einstellbare Tastenhöhe und -abstände, Themes mit eigenen Farben und ein Layout-Editor. Keine Werbung, kein Tracking, und für all das kein Konto.
 
 Freie Software unter der GNU General Public License v3.0.
-Quellcode: https://github.com/VibeVoice/VibeVoice Keyboard
+Quellcode: https://github.com/VibeVoice/VibeVoiceBoard
 Dienst und Datenschutzerklärung: https://vibevoice.net

@@ -127,6 +127,7 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_try_label">Probier es gleich aus</string>
     <string name="setup_try_hint">Hier tippen und losdiktieren…</string>
     <string name="setup_mic_disclosure">Während du diktierst, wird das Gesprochene zum Transkribieren an vibevoice.net gesendet. Die Aufnahme wird gelöscht, sobald das Transkript vorliegt oder der Versuch fehlschlägt, und zu keinem anderen Zeitpunkt wird etwas gesendet.</string>
+    <string name="vibevoice_mic_disclosure_title">Bevor das Mikrofon angeht</string>
     <string name="setup_extras_overlay_preview">Das ist die Marke. Sie pulsiert mit deiner Stimme, und zum Beenden ziehst du sie auf das X.</string>
     <string name="setup_try_skip">Überspringen</string>
     <string name="setup_link_later">Später verknüpfen – die Gratis-Minuten laufen weiter</string>

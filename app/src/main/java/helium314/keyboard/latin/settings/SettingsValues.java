@@ -398,14 +398,29 @@ public class SettingsValues {
         return mToolbarMode != ToolbarMode.HIDDEN || !mToolbarHidingGlobal;
     }
 
+    /**
+     * Always false: this fork does not declare READ_CONTACTS.
+     *
+     * The permission check the rest of the contacts path relies on cannot carry this on its own.
+     * PermissionsUtil.checkAllPermissionsGranted returns true unconditionally below API 23, on the
+     * reasoning that a pre-Marshmallow install granted everything up front -- true, but only for
+     * permissions the manifest actually declares. minSdk here is 21, so on Android 5.x that check
+     * said yes to a permission that no longer exists, DictionaryFacilitatorImpl went on adding
+     * TYPE_CONTACTS, and ContactsManager.getValidNames() reached an unguarded ContentResolver.query
+     * that now throws SecurityException on a background executor.
+     *
+     * Deciding it here rather than patching the query is deliberate: this is the one place that
+     * turns the feature on, it is a fork file already, and the twelve upstream files behind it stay
+     * untouched for the next `git merge main`.
+     *
+     * The stored preference is cleared too, so an upgrade that carried use_contacts=true from a
+     * build that did declare the permission does not leave a true value behind for anything reading
+     * the pref directly.
+     */
     private static boolean readUseContactsEnabled(final SharedPreferences prefs, final Context ctx) {
-        final boolean setting = prefs.getBoolean(Settings.PREF_USE_CONTACTS, Defaults.PREF_USE_CONTACTS);
-        if (!setting) return false;
-        if (PermissionsUtil.checkAllPermissionsGranted(ctx, Manifest.permission.READ_CONTACTS)) {
-            return true;
+        if (prefs.getBoolean(Settings.PREF_USE_CONTACTS, Defaults.PREF_USE_CONTACTS)) {
+            prefs.edit().putBoolean(Settings.PREF_USE_CONTACTS, false).apply();
         }
-        // disable if permission not granted
-        prefs.edit().putBoolean(Settings.PREF_USE_CONTACTS, false).apply();
         return false;
     }
 
