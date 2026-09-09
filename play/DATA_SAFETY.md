@@ -29,32 +29,53 @@ Everything else is `FALSE`. Worth stating explicitly, because two of them look l
 * **Contacts — not declared.** `READ_CONTACTS` is inherited from HeliBoard and
   `SettingsValues.readUseContactsEnabled` now returns `false` unconditionally.
 
-## The four blank rows — for the VibeVoice agent
+## The four rows that were blank — answered
 
-Each needs an answer from the server code. The row is identified by its `Question ID`.
+All four are filled in. The answers came from the VibeVoice agent, who read them out of the server
+rather than out of memory; two of them corrected what this file used to claim.
 
-### 1. `PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:PSL_DATA_USAGE_EPHEMERAL`
-*Is audio processed ephemerally?* Play means: held in memory only, never written to storage, kept no
-longer than the request.
+### `PSL_ACCOUNT_DELETION_URL` and `PSL_DATA_DELETION_URL` → `https://vibevoice.net/delete-account`
 
-Our understanding is **no** — the server writes a temporary file and unlinks it in a `finally`. If
-that is still true, answer `FALSE`. Check it rather than repeat it: the difference is whether the
-store listing may say the recording never touches disk.
+One page answers both. Public, no login, English. It lists what deletion actually removes — read out
+of `delete_account_cascade()`, including the keyboard's trial `install_id` — and names the billing
+records that stay de-identified under German retention law. It also states the consequence nobody
+expects: if a paid subscription is running it is cancelled first, and if that fails, nothing is
+deleted at all.
 
-### 2. `PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:PSL_DATA_USAGE_COLLECTION_AND_SHARING` / `PSL_DATA_USAGE_ONLY_SHARED`
-*Is audio shared with a third party?* Currently `FALSE`, which assumes transcription happens on
-infrastructure we control.
+> **The page is built but not deployed.** It answers only on the admin-only preview host until the
+> frontend deploy is released. **Do not import this CSV into the Console before the URL responds
+> publicly** — a data-deletion URL that 404s is worse than a missing one.
 
-**If any part of the audio path reaches an API we do not own, this must be `TRUE`** and the sharing
-purposes below it must be filled in. This is the single most consequential row in the file: getting
-it wrong is the kind of misdeclaration that gets an app pulled, not warned.
+### `…:PSL_AUDIO:PSL_DATA_USAGE_EPHEMERAL` → `FALSE`
 
-### 3. `PSL_ACCOUNT_DELETION_URL`
-Public URL where a user can request deletion of the account **and** its data, reachable without
-signing in. Does not exist yet — it is task 3a in the handoff.
+The answer is right and the reason this file used to give was wrong, which is worth keeping written
+down because the wrong reason was plausible.
 
-### 4. `PSL_DATA_DELETION_URL`
-May be the same page as 3, or a separate one for data-only deletion.
+"Temporary file, unlinked in a `finally`" belongs to the **batch upload path** (`job_processor.py`),
+which the keyboard never touches. The keyboard's path is `/stream` → `transcribe_array()`: mono
+float32 numpy handed straight to recognition, no filesystem at all; `streaming_ws.py` writes nothing
+to disk. On that evidence alone the honest answer would have been `TRUE`.
+
+`FALSE` holds for a different reason. Production runs with `TRAINING_CAPTURE_USER_ID=1` — confirmed
+in `/etc/vibevoice.env` and in the running process. For that one account, the operator's own, the
+full session is written to the NAS as a WAV. "Memory only" therefore does not hold without exception,
+and `TRUE` would be a misdeclaration. `DEBUG_SAVE_AUDIO_USER_ID` is not set.
+
+**Anyone who wants this row to say `TRUE` has to turn the training capture off.** That is a decision
+worth making deliberately; its only prize is one sentence on the store listing.
+
+### `…:PSL_AUDIO:…COLLECTION_AND_SHARING` / `PSL_DATA_USAGE_ONLY_SHARED` → `FALSE`
+
+Previously this assumed transcription runs on our own infrastructure. It now rests on a search:
+`server_side/` and `config/` were swept for OpenAI, Deepgram, AssemblyAI, Azure, Google Speech,
+Speechmatics, Groq, Replicate and HF Inference, and outside tests there is nothing. Recognition runs
+on our own GPU.
+
+One qualification that had to be checked rather than assumed: `vibevoice.net` has been orange-clouded
+since 2026-08-09, and that includes the WebSocket stream, so the dictation audio does pass through
+Cloudflare with TLS terminated there. `FALSE` still holds, because Google's definition of sharing
+excludes a service provider processing on our behalf, and Cloudflare is named as a processor in the
+privacy policy and the DPA annex.
 
 ## Two judgement calls worth a second opinion
 

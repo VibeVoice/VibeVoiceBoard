@@ -8,11 +8,11 @@ PSL_SUPPORTED_ACCOUNT_CREATION_METHODS,PSL_ACM_OAUTH,FALSE,MULTIPLE_CHOICE,Which
 PSL_SUPPORTED_ACCOUNT_CREATION_METHODS,PSL_ACM_OTHER,FALSE,MULTIPLE_CHOICE,Which of the following methods of account creation does your app support? Select all that apply / Other
 PSL_SUPPORTED_ACCOUNT_CREATION_METHODS,PSL_ACM_NONE,TRUE,MULTIPLE_CHOICE,Which of the following methods of account creation does your app support? Select all that apply / My app does not allow users to create an account
 PSL_ACM_SPECIFY,,,MAYBE_REQUIRED,Describe the method of account creation that your app supports
-PSL_ACCOUNT_DELETION_URL,,,MAYBE_REQUIRED,Add a link that users can use to request that their account and associated data is deleted 
+PSL_ACCOUNT_DELETION_URL,,https://vibevoice.net/delete-account,MAYBE_REQUIRED,Add a link that users can use to request that their account and associated data is deleted 
 PSL_SUPPORT_DATA_DELETION_BY_USER,DATA_DELETION_YES,TRUE,SINGLE_CHOICE,Do you provide a way for users to request that their data is deleted? / Yes
 PSL_SUPPORT_DATA_DELETION_BY_USER,DATA_DELETION_NO,FALSE,SINGLE_CHOICE,Do you provide a way for users to request that their data is deleted? / No
 PSL_SUPPORT_DATA_DELETION_BY_USER,DATA_DELETION_NO_AUTO_DELETED,FALSE,SINGLE_CHOICE,"Do you provide a way for users to request that their data is deleted? / No, but user data is automatically deleted within 90 days"
-PSL_DATA_DELETION_URL,,,MAYBE_REQUIRED,Delete data URL
+PSL_DATA_DELETION_URL,,https://vibevoice.net/delete-account,MAYBE_REQUIRED,Delete data URL
 PSL_DATA_COLLECTION_COMPLIES_FAMILY_POLICY,,,OPTIONAL,"Only answer this question if you've indicated that your app's target age group includes children, or you've opted into the Designed for Families program. If either of the above is true, you are required to follow the Google Play Families Policy (https://support.google.com/googleplay/android-developer/answer/9893335). Do you want to let users know about this commitment in the Data safety section on your store listing?"
 PSL_INDEPENDENTLY_VALIDATED,,,OPTIONAL,"Has your app successfully completed an independent security review, according to the Mobile Application Security Assessment (MASA) framework? Only answer ""yes"" if the review is in good standing."
 PSL_UPI_BADGE_OPT_IN,,,OPTIONAL,Do you want to show this badge on your store listing?
@@ -459,8 +459,8 @@ PSL_DATA_USAGE_RESPONSES:PSL_VIDEOS:DATA_USAGE_SHARING_PURPOSE,PSL_ADVERTISING,F
 PSL_DATA_USAGE_RESPONSES:PSL_VIDEOS:DATA_USAGE_SHARING_PURPOSE,PSL_PERSONALIZATION,FALSE,MULTIPLE_CHOICE,Data usage and handling (Videos) / Why is this user data shared? Select all that apply. / Personalization
 PSL_DATA_USAGE_RESPONSES:PSL_VIDEOS:DATA_USAGE_SHARING_PURPOSE,PSL_ACCOUNT_MANAGEMENT,FALSE,MULTIPLE_CHOICE,Data usage and handling (Videos) / Why is this user data shared? Select all that apply. / Account management
 PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:PSL_DATA_USAGE_COLLECTION_AND_SHARING,PSL_DATA_USAGE_ONLY_COLLECTED,TRUE,MULTIPLE_CHOICE,"Data usage and handling (Voice or sound recordings) / Is this data collected, shared, or both? / Collected"
-PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:PSL_DATA_USAGE_COLLECTION_AND_SHARING,PSL_DATA_USAGE_ONLY_SHARED,,MULTIPLE_CHOICE,"Data usage and handling (Voice or sound recordings) / Is this data collected, shared, or both? / Shared"
-PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:PSL_DATA_USAGE_EPHEMERAL,,,MAYBE_REQUIRED,Data usage and handling (Voice or sound recordings) / Is this data processed ephemerally?
+PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:PSL_DATA_USAGE_COLLECTION_AND_SHARING,PSL_DATA_USAGE_ONLY_SHARED,FALSE,MULTIPLE_CHOICE,"Data usage and handling (Voice or sound recordings) / Is this data collected, shared, or both? / Shared"
+PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:PSL_DATA_USAGE_EPHEMERAL,,FALSE,MAYBE_REQUIRED,Data usage and handling (Voice or sound recordings) / Is this data processed ephemerally?
 PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:DATA_USAGE_USER_CONTROL,PSL_DATA_USAGE_USER_CONTROL_OPTIONAL,FALSE,SINGLE_CHOICE,"Data usage and handling (Voice or sound recordings) / Is this data required for your app, or can users choose whether it's collected? / Users can choose whether this data is collected"
 PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:DATA_USAGE_USER_CONTROL,PSL_DATA_USAGE_USER_CONTROL_REQUIRED,TRUE,SINGLE_CHOICE,"Data usage and handling (Voice or sound recordings) / Is this data required for your app, or can users choose whether it's collected? / Data collection is required (users can't turn off this data collection)"
 PSL_DATA_USAGE_RESPONSES:PSL_AUDIO:DATA_USAGE_COLLECTION_PURPOSE,PSL_APP_FUNCTIONALITY,TRUE,MULTIPLE_CHOICE,Data usage and handling (Voice or sound recordings) / Why is this user data collected? Select all that apply. / App functionality
