@@ -3,9 +3,15 @@
 `data_safety.csv` is the Play Console export, filled in. Import it back under
 **App content → Data safety → Import from CSV**.
 
-Every choice row carries an explicit `TRUE` or `FALSE`; nothing is left implicit, so a question that
-was never considered cannot pass for a "no". **Four rows are deliberately blank** because they depend
-on what the server does, not on what the app does — see below.
+**Only the rows Play actually asks carry a value; 758 of the 782 are blank, and that is correct.**
+The first attempt set every unticked option to `FALSE`, on the theory that an explicit no is more
+careful than a gap. It is not: an unticked checkbox is an absent answer, and a follow-up behind a
+question we answered "none" to is not answerable at all. Play refuses the import — *"You cannot
+answer PSL_ACCOUNT_DELETION_URL"* — and the same would have applied to every usage row hanging off a
+data type we do not collect.
+
+Values are lowercase `true` / `false`. `play/data_safety_sample.csv` is Google's own example and the
+authority for both conventions: fifteen filled rows out of 782.
 
 ## What was declared, and why
 
@@ -20,7 +26,8 @@ Verified against the app source, not assumed.
 | Account creation methods: **none** | Accounts are made on vibevoice.net in a browser. The app links an existing one with an OAuth 2.0 device grant and stores only the resulting API key. Declared instead under "accounts created outside the app". |
 | Users can request deletion: **yes** | URL still to come, see below |
 
-Everything else is `FALSE`. Worth stating explicitly, because two of them look like they should be true:
+Everything else is blank. Two absences are worth stating out loud, because they look like they
+should be there:
 
 * **Email address — not declared.** The app never sees one. Linking returns an API key; there is no
   email field anywhere in `helium314.keyboard.latin.vibevoice`. The address is collected by
