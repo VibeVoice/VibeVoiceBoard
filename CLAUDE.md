@@ -28,9 +28,13 @@ summarizes them.
 ## Versioning
 
 `VERSION` at the repo root is the single source of truth; `app/build.gradle.kts` reads it and derives
-`versionCode = 500000 + major*100000 + minor*1000 + patch`. The offset is not decoration: Play has
-already seen `403001` from the pre-release 4.x iterations, a version code may never go down, and the
-first release anyone outside sees is `1.0.0`. So the name restarts and the code does not. Version bumps are automated by git hooks that are
+`versionCode = 500000 + major*100000 + minor*1000 + patch`, unless `VERSION_CODE` exists at the repo
+root, which then wins. The offset is not decoration: Play saw `403001` from the pre-release 4.x
+iterations, a version code may never go down, and the first release anyone outside sees is `1.0.0`.
+`VERSION_CODE` exists because Play also consumes a code permanently — rebuilding the same version
+name is rejected with *"Version code N has already been used"*, even when the release carrying it was
+replaced while still a draft. Bump `VERSION_CODE` for a re-upload; leave `VERSION` saying what the
+release is called. Version bumps are automated by git hooks that are
 **not** installed by a clone:
 
 ```bash

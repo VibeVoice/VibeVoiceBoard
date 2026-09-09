@@ -23,7 +23,15 @@ val vPatch = versionParts.getOrElse(2) { 0 }
 // Android keeps these two independent on purpose: the name is for people, the code is for ordering.
 // Do not "fix" this by removing the offset -- that would make the next release unpublishable.
 val versionCodeOffset = 500000
-val computedVersionCode = versionCodeOffset + vMajor * 100000 + vMinor * 1000 + vPatch
+// VERSION_CODE overrides the derived number when it exists, and it exists because Play consumes a
+// version code permanently: "Version code 600000 has already been used" is what you get for
+// rebuilding the same version name, even after the release that carried it was replaced while still
+// a draft. A name can legitimately be built twice -- a merge landed, a signing key changed, an upload
+// was retried -- so the ordering number cannot be a pure function of the name. Bump this file, not
+// the offset, and leave VERSION saying what the release is called.
+val versionCodeFile = rootProject.file("VERSION_CODE")
+val computedVersionCode = if (versionCodeFile.exists()) versionCodeFile.readText().trim().toInt()
+    else versionCodeOffset + vMajor * 100000 + vMinor * 1000 + vPatch
 
 // Release signing material. Never committed: put it in keystore.properties (gitignored) or pass it
 // through the environment on CI. When it is absent the release variants stay unsigned, exactly as
