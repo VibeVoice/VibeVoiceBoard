@@ -1,3 +1,8 @@
+# NOTICE
+
+**Currently it's not possible to open PRs. This is because I want to deal with existing PRs before migrating to Codeberg (https://github.com/HeliBorg/HeliBoard/issues/378), and this doesn't work for me while new PRs are coming in.**
+Will re-open probably in (late) October or November.
+
 # Getting Started
 
 VibeVoiceBoard is built with Gradle and the Android Gradle Plugin. Clone this repository

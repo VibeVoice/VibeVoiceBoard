@@ -51,6 +51,7 @@ import helium314.keyboard.keyboard.KeyboardActionListenerImpl;
 import helium314.keyboard.keyboard.KeyboardMode;
 import helium314.keyboard.keyboard.emoji.EmojiPalettesView;
 import helium314.keyboard.keyboard.emoji.EmojiSearchActivity;
+import helium314.keyboard.keyboard.emoji.EmojiSearchActivityKt;
 import helium314.keyboard.keyboard.internal.KeyboardIconsSet;
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode;
 import helium314.keyboard.latin.common.InsetsOutlineProvider;
@@ -173,6 +174,13 @@ public class LatinIME extends InputMethodService implements
 
     FoldableUtils.FoldableObserver foldableObserver;
 
+    private final BroadcastReceiver mEmojiSearchReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            onEmojiSearchDone(intent);
+        }
+    };
+
     final static class RestartAfterDeviceUnlockReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -255,7 +263,7 @@ public class LatinIME extends InputMethodService implements
                             latinIme.mSettings.getCurrent(), msg.arg1 /* inputStyle */);
                     break;
                 case MSG_UPDATE_SHIFT_STATE:
-                    latinIme.mKeyboardSwitcher.requestUpdatingShiftState(latinIme.getCurrentAutoCapsState(),
+                    latinIme.mKeyboardSwitcher.updateShiftState(latinIme.getCurrentAutoCapsState(),
                             latinIme.getCurrentRecapitalizeState());
                     break;
                 case MSG_SHOW_GESTURE_PREVIEW_AND_SET_SUGGESTIONS:
@@ -597,6 +605,10 @@ public class LatinIME extends InputMethodService implements
             restartAfterUnlockFilter.addAction(Intent.ACTION_USER_UNLOCKED);
         registerReceiver(mRestartAfterDeviceUnlockReceiver, restartAfterUnlockFilter);
 
+        final IntentFilter emojiSearchFilter = new IntentFilter();
+        emojiSearchFilter.addAction(EmojiSearchActivity.EMOJI_SEARCH_DONE_ACTION);
+        ContextCompat.registerReceiver(this, mEmojiSearchReceiver, emojiSearchFilter, ContextCompat.RECEIVER_NOT_EXPORTED);
+
         StatsUtils.onCreate(mSettings.getCurrent(), mRichImm);
     }
 
@@ -724,6 +736,7 @@ public class LatinIME extends InputMethodService implements
         unregisterReceiver(mDictionaryPackInstallReceiver);
         unregisterReceiver(mDictionaryDumpBroadcastReceiver);
         unregisterReceiver(mRestartAfterDeviceUnlockReceiver);
+        unregisterReceiver(mEmojiSearchReceiver);
         mStatsUtilsManager.onDestroy(this /* context */);
         if (mVibeVoiceClient != null) {
             mVibeVoiceClient.cancel();
@@ -745,9 +758,8 @@ public class LatinIME extends InputMethodService implements
     }
 
     private boolean isImeSuppressedByHardwareKeyboard() {
-        final KeyboardSwitcher switcher = KeyboardSwitcher.getInstance();
-        return !onEvaluateInputViewShown() && switcher.isImeSuppressedByHardwareKeyboard(
-                mSettings.getCurrent(), switcher.getKeyboardSwitchState());
+        return !onEvaluateInputViewShown() && mKeyboardSwitcher.isImeSuppressedByHardwareKeyboard(
+                mSettings.getCurrent(), mKeyboardSwitcher.getKeyboardSwitchState());
     }
 
     @Override
@@ -1044,14 +1056,12 @@ public class LatinIME extends InputMethodService implements
         } else if (restarting) {
             // TODO: Come up with a more comprehensive way to reset the keyboard layout when
             // a keyboard layout set doesn't get reloaded in this method.
-            switcher.resetKeyboardStateToAlphabet(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
-            // In apps like Talk, we come here when the text is sent and the field gets
-            // emptied and
-            // we need to re-evaluate the shift state, but not the whole layout which would
-            // be
+            switcher.resetKeyboardStateToAlphabet();
+            // In apps like Talk, we come here when the text is sent and the field gets emptied and
+            // we need to re-evaluate the shift state, but not the whole layout which would be
             // disruptive.
             // Space state must be updated before calling updateShiftState
-            switcher.requestUpdatingShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
+            switcher.updateShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
         }
         // Set neutral suggestions and show the toolbar if the "Auto show toolbar"
         // setting is enabled.
@@ -1206,7 +1216,7 @@ public class LatinIME extends InputMethodService implements
             if (mKeyboardSwitcher.getKeyboard() != null && mKeyboardSwitcher.getKeyboard().mId.getElement().isAlphabetShiftedManually()
                 && ((oldSelEnd == newSelEnd && oldSelStart != newSelStart) || (oldSelEnd != newSelEnd && oldSelStart == newSelStart)))
                 return;
-            mKeyboardSwitcher.requestUpdatingShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
+            mKeyboardSwitcher.updateShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
         }
     }
 
@@ -1935,7 +1945,7 @@ public class LatinIME extends InputMethodService implements
         VoiceOverlay.hide(this);
         VoiceSessionService.detach(this);
         updateVoiceInputState(false);
-        mKeyboardSwitcher.requestUpdatingShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
+        mKeyboardSwitcher.updateShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
     }
 
     public void onTextInput(@Nullable String rawText) {
@@ -2073,9 +2083,9 @@ public class LatinIME extends InputMethodService implements
      * returns whether a clipboard suggestion has been set.
      */
     public boolean tryShowClipboardSuggestion() {
-        final View clipboardView = mClipboardHistoryManager.getClipboardSuggestionView(getCurrentInputEditorInfo(),
-                mSuggestionStripView);
-        if (clipboardView != null && hasSuggestionStripView()) {
+        if (!hasSuggestionStripView()) return false;
+        View clipboardView = mClipboardHistoryManager.getClipboardSuggestionView(getCurrentInputEditorInfo(), mSuggestionStripView);
+        if (clipboardView != null) {
             mSuggestionStripView.setExternalSuggestionView(clipboardView, false);
             return true;
         }
@@ -2156,7 +2166,7 @@ public class LatinIME extends InputMethodService implements
         switch (inputTransaction.getRequiredShiftUpdate()) {
             case InputTransaction.SHIFT_UPDATE_LATER -> mHandler.postUpdateShiftState();
             case InputTransaction.SHIFT_UPDATE_NOW -> mKeyboardSwitcher
-                    .requestUpdatingShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
+                    .updateShiftState(getCurrentAutoCapsState(), getCurrentRecapitalizeState());
             default -> {
             } // SHIFT_NO_UPDATE
         }
@@ -2279,29 +2289,32 @@ public class LatinIME extends InputMethodService implements
     }
 
     public void launchEmojiSearch() {
-        Log.d("emoji-search", "before activity launch");
+        Log.d(EmojiSearchActivityKt.TAG, "before activity launch");
         startActivity(new Intent().setClass(this, EmojiSearchActivity.class)
                 .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK));
     }
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && EmojiSearchActivity.EMOJI_SEARCH_DONE_ACTION.equals(intent.getAction())
-                && !isEmojiSearch()) {
-            if (intent.getBooleanExtra(EmojiSearchActivity.IME_CLOSED_KEY, false)) {
+    private void onEmojiSearchDone(Intent intent) {
+        Log.d(EmojiSearchActivityKt.TAG, "after activity closing. isEmojiSearch: " + isEmojiSearch() + ". Intent: " + intent +
+                (intent != null ? ". imeClosed: " + isImeClosed(intent) + ". selected emoji: " + getSelectedEmoji(intent) : ""));
+        if (intent != null && EmojiSearchActivity.EMOJI_SEARCH_DONE_ACTION.equals(intent.getAction()) && ! isEmojiSearch()) {
+            if (isImeClosed(intent)) {
                 requestHideSelf(0);
             } else {
-                mHandler.postDelayed(() -> KeyboardSwitcher.getInstance().setEmojiKeyboard(), 100);
+                mHandler.postDelayed(mKeyboardSwitcher::setEmojiKeyboard, 100);
                 if (intent.hasExtra(EmojiSearchActivity.EMOJI_KEY)) {
                     onTextInput(intent.getStringExtra(EmojiSearchActivity.EMOJI_KEY));
                 }
             }
-
-            stopSelf(startId); // Allow the service to be destroyed when unbound
-            return START_NOT_STICKY;
         }
+    }
 
-        return super.onStartCommand(intent, flags, startId);
+    private static boolean isImeClosed(Intent intent) {
+        return intent.getBooleanExtra(EmojiSearchActivity.IME_CLOSED_KEY, false);
+    }
+
+    private static String getSelectedEmoji(Intent intent) {
+        return intent.getStringExtra(EmojiSearchActivity.EMOJI_KEY);
     }
 
     public boolean isEmojiSearch() {

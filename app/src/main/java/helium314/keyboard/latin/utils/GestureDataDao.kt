@@ -75,7 +75,7 @@ class GestureDataDao(val db: Database) {
                     null,
                     null,
                     null,
-                    "RANDOM()"
+                    "$COLUMN_DATA DESC"
                 ).use {
                     while (it.moveToNext()) {
                         list.add(it.getString(0))
@@ -98,7 +98,7 @@ class GestureDataDao(val db: Database) {
                 null,
                 null,
                 null,
-                "RANDOM()"
+                "$COLUMN_DATA DESC"
             ).use {
                 while (it.moveToNext()) {
                     list.add(it.getString(0))

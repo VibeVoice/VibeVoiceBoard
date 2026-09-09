@@ -4,9 +4,8 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    kotlin("android")
-    kotlin("plugin.serialization") version "2.3.20"
-    kotlin("plugin.compose") version "2.3.20"
+    kotlin("plugin.serialization") version "2.4.0"
+    kotlin("plugin.compose") version "2.4.0"
 }
 
 // Read version from centralized VERSION file
@@ -37,12 +36,12 @@ fun signingValue(property: String, environment: String): String? =
     keystoreProperties.getProperty(property) ?: System.getenv(environment)
 
 android {
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "org.vibevoice.board"
         minSdk = 21
-        targetSdk = 36
+        targetSdk = 37
         versionCode = computedVersionCode
         versionName = versionString
         ndk {
@@ -100,7 +99,9 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
         }
-        base.archivesBaseName = "VibeVoiceKeyboard_$versionString"
+        // archivesBaseName went away with the Gradle upgrade that came in with upstream; archivesName
+        // is its replacement and is a Property, so it is set rather than assigned.
+        base.archivesName.set("VibeVoiceKeyboard_$versionString")
         androidComponents.onVariants { variant: ApplicationVariant ->
             if (variant.buildType == "debug") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
@@ -157,7 +158,7 @@ android {
         }
     }
 
-    // see https://github.com/Helium314/HeliBoard/issues/477
+    // see https://github.com/HeliBorg/HeliBoard/issues/477
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -184,16 +185,14 @@ dependencies {
 
     // compose
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-    // newer than 2025.11.01 contains androidx.compose.material:material-android:1.10.0, which requires minSdk 23
-    // maybe it's possible to use tools:overrideLibrary="androidx.compose.material" as it's not used explicitly, but probably this is just going to crash
-    implementation(platform("androidx.compose:compose-bom:2025.11.01"))
+    implementation(platform("androidx.compose:compose-bom:2025.11.01")) // newer requires minSdk 23
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     "debugNoMinifyImplementation"("androidx.compose.ui:ui-tooling")
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("sh.calvin.reorderable:reorderable:3.1.0") // for easier re-ordering
-    implementation("com.github.skydoves:colorpicker-compose:1.1.3") // for user-defined colors
+    implementation("com.github.skydoves:colorpicker-compose:1.1.3") // for user-defined colors, newer requires minSdk 23
 
     // vibevoice
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -203,6 +202,7 @@ dependencies {
     // test
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
     testImplementation("org.mockito:mockito-core:5.23.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("androidx.test:runner:1.7.0")
