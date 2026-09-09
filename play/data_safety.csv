@@ -8,7 +8,7 @@ PSL_SUPPORTED_ACCOUNT_CREATION_METHODS,PSL_ACM_OAUTH,FALSE,MULTIPLE_CHOICE,Which
 PSL_SUPPORTED_ACCOUNT_CREATION_METHODS,PSL_ACM_OTHER,FALSE,MULTIPLE_CHOICE,Which of the following methods of account creation does your app support? Select all that apply / Other
 PSL_SUPPORTED_ACCOUNT_CREATION_METHODS,PSL_ACM_NONE,TRUE,MULTIPLE_CHOICE,Which of the following methods of account creation does your app support? Select all that apply / My app does not allow users to create an account
 PSL_ACM_SPECIFY,,,MAYBE_REQUIRED,Describe the method of account creation that your app supports
-PSL_ACCOUNT_DELETION_URL,,https://vibevoice.net/delete-account,MAYBE_REQUIRED,Add a link that users can use to request that their account and associated data is deleted 
+PSL_ACCOUNT_DELETION_URL,,,MAYBE_REQUIRED,Add a link that users can use to request that their account and associated data is deleted 
 PSL_SUPPORT_DATA_DELETION_BY_USER,DATA_DELETION_YES,TRUE,SINGLE_CHOICE,Do you provide a way for users to request that their data is deleted? / Yes
 PSL_SUPPORT_DATA_DELETION_BY_USER,DATA_DELETION_NO,FALSE,SINGLE_CHOICE,Do you provide a way for users to request that their data is deleted? / No
 PSL_SUPPORT_DATA_DELETION_BY_USER,DATA_DELETION_NO_AUTO_DELETED,FALSE,SINGLE_CHOICE,"Do you provide a way for users to request that their data is deleted? / No, but user data is automatically deleted within 90 days"

@@ -34,9 +34,15 @@ Everything else is `FALSE`. Worth stating explicitly, because two of them look l
 All four are filled in. The answers came from the VibeVoice agent, who read them out of the server
 rather than out of memory; two of them corrected what this file used to claim.
 
-### `PSL_ACCOUNT_DELETION_URL` and `PSL_DATA_DELETION_URL` → `https://vibevoice.net/delete-account`
+### `PSL_DATA_DELETION_URL` → `https://vibevoice.net/delete-account`
 
-One page answers both. Public, no login, English. It lists what deletion actually removes — read out
+**`PSL_ACCOUNT_DELETION_URL` stays empty**, and it has to. It is a follow-up to "which account
+creation methods does your app support", and we answer that with `PSL_ACM_NONE`: accounts are made on
+vibevoice.net in a browser, the app only links one. Play therefore never asks the question, and an
+import that answers it anyway is refused with *"You cannot answer PSL_ACCOUNT_DELETION_URL"*.
+
+The URL is not lost — it hangs off "can users request that their data is deleted", which is `yes`.
+One page answers what is asked. Public, no login, English. It lists what deletion actually removes — read out
 of `delete_account_cascade()`, including the keyboard's trial `install_id` — and names the billing
 records that stay de-identified under German retention law. It also states the consequence nobody
 expects: if a paid subscription is running it is cancelled first, and if that fails, nothing is
