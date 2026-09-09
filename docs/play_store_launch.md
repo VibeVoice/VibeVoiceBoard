@@ -35,7 +35,7 @@ mit sichtbaren Fingertipps und kommt separat.
 | 2 | `Gmail_2.jpg` | Fachbegriffe richtig geschrieben | ✅ |
 | 3 | `Google_mark_down.jpg` | Drei Sprachen in einem Satz, dazu die Marke | ✅ |
 | 4 | `Homescreen.jpg` | Läuft weiter, nachdem man die App verlassen hat | ✅ |
-| 5 | Wizard-Hero | Markenbild | ❌ fehlt |
+| 5 | Wizard-Hero | Markenbild | ❌ fehlt — `marketing/shots/hero/` ist leer |
 | — | Schritt 1 des Wizards | nur zur Kontrolle, nicht für den Store | ❌ fehlt |
 
 **Aufnahmeanweisung für 5:** Tastatur in den Systemeinstellungen deaktivieren
@@ -108,11 +108,11 @@ Weitgehend fertig. Was noch fehlt:
 
 * **Kurzbeschreibung de-DE** prüfen: „Stop typing. Start speaking." bleibt englisch (Slogan),
   der Rest deutsch. 71 Zeichen, passt.
-* **Changelogs.** `fastlane/metadata/android/*/changelogs/` trägt noch HeliBoards Versionscodes
-  (1001–4005). Unsere sind sechsstellig, es kann also nie einer greifen. Löschen und einen
-  einzigen für den ersten Release schreiben.
-* **Website-Feld** im Store-Eintrag: `https://vibevoice.net`.
-* **Support-E-Mail:** Pflichtfeld. Muss benannt werden.
+* ~~**Changelogs.**~~ Erledigt: HeliBoards vierstellige Versionscodes sind weg, `403001.txt` steht
+  in beiden Sprachen.
+* ~~**Website-Feld**~~ und ~~**Support-E-Mail**~~ erledigt: `https://vibevoice.net` und
+  `support@vibevoice.net`, per API gesetzt. Die Adresse war Voraussetzung für das Website-Feld — die
+  API lehnte es vorher ab mit *„This app does not have a contact email address set."*
 
 ---
 
@@ -120,10 +120,11 @@ Weitgehend fertig. Was noch fehlt:
 
 Das ist der Teil, der einen Eintrag blockiert, und er hat nichts mit Code zu tun.
 
-### 3a. Signing
+### 3a. Signing — erledigt
 
-Es existiert **kein Release-Key**. `app/build.gradle.kts` liest `keystore.properties`, die Datei
-gibt es nicht.
+Der Release-Key existiert: `vibevoice-release.jks` mit `keystore.properties` daneben, beide
+gitignored, SHA-256 `AC:73:DA:E1:07:E8:25:8C:2C:54:D2:42:B0:8A:2B:7A:8B:AB:20:75:C0:80:26:70:E6:1B:E7:A4:FF:07:30:0B`.
+Erzeugt wurde er so:
 
 ```
 keytool -genkeypair -v -keystore vibevoice-release.jks \
@@ -154,7 +155,7 @@ Konfiguration steht, es ist ein anderer Gradle-Task.
 | Berechtigung | Lage |
 |---|---|
 | `SYSTEM_ALERT_WINDOW` | Play prüft das streng. Begründung: die schwebende Marke während eines Diktats ohne Tastatur. Optional, der Nutzer erteilt es selbst. |
-| `READ_CONTACTS` | **Von HeliBoard geerbt**, für Namensvorschläge. Es ist die einzige Berechtigung im Manifest, die wir nicht brauchen und die einen Prüfer stutzen lässt. Entfernen ist die klare Empfehlung — es kostet eine Vorschlagsfunktion, die niemand vermissen wird, und spart eine Rechtfertigung. |
+| `READ_CONTACTS` | **Entfernt.** War von HeliBoard geerbt, für Namensvorschläge — die einzige Berechtigung, die wir nicht brauchten und die einen Prüfer stutzen ließ. |
 | `RECORD_AUDIO`, `INTERNET`, `FOREGROUND_SERVICE*`, `POST_NOTIFICATIONS` | erklärt durch das Produkt |
 
 ### 3e. Inhaltseinstufung, Zielgruppe, Werbung
@@ -168,14 +169,14 @@ gegen die Zahlungsrichtlinie.
 
 ## Teil 4 — Reihenfolge
 
-1. **Testupload eines Screenshots** in die Play Console → klärt das Seitenverhältnis.
-2. **Wizard-Hero aufnehmen** (Bild 5).
-3. `READ_CONTACTS` entfernen, Changelogs aufräumen, Support-Mail und Website eintragen.
-4. **Overlay-Pipeline bauen**, alle fünf Bilder + Feature-Grafik rendern.
-5. **Release-Key erzeugen**, `bundleRelease` einmal durchlaufen lassen.
-6. Data Safety, FGS-Deklaration, Kontolöschung, Inhaltseinstufung ausfüllen.
-7. Interner Test-Track, auf dem Gerät installieren, durchspielen.
-8. Video (separat).
+1. ~~Seitenverhältnis klären~~ — gelöst durch Rendern auf 9:16, dem höchsten Maß, das Play nimmt.
+2. **Wizard-Hero aufnehmen** (Bild 5) — offen.
+3. ~~`READ_CONTACTS`, Changelogs, Support-Mail, Website~~ — erledigt.
+4. ~~Overlay-Pipeline~~ — erledigt, siehe `marketing/render/`.
+5. ~~Release-Key, `bundleRelease`~~ — erledigt, Bundle liegt als Draft auf dem Closed-Track.
+6. **App content ausfüllen** — offen, Aufteilung in `docs/play_console_walkthrough.md`.
+7. **Geschlossener Test mit 12+ Testern, 14 Tage** — der kritische Pfad.
+8. Video (separat) — offen.
 
 ---
 

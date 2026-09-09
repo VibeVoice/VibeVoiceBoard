@@ -1,190 +1,128 @@
-# Play Console: was du klickst, und was ich mache
+# Play Console: Stand, und was noch zu klicken ist
 
-Für ein **persönliches Konto nach dem 13.11.2023**. Das heißt: geschlossener Test mit
-**12 Testern, 14 zusammenhängende Tage**, bevor die Produktion freigeschaltet wird.
+Für ein **persönliches Konto nach dem 13.11.2023**: geschlossener Test mit **12 Testern über
+14 zusammenhängende Tage**, bevor die Produktion freigeschaltet wird.
 
 > **Die 14 Tage sind der längste Weg im ganzen Projekt.** Sie laufen erst, wenn 12 Tester
-> tatsächlich beigetreten sind. Alles andere — Bilder, Banner, Texte — kann parallel entstehen.
-> Priorität ist deshalb nicht „schöner Eintrag", sondern **heute ein Build in den geschlossenen
-> Test bekommen.**
+> tatsächlich beigetreten sind. Alles andere — Bilder, Texte, Seiten — kann parallel entstehen.
+
+Der ausführliche Auftrag an den VibeVoice-Agenten liegt in Nextcloud unter
+*Geteilte Dokumente / VibeVoiceBoard / HANDOFF_VibeVoice_Agent.md*. Dieses Dokument ist die
+Play-Console-Seite davon.
 
 ---
 
-## Block 1 — Heute, ~20 Minuten: die Uhr starten
+## Erledigt
 
-### 1.1 App anlegen
-
-<https://play.google.com/console> → **Alle Apps** → **App erstellen**
-
-| Feld | Eintrag |
-|---|---|
-| App-Name | `VibeVoice Keyboard` |
-| Standardsprache | Englisch (USA) |
-| App oder Spiel | App |
-| Kostenlos oder kostenpflichtig | Kostenlos |
-
-Die beiden Erklärungen darunter (Programmrichtlinien, US-Exportgesetze) abhaken.
-
-### 1.2 Dienstkonto anlegen, damit ich den Rest übernehmen kann
-
-Drei Schritte, alle einmalig:
-
-1. **Projekt anlegen:** <https://console.cloud.google.com/projectcreate> → Name z. B. `vibevoice-play`
-2. **API einschalten:** <https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com>
-   → Projekt oben auswählen → **Aktivieren**
-3. **Dienstkonto:** <https://console.cloud.google.com/iam-admin/serviceaccounts>
-   → **Dienstkonto erstellen** → Name `play-publisher` → **Fertig**
-   → in der Liste auf das Konto klicken → Reiter **Schlüssel** → **Schlüssel hinzufügen** →
-   **Neuen Schlüssel erstellen** → **JSON** → die Datei landet im Download-Ordner
-
-Dann in der Play Console verknüpfen:
-
-<https://play.google.com/console> → Zahnrad **Einstellungen** → **API-Zugriff**
-→ falls gefragt, das Cloud-Projekt verknüpfen → unter **Dienstkonten** dein
-`play-publisher@…iam.gserviceaccount.com` → **Zugriff gewähren**
-
-Berechtigungen setzen: **Version** → *App-Versionen erstellen und in Testtracks veröffentlichen*
-sowie *Store-Präsenz verwalten*. Finanzdaten braucht es **nicht**.
-
-**Die JSON-Datei nach `~/repos/VibeVoiceBoard/play-service-account.json` legen.**
-Sie ist bereits durch `.gitignore` gedeckt (`*.json` ist es nicht — ich trage sie ausdrücklich ein).
-
-### 1.3 Die zwölf Tester
-
-Das ist der eigentliche Engpass, und es sind echte Google-Konten, keine Aliase.
-
-Am robustesten: **Google-Gruppe** statt einer Liste, dann kannst du Leute nachtragen, ohne die
-Track-Konfiguration anzufassen.
-
-<https://groups.google.com> → **Gruppe erstellen** → z. B. `vibevoice-testers` →
-Beitritt „Nur eingeladene" → die zwölf Adressen einladen.
-
-In der Play Console: **Test → Geschlossener Test → Track verwalten → Tester** →
-**E-Mail-Liste erstellen** oder die Gruppenadresse eintragen.
-
-> Die 14 Tage zählen ab dem Moment, in dem die Tester **beigetreten** sind und beigetreten
-> **bleiben**. Wer zwischendrin austritt, setzt seinen Beitrag zurück. Also: einmal einladen,
-> Opt-in-Link schicken, und dann in Ruhe lassen.
-
----
-
-## Block 2 — Die Formulare, die es per API nicht gibt
-
-Play lässt keinen Track frei, bevor **App-Inhalte** vollständig ist. Unten steht für jedes Feld
-die Antwort. Pfad jeweils: **Monetarisierung/Richtlinien → App-Inhalte**.
-
-### Datenschutzerklärung
-`https://vibevoice.net/privacy`
-
-### App-Zugriff
-**Nicht** „Alle Funktionen sind ohne besonderen Zugriff verfügbar."
-
-Das Diktat läuft zwar zehn Minuten ohne Konto (der Trial aus P-058), danach braucht es eins.
-Also: **Alle oder einige Funktionen sind eingeschränkt** → Anweisungen hinterlegen:
-
-> Dictation works for 10 free minutes without an account. Beyond that a VibeVoice account is
-> required. Test account: `<E-Mail>` / `<Passwort>`. Link it in the app's setup wizard, step 5,
-> or under Settings → VibeVoice.
-
-**→ Dafür brauchst du ein echtes Testkonto auf vibevoice.net.** Anlegen und die Zugangsdaten
-hier eintragen.
-
-### Werbung
-Nein, die App enthält keine Werbung.
-
-### Inhaltseinstufung (IARC-Fragebogen)
-Kategorie **Dienstprogramm / Produktivität / Kommunikation**. Alle Fragen nach Gewalt, Sexualität,
-Drogen, Glücksspiel: **Nein**. Nutzergenerierte Inhalte: **Nein** — der transkribierte Text geht
-in das Textfeld des Nutzers, nicht in einen geteilten Bereich. Ergebnis wird PEGI 3 / USK 0.
-
-### Zielgruppe
-Nur **18 und älter** ankreuzen. Das hält uns aus dem Families-Programm mit seinen zusätzlichen
-Auflagen heraus, und die App richtet sich ohnehin nicht an Kinder.
-
-### Datensicherheit (Data Safety)
-
-Das längste Formular, und das einzige, bei dem eine falsche Angabe später teuer wird.
-
-| Frage | Antwort |
-|---|---|
-| Erfasst oder teilt deine App Nutzerdaten? | **Ja** |
-| Sind alle Daten bei der Übertragung verschlüsselt? | **Ja** (WSS/HTTPS) |
-| Können Nutzer die Löschung ihrer Daten beantragen? | **Ja**, mit URL |
-
-Datentypen:
-
-| Typ | Erfasst | Geteilt | Zweck | Pflicht |
-|---|---|---|---|---|
-| **Audio → Sprach- oder Tonaufnahmen** | Ja | Nein | App-Funktionalität | Ja |
-| **Persönliche Infos → E-Mail-Adresse** | Ja | Nein | Kontoverwaltung | Ja |
-| **App-Infos → Absturz-/Diagnoseprotokolle** | Ja | Nein | Diagnose | Nein, optional |
-
-Zwei Punkte, die stimmen müssen und die ich **nicht** aus dem Repo beantworten kann:
-
-* **Audio als „vorübergehend verarbeitet" markieren?** Play meint damit „nur im Arbeitsspeicher,
-  nicht gespeichert". Der Server legt die Aufnahme als temporäre Datei ab und löscht sie in einem
-  `finally` — also berührt sie kurz die Platte. Sicherer und ehrlicher: **nicht** als vorübergehend
-  markieren, sondern als erfasst mit der Aufbewahrung „gelöscht, sobald das Transkript vorliegt
-  oder der Versuch fehlschlägt".
-* **Fehlerberichte enthalten Diagnoseprotokolle, und darin kann diktierter Text stehen.** Das steht
-  bereits in unserer Store-Beschreibung und muss hier konsistent deklariert werden.
-
-### Kontolöschung
-Play verlangt seit 2023 einen Weg, das Konto **außerhalb der App** zu löschen, als öffentliche URL.
-Muss auf vibevoice.net existieren, z. B. `https://vibevoice.net/delete-account`.
-**Ohne diese Seite geht der Eintrag nicht durch.**
-
-### Foreground Service
-**Monetarisierung/Richtlinien → App-Inhalte → Berechtigungen für Vordergrunddienste**
-
-Typ `microphone`, Begründung:
-
-> Dictation continues after the keyboard is dismissed, so the user can start speaking in one app
-> and finish in another. Android silently feeds a process with no visible window zeroed audio
-> buffers, so a foreground service with the microphone type is the only way this can work. The
-> service runs only while a dictation session is active, shows a notification with the live
-> transcript and a stop button, and stops with the session.
-
-Google fragt hier gelegentlich nach einem kurzen Demonstrationsvideo. Falls ja: das ist dasselbe
-Video, das wir für den Store schneiden — dann eben zuerst dafür.
-
-### Restliche Ja/Nein-Fragen
-Nachrichten-App: **Nein**. COVID-19: **Nein**. Behörden-App: **Nein**.
-Finanzfunktionen: **Nein**. Gesundheits-App: **Nein**.
-
----
-
-## Block 3 — Was ich mache
-
-Sobald `play-service-account.json` liegt:
+Per API gesetzt und zurückgelesen:
 
 | | |
 |---|---|
-| Release-Schlüssel | erzeugen, `keystore.properties` schreiben, beides gitignored |
-| AAB | `bundleRelease` bauen und in den geschlossenen Test hochladen |
-| Store-Texte | Titel, Kurz- und Volltext in en-US und de-DE, per API |
-| Bilder | die fünf Screenshots mit Bannern rendern und hochladen |
-| Feature-Grafik | 1024 × 500 aus demselben Template |
-| Changelogs | HeliBoards tote Versionscodes löschen, einen neuen schreiben |
-| `READ_CONTACTS` | aus dem Manifest entfernen |
+| App | `org.vibevoice.board`, Titel `VibeVoice Keyboard` |
+| Bundle | `4.3.1`, versionCode `403001`, signiert |
+| Track | `alpha` = **Closed testing**, Release als **Draft** |
+| Store-Listing | en-US und de-DE: Titel, Kurz- und Volltext |
+| Screenshots | je vier, aus `marketing/shots/*/tall.store.*.png` |
+| Feature-Grafik, Icon | je Sprache |
+| Release-Notes | `fastlane/metadata/android/*/changelogs/403001.txt` |
+| Kontakt | `support@vibevoice.net`, `https://vibevoice.net` |
+| Testerliste | `vibevoice-testers@googlegroups.com` |
+| `READ_CONTACTS` | aus dem Manifest entfernt |
 
-**Über den Schlüssel:** Ohne ihn kann die App nie wieder aktualisiert werden. Er gehört an einen
-Ort, der einen Festplattenausfall überlebt — Passwortmanager oder verschlüsseltes Backup. Nicht in
-dieses Repo, und nicht nur auf diesem Rechner.
+Zwei Regeln, die dabei am lebenden Objekt gelernt wurden und die man sonst falsch plant:
+
+* **Der Release muss `draft` sein.** *„Only releases with status draft may be created on draft app."*
+  Solange die App nie etwas veröffentlicht hat, geht kein anderer Status. Ausrollen ist ein Klick in
+  der Console, und den lässt Play erst zu, wenn App content vollständig ist.
+* **Länder gehen nicht per API.** *„Country targeting is only supported for staged releases."* Für
+  einen normalen Closed-Track-Release ist das ein UI-Schritt.
 
 ---
 
-## Block 4 — Reihenfolge
+## Das Dienstkonto
+
+`claude@vibevoice-play.iam.gserviceaccount.com`, Schlüssel in `play-service-account.json`
+(gitignored). Cloud-Projekt `vibevoice-play`, Android Publisher API aktiviert.
+
+**Die alte „API access"-Seite gibt es nicht mehr.** Google hat das umgestellt: Ein Cloud-Projekt muss
+nicht mehr verknüpft werden, und das Dienstkonto wird wie ein Nutzer eingeladen —
+**Users and permissions → Invite new users**, mit der Konto-Adresse als E-Mail. Rechte auf
+Kontoebene: *Release apps to testing tracks*, *Manage testing tracks and edit tester lists*,
+*Manage store presence*. Finanzdaten nicht.
+
+Was die API **nicht** kann: E-Mail-Listen als Tester (*„email lists are not supported by this
+resource"* — nur Google-Gruppen), Länder für einen normalen Release, und keine einzige der
+App-content-Deklarationen.
+
+---
+
+## Was noch zu klicken ist
+
+### Sofort, ohne auf jemanden zu warten
+
+| Wo | Antwort |
+|---|---|
+| App content → **Ads** | No |
+| App content → **Target audience** | **13-15, 16-17, 18 and over.** Die Grenze liegt bei 13, nicht bei 18: unter 13 gilt die App als kinderorientiert und die Families-Richtlinien greifen, die eine App mit Kontopflicht und Audio-Übertragung nicht besteht. Nur-18+ wäre der andere Fehler — Play warnt selbst vor *„additional restrictions to your availability"*. |
+| App content → **Government apps** | No |
+| App content → **Financial features** | „My app doesn't provide any financial features". Die Bezahlung läuft über die Website; Abos sind keine financial features im Sinne von Play, gemeint sind Banking, Kredite, Krypto, Versicherungen. |
+| App content → **Health** | No |
+| App content → **Advertising ID** | No. Geprüft: keine `AD_ID`-Berechtigung, keine Ads-, Firebase- oder Analytics-Abhängigkeit. |
+| App content → **Content rating** | Kategorie *Utility, Productivity, Communication or Other*. Gewalt, Sexualität, Drogen, Glücksspiel: durchweg No. Nutzergenerierte Inhalte: **No** — der Text geht in das Feld des Nutzers, nicht in einen geteilten Bereich. Ergebnis PEGI 3 / USK 0. |
+| App content → **Foreground service permissions** | Typ `microphone`, Begründung unten |
+| Store settings → **App category** | Tools |
+| Closed testing → **Countries/regions** | Alle. Kostet im geschlossenen Test nichts. |
+
+**Begründung für den Foreground Service**, wörtlich zu übernehmen:
+
+> Dictation continues after the keyboard is dismissed, so the user can start speaking in one app and
+> finish in another. Android silently feeds a process with no visible window zeroed audio buffers, so
+> a foreground service with the microphone type is the only way this can work. The service runs only
+> while a dictation session is active, shows a notification with the live transcript and a stop
+> button, and stops with the session.
+
+### Erst wenn der VibeVoice-Agent geliefert hat
+
+Diese vier gehen zwischen zwei Leuten hin und her und werden deshalb gern vergessen:
+
+1. **Sign in details** — Username und Passwort des Testkontos eintragen und absenden. Name und
+   Anleitungstext stehen fertig im Nextcloud-Handoff, Abschnitt 3b; das Feld für die Anleitung fasst
+   500 Zeichen und der Text nutzt 496 davon.
+2. **Set privacy policy** — die URL eintragen, die der Agent bestätigt.
+3. **Data safety** — `play/data_safety.csv` ist ausgefüllt und wird über *Import from CSV*
+   eingelesen. Vier Zeilen fehlen noch, sie stehen mit ihrer Question-ID in `play/DATA_SAFETY.md`.
+4. **Release ausrollen.** Erst danach greift die Opt-in-URL — und das kann Stunden dauern. Vorher
+   darf die Rundmail nicht raus.
+
+---
+
+## Die Tester
+
+Opt-in-URL: `https://play.google.com/apps/testing/org.vibevoice.board`
+Gruppe: `https://groups.google.com/g/vibevoice-testers`
+
+Beide URLs stehen fest, bevor sie funktionieren — die eine folgt aus dem Package-Namen, die andere
+aus dem Gruppennamen. Es gibt also kein Henne-Ei-Problem: Seite, Mail und Gruppentexte dürfen sie
+eintragen, solange niemand den Link bekommt, bevor er greift.
+
+**25 bis 30 einladen, nicht 12.** Es gibt keine Obergrenze, und Puffer erspart es, jemanden um
+Wohlverhalten zu bitten. Nachrücken hilft nicht kurzfristig: Wer an Tag 8 beitritt, hat an Tag 14
+erst sechs.
+
+Rückmeldungen laufen auf `keyboard-beta@vibevoice.net`, getrennt von `support@`. Beim
+Produktionsantrag fragt Google, was die Tester gemeldet haben und was daraufhin geändert wurde —
+dieses Postfach ist die Quelle für diese Antwort.
+
+---
+
+## Reihenfolge
 
 | Wann | Was | Wer |
 |---|---|---|
-| **Heute** | App anlegen, Dienstkonto, 12 Tester einladen | du |
-| **Heute** | Schlüssel, AAB, Upload in den geschlossenen Test | ich |
-| **Heute** | Testkonto auf vibevoice.net, Löschseite | du |
-| **Heute+** | App-Inhalte ausfüllen (Block 2) | du |
-| **Parallel** | Banner, Bilder, Texte, Feature-Grafik | ich |
-| **Parallel** | Wizard-Hero-Screenshot | du |
-| **Tag 14** | Produktionszugriff beantragen | du |
-
-Der einzige Punkt, der nicht warten kann, ist der Test-Track. Alles andere darf schlampig anfangen
-und bis Tag 14 gut werden.
+| erledigt | Dienstkonto, Bundle, Listing, Screenshots, Testerliste | ich |
+| jetzt | die zehn Felder oben | Florian |
+| jetzt | Löschseite, Testkonto, Datenschutz-URL, die vier CSV-Zeilen | VibeVoice-Agent |
+| dann | Sign in details, Privacy policy, Data safety importieren | Florian |
+| dann | Release ausrollen, Opt-in-URL prüfen | Florian |
+| dann | Rundmail, 25–30 Einladungen | VibeVoice-Agent |
+| Tag 14 | Produktionszugang beantragen | Florian |
