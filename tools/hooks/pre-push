@@ -11,19 +11,48 @@ if [[ "${SKIP_APK_BUILD}" == "1" ]]; then
 fi
 
 BUILD_LOCK="$REPO_ROOT/tools/.build.lock"
+# A lock is a lock only while whoever took it is still alive. The build used to leave this
+# directory behind whenever it was killed instead of finishing -- close the terminal, end the CI
+# step -- and from then on every push printed "already in progress" and built nothing, silently,
+# for good. So the holder's pid goes into the lock, and a lock whose holder is gone is taken over.
 if ! mkdir "$BUILD_LOCK" 2>/dev/null; then
-  echo "[pre-push] Build already in progress (lock held). Skipping."
-  exit 0
+  HOLDER="$(cat "$BUILD_LOCK/pid" 2>/dev/null)"
+  if [[ -n "$HOLDER" ]] && kill -0 "$HOLDER" 2>/dev/null; then
+    echo "[pre-push] Build already in progress (pid $HOLDER). Skipping."
+    exit 0
+  fi
+  echo "[pre-push] Clearing stale build lock (holder ${HOLDER:-unknown} is gone)."
+  rm -f "$BUILD_LOCK/pid"
 fi
 
 BUILD_LOG="$REPO_ROOT/tools/build-$(date +%Y%m%d-%H%M%S).log"
+# Repointed now, not once the build finishes. This symlink is what the line at the bottom tells
+# you to tail, and it used to go on pointing at the previous build for the whole of the current
+# one -- so a build that died halfway left the last successful log standing as its apparent
+# result, down to the version number in it. Whoever reads it deserves the log of the build that
+# is actually running, even while it is still empty.
+ln -sfn "$BUILD_LOG" "$REPO_ROOT/tools/last-build.log"
+
+# Its own session, not merely a background job. A plain `&` leaves the build in the pushing
+# shell's process group, so whatever takes that shell down takes the build with it, and the
+# moment it died here was the worst one available: after gradle, before the upload. An APK on
+# disk, nothing uploaded, and a log that stopped mid-sentence.
+run_detached() {
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "$@" </dev/null >/dev/null 2>&1 &
+  elif command -v perl >/dev/null 2>&1; then # macOS ships no setsid, but its perl has the call
+    perl -e 'use POSIX qw(setsid); setsid(); exec @ARGV or die "$!"' -- "$@" </dev/null >/dev/null 2>&1 &
+  else
+    nohup "$@" </dev/null >/dev/null 2>&1 &
+  fi
+}
+
+# Built with %q rather than interpolated, so a repo path with a space in it stays one word.
+BUILD_CMD="$(printf 'echo $$ > %q/pid; bash %q > %q 2>&1; rm -rf %q' \
+  "$BUILD_LOCK" "$REPO_ROOT/tools/build-and-deploy.sh" "$BUILD_LOG" "$BUILD_LOCK")"
 
 echo "[pre-push] Launching background APK build + Nextcloud upload..."
-(
-  bash "$REPO_ROOT/tools/build-and-deploy.sh" > "$BUILD_LOG" 2>&1
-  ln -sf "$BUILD_LOG" "$REPO_ROOT/tools/last-build.log"
-  rmdir "$BUILD_LOCK" 2>/dev/null
-) &
+run_detached bash -c "$BUILD_CMD"
 
-echo "[pre-push] Build running in background (PID $!). Tail: tools/last-build.log"
+echo "[pre-push] Build running in background. Tail: tools/last-build.log -> tools/$(basename "$BUILD_LOG")"
 exit 0

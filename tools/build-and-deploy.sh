@@ -2,6 +2,11 @@
 # Automated Build, WebDAV Upload, and ADB Install script for VibeVoice Keyboard
 set -e
 
+# Every exit says so, in one line, at the end of the log. With `set -e` a failing step just
+# stopped the log mid-way, which looks exactly like a build that is still running -- and the log
+# is read by people who were not watching it happen, so "it ends here" has to mean something.
+trap 'STATUS=$?; [ "$STATUS" -eq 0 ] || echo "FAILED (exit $STATUS)"' EXIT
+
 # 1. Environment Setup & Paths
 # Defined before it is used below: the vendored platform-tools are found relative to this script,
 # so the script works in any clone rather than only in the author's.
