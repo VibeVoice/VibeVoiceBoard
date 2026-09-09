@@ -260,7 +260,11 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                         else -> Color(0xFF10B981)
                     }
                     
-                    val fraction = if (hasTotal) (minutesUsed / monthlyMinutes).coerceIn(0.0, 1.0).toFloat() else 0f
+                    // monthly_minutes comes off the wire, so a zero is a server's answer rather than an
+                    // impossibility. Dividing by it yields NaN or Infinity, coerceIn passes NaN straight
+                    // through, and the progress indicator is then drawn from a number that is not one.
+                    val fraction = if (hasTotal && monthlyMinutes > 0.0)
+                        (minutesUsed / monthlyMinutes).coerceIn(0.0, 1.0).toFloat() else 0f
                     val textLabel = if (hasTotal) {
                         stringResource(R.string.vibevoice_quota_used, minutesUsed, monthlyMinutes)
                     } else {
