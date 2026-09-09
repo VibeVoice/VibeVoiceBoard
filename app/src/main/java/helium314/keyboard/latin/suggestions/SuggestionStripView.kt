@@ -124,7 +124,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     // toolbar views, drawables and setup
     private val toolbar: ViewGroup = findViewById(R.id.toolbar)
-    private val toolbarContainer: View = findViewById(R.id.toolbar_container)
+    private val toolbarContainer: ToolbarScrollView = findViewById(R.id.toolbar_container)
     private val pinnedKeys: ViewGroup = findViewById(R.id.pinned_keys)
     /** The fixed right edge. Holds the VibeVoice key, never scrolls, never shrinks. */
     private val voiceAnchor: ViewGroup = findViewById(R.id.voice_anchor)
@@ -209,15 +209,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             setupKey(button, colors)
             voiceAnchor.addView(button)
         }
-        toolbarContainer.doOnNextLayout {
-            // set min width of the toolbar so the weight of the toolbar keys actually does something
-            // todo: results in requestLayout() improperly called by android.widget.LinearLayout during layout: running second layout pass
-            toolbarContainer.post {
-                fitToolbarKeys()
-                if (toolbar.minimumWidth != toolbarContainer.width) {
-                    toolbar.minimumWidth = toolbarContainer.width
-                }
-            }
+        // Every layout, not just the first one. The carousel's width changes with the display zoom,
+        // with a rotation, with one-handed mode, and it is zero for as long as the toolbar is
+        // hidden -- which is the state it is inflated in. A single shot could therefore run against
+        // a width that was never the real one and leave the fit stale for the life of the view.
+        // Posted because the fit sets layout params, which must not happen during a layout pass.
+        toolbarContainer.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (right - left != oldRight - oldLeft)
+                toolbarContainer.post { fitToolbarKeys() }
         }
 
         updateKeys()
@@ -662,14 +661,19 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         copy.scaleY = original.scaleY
         copy.contentDescription = original.contentDescription
         copy.setImageDrawable(original.drawable)
-        copy.layoutParams = original.layoutParams
+        // Its own params. Sharing the original's instance would hand the pinned row whatever width
+        // the fit pass gave the carousel -- the pinned keys have their own space and do not scroll,
+        // so they are never the ones that need squeezing -- and setupKey below would write the copy's
+        // weight straight back into the carousel key.
+        copy.layoutParams = newToolbarKeyParams()
         copy.isActivated = original.isActivated
         setupKey(copy, Settings.getValues().mColors)
         pinnedKeys.addView(copy)
     }
 
     /**
-     * Narrows the carousel's keys when a small overflow can be absorbed, so nothing has to scroll.
+     * Narrows the carousel's keys when a small overflow can be absorbed, so nothing has to scroll,
+     * and decides whether the carousel may scroll at all.
      *
      * The best affordance for hidden content is not having any. One key over the edge is the common
      * case -- somebody enabled a tenth tool -- and taking a few dp off each key makes the whole set
@@ -681,15 +685,23 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      *
      * All or nothing. Shrinking as far as the floor and still overflowing would leave keys that are
      * both cramped and scrolling, which is the worst of each.
+     *
+     * The keys get the viewport minus the toolbar's own padding, which the first version of this
+     * forgot. The toolbar wears ?attr/suggestionWordStyle for its colours and that style carries
+     * 6dp on each side, so a set the fit pass had declared to fit still ran 12dp long. The result
+     * was the worst possible bar: permanent, a few pixels of travel, and nothing at either end of
+     * it. Whatever is left over after the fit decides whether scrolling is allowed at all, so a bar
+     * now appears only when dragging it actually brings a key into view.
      */
     private fun fitToolbarKeys() {
         val count = toolbar.childCount
         if (count == 0) return
-        val available = toolbarContainer.width
-        if (available <= 0) return
+        val viewport = toolbarContainer.width - toolbarContainer.paddingLeft - toolbarContainer.paddingRight
+        val forKeys = viewport - toolbar.paddingLeft - toolbar.paddingRight
+        if (forKeys <= 0) return
 
-        val target = if (count * toolbarKeyWidth <= available) toolbarKeyWidth
-            else (available / count).takeIf { it >= toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION }
+        val target = if (count * toolbarKeyWidth <= forKeys) toolbarKeyWidth
+            else (forKeys / count).takeIf { it >= toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION }
                 ?: toolbarKeyWidth
 
         for (i in 0 until count) {
@@ -700,6 +712,12 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 child.layoutParams = params
             }
         }
+
+        // so the weight of the toolbar keys actually does something: with a minimum the width of
+        // the viewport, keys that fit are stretched across it instead of huddling at the left.
+        if (toolbar.minimumWidth != viewport)
+            toolbar.minimumWidth = viewport
+        toolbarContainer.isScrollingEnabled = count * target > forKeys
     }
 
     private fun setupKey(view: ImageButton, colors: Colors) {

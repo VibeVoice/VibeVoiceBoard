@@ -32,7 +32,7 @@
              right edge; it only ever looked right because the siblings after it were hidden
              whenever it was shown. With the voice key now anchored to the right in both modes,
              the carousel has to end where the anchor begins. -->
-        <HorizontalScrollView
+        <helium314.keyboard.latin.suggestions.ToolbarScrollView
             android:id="@+id/toolbar_container"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -49,7 +49,7 @@
                 android:orientation="horizontal"
                 style="?attr/suggestionWordStyle">
             </LinearLayout>
-        </HorizontalScrollView>
+        </helium314.keyboard.latin.suggestions.ToolbarScrollView>
         <!-- 0dp, not wrap_content. A weighted child sized wrap_content is measured at its natural
              width first and only then given a share of what is left, so a strip of long
              suggestions took its space before the keys to its right were measured at all. At a
