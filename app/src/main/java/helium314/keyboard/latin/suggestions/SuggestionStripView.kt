@@ -687,11 +687,12 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      * both cramped and scrolling, which is the worst of each.
      *
      * The keys get the viewport minus the toolbar's own padding, which the first version of this
-     * forgot. The toolbar wears ?attr/suggestionWordStyle for its colours and that style carries
-     * 6dp on each side, so a set the fit pass had declared to fit still ran 12dp long. The result
-     * was the worst possible bar: permanent, a few pixels of travel, and nothing at either end of
-     * it. Whatever is left over after the fit decides whether scrolling is allowed at all, so a bar
-     * now appears only when dragging it actually brings a key into view.
+     * forgot. ?attr/suggestionWordStyle used to put 6dp on each side of the toolbar, so a set the
+     * fit pass had declared to fit still ran 12dp long, and the result was the worst possible bar:
+     * permanent, a few pixels of travel, and nothing at either end of it. The layout zeroes that
+     * padding now; the pass still subtracts whatever is actually there rather than trusting it to
+     * stay zero. Whatever is left over decides whether scrolling is allowed at all, so a bar
+     * appears only when dragging it actually brings a key into view.
      */
     private fun fitToolbarKeys() {
         val count = toolbar.childCount

@@ -42,11 +42,17 @@
             android:scrollbarSize="@dimen/config_toolbar_scrollbar_size"
             android:fadeScrollbars="false"
             android:visibility="gone">
+            <!-- paddingHorizontal 0dp. ?attr/suggestionWordStyle is a style for a suggested word,
+                 and the 6dp it puts on each side is the breathing room a word needs next to
+                 another word. These containers hold keys, which bring their own, so the style's
+                 padding only ever showed up as a gap where two containers meet. -->
             <LinearLayout
                 android:id="@+id/toolbar"
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
+                android:paddingLeft="0dp"
+                android:paddingRight="0dp"
                 style="?attr/suggestionWordStyle">
             </LinearLayout>
         </helium314.keyboard.latin.suggestions.ToolbarScrollView>
@@ -71,6 +77,8 @@
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:minWidth="0dp"
+            android:paddingLeft="0dp"
+            android:paddingRight="0dp"
             style="?attr/suggestionWordStyle">
         </LinearLayout>
         <!--
@@ -90,6 +98,8 @@
             android:layout_height="match_parent"
             android:layout_weight="0"
             android:minWidth="0dp"
+            android:paddingLeft="0dp"
+            android:paddingRight="0dp"
             style="?attr/suggestionWordStyle">
         </LinearLayout>
     </LinearLayout>
