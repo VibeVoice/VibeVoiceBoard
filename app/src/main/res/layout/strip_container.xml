@@ -29,7 +29,10 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         style="?attr/suggestionStripViewStyle"
-        android:scrollbarThumbHorizontal="@color/toolbar_scrollbar" >
+        android:scrollbarThumbHorizontal="@color/toolbar_scrollbar"
+        android:scrollbars="horizontal"
+        android:scrollbarSize="@dimen/config_toolbar_scrollbar_size"
+        android:fadeScrollbars="false" >
         <LinearLayout
             android:id="@+id/clipboard_strip"
             android:layout_width="wrap_content"
