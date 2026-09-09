@@ -768,7 +768,10 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final int maxTextWidth = width - mLanguageOnSpacebarHorizontalMargin * 2;
         paint.setTextScaleX(1.0f);
         final float textWidth = TypefaceUtils.getStringWidth(text, paint);
-        if (textWidth < width) {
+        // maxTextWidth, not width. Comparing against the whole key called any text that merely did
+        // not overrun the key a fit, which is how the margin this method subtracts one line earlier
+        // ended up meaning nothing: the label sat flush against both edges of the space bar.
+        if (textWidth < maxTextWidth) {
             return true;
         }
 

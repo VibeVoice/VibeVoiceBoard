@@ -126,7 +126,7 @@
     <string name="vibevoice_waiting_for_connection">Waiting for connection…</string>
     <!-- Shown when an outage lasted longer than the buffered audio could survive. -->
     <string name="vibevoice_connection_lost">The connection dropped. What was transcribed up to that point has been inserted.</string>
-    <string name="vibevoice_hold_to_transcribe">Long-press to dictate</string>
+    <string name="vibevoice_hold_to_transcribe">Hold to dictate</string>
     <string name="privacy_policy">Privacy Policy</string>
     <!-- Bug reporting strings -->
     <string name="vibevoice_report_bug_title">Report a Bug</string>
