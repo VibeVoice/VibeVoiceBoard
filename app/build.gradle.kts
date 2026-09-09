@@ -11,12 +11,20 @@ plugins {
 
 // Read version from centralized VERSION file
 val versionFilePath = rootProject.file("VERSION")
-val versionString = if (versionFilePath.exists()) versionFilePath.readText().trim() else "4.1.1"
+val versionString = if (versionFilePath.exists()) versionFilePath.readText().trim() else "1.0.0"
 val versionParts = versionString.split(".").mapNotNull { it.toIntOrNull() }
-val vMajor = versionParts.getOrElse(0) { 4 }
-val vMinor = versionParts.getOrElse(1) { 1 }
-val vPatch = versionParts.getOrElse(2) { 1 }
-val computedVersionCode = vMajor * 100000 + vMinor * 1000 + vPatch
+val vMajor = versionParts.getOrElse(0) { 1 }
+val vMinor = versionParts.getOrElse(1) { 0 }
+val vPatch = versionParts.getOrElse(2) { 0 }
+// The offset exists because versionCode may never go down and Play has already seen 403001, from
+// the pre-release iterations this fork spent numbered 4.x. Those numbers were internal; the first
+// version anyone outside sees is 1.0.0, so versionName restarts and versionCode does not. 1.0.0
+// lands on 600000, above everything already uploaded, and stays monotonic from there.
+//
+// Android keeps these two independent on purpose: the name is for people, the code is for ordering.
+// Do not "fix" this by removing the offset -- that would make the next release unpublishable.
+val versionCodeOffset = 500000
+val computedVersionCode = versionCodeOffset + vMajor * 100000 + vMinor * 1000 + vPatch
 
 // Release signing material. Never committed: put it in keystore.properties (gitignored) or pass it
 // through the environment on CI. When it is absent the release variants stay unsigned, exactly as
