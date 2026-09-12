@@ -772,6 +772,35 @@ language, hence "No language". -->
     <!-- Shown when the free trial minutes have been spent. Not an error: an invitation. -->
     <string name="vibevoice_trial_over">Your free minutes are used up. Link a VibeVoice account to keep dictating — 30 minutes a month, no cost.</string>
     <string name="setup_finish_action">Finished</string>
+
+    <!-- Setup wizard rebuilt 6-step flow -->
+    <string name="setup_step1_turn_on">"Turn it on"</string>
+    <string name="setup_step1_turn_on_instruction">"Enable %s in your system settings, then select it as your keyboard."</string>
+    <string name="setup_step1_tick_enable">"Enable %s"</string>
+    <string name="setup_step1_tick_select">Select it as your keyboard</string>
+    <string name="setup_step1_action_switch">"Switch to %s"</string>
+
+    <string name="setup_try_phase_a_title">"Your keyboard is ready."</string>
+    <string name="setup_try_phase_a_instruction">Type something.</string>
+    <string name="setup_try_phase_b_title">Nice.</string>
+    <string name="setup_try_phase_b_instruction">Now the other half — let it hear you.</string>
+    <string name="setup_try_phase_c_title">Tap the mark and say something.</string>
+    <string name="setup_try_phase_c_instruction">Tap the V at the top right of the keyboard, or hold the space bar.</string>
+
+    <string name="setup_minutes_title">"Your minutes"</string>
+    <string name="setup_minutes_instruction">"These first 10 minutes are on us — no account needed.\n\nAfter that, a free account gives you 30 minutes a month. Pro is €3 for 180."</string>
+    <string name="setup_link_later_equal">Later</string>
+
+    <string name="setup_floating_mark_title">"The floating mark"</string>
+    <string name="setup_floating_mark_instruction">Dictation keeps going after the keyboard closes. The mark pulses with your voice, and you drag it onto the X to stop.</string>
+    <string name="setup_overlay_enable">Enable</string>
+    <string name="setup_overlay_not_now">Not now</string>
+    <string name="setup_overlay_guard_message">Without this, dictation stops when the keyboard closes.</string>
+    <string name="setup_overlay_guard_keep_off">Keep it off</string>
+    <string name="setup_overlay_guard_turn_on">Turn it on</string>
+
+    <string name="setup_done_slogan_line1">"You're set."</string>
+    <string name="setup_done_slogan_line2">Typing will never feel the same.</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
     <!-- Description for the option to show setup wizard application icon of this IME in the launcher. -->

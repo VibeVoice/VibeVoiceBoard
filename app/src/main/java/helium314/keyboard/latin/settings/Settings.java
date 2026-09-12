@@ -112,6 +112,7 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_FONT_SCALE = "font_scale";
     // Voice wave background, tunable from the VibeVoice settings screen
     public static final String PREF_VOICE_BACKGROUND = "vibevoice_background_dictation";
+    public static final String PREF_VOICE_KEY_PULSE = "vibevoice_voice_key_pulse";
     public static final String PREF_BG_HINT_SHOWN = "vibevoice_background_hint_shown";
     public static final String PREF_OVERLAY_ENABLED = "vibevoice_overlay_enabled";
     public static final String PREF_OVERLAY_ICON = "vibevoice_overlay_icon";
@@ -246,7 +247,7 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     private static boolean reloadOnChanged(String key) {
         return switch (key) {
             case PREF_LAST_SHOWN_EMOJI_CATEGORY_PAGE_ID, PREF_LAST_SHOWN_EMOJI_CATEGORY_ID, PREF_RECENT_EMOJIS,
-                 PREF_DONT_SHOW_MISSING_DICTIONARY_DIALOG, PREF_SELECTED_SUBTYPE -> false;
+                 PREF_DONT_SHOW_MISSING_DICTIONARY_DIALOG, PREF_SELECTED_SUBTYPE, PREF_VOICE_KEY_PULSE -> false;
             default -> !key.startsWith(PREF_SAVED_APP_SUBTYPE_PREFIX) && !key.startsWith("floating_pos");
         };
     }

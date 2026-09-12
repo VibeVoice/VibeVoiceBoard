@@ -138,4 +138,27 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_extras_overlay_locked">Marke anzeigen – braucht die Option darüber</string>
     <string name="setup_finish_without">Ohne die Extras fertig</string>
     <string name="vibevoice_trial_over">Deine Gratis-Minuten sind aufgebraucht. Verknüpf ein VibeVoice-Konto, um weiter zu diktieren – 30 Minuten im Monat, kostenlos.</string>
+    <string name="setup_step1_turn_on">"Einschalten"</string>
+    <string name="setup_step1_turn_on_instruction">"Aktiviere %s in den Systemeinstellungen und wähle es als deine Tastatur aus."</string>
+    <string name="setup_step1_tick_enable">"%s aktivieren"</string>
+    <string name="setup_step1_tick_select">Als Tastatur auswählen</string>
+    <string name="setup_step1_action_switch">"Zu %s wechseln"</string>
+    <string name="setup_try_phase_a_title">"Deine Tastatur ist bereit."</string>
+    <string name="setup_try_phase_a_instruction">Tippe etwas.</string>
+    <string name="setup_try_phase_b_title">Schön.</string>
+    <string name="setup_try_phase_b_instruction">Jetzt die andere Hälfte – lass sie dich hören.</string>
+    <string name="setup_try_phase_c_title">Tippe auf die Marke und sag etwas.</string>
+    <string name="setup_try_phase_c_instruction">Tippe oben rechts auf das V oder halte die Leertaste gedrückt.</string>
+    <string name="setup_minutes_title">"Deine Minuten"</string>
+    <string name="setup_minutes_instruction">"Diese ersten 10 Minuten gehen auf uns – ganz ohne Konto.\n\nDanach gibt dir ein kostenloses Konto 30 Minuten im Monat. Pro kostet 3 € für 180."</string>
+    <string name="setup_link_later_equal">Später</string>
+    <string name="setup_floating_mark_title">"Die schwebende Marke"</string>
+    <string name="setup_floating_mark_instruction">Das Diktat läuft weiter, wenn die Tastatur zugeht. Die Marke pulsiert mit deiner Stimme, und zum Beenden ziehst du sie auf das X.</string>
+    <string name="setup_overlay_enable">Aktivieren</string>
+    <string name="setup_overlay_not_now">Jetzt nicht</string>
+    <string name="setup_overlay_guard_message">Ohne dies endet das Diktat, sobald die Tastatur schließt.</string>
+    <string name="setup_overlay_guard_keep_off">Auslassen</string>
+    <string name="setup_overlay_guard_turn_on">Aktivieren</string>
+    <string name="setup_done_slogan_line1">"You're set."</string>
+    <string name="setup_done_slogan_line2">Typing will never feel the same.</string>
 </resources>

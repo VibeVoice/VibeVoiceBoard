@@ -336,6 +336,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         setToolbarButtonsActivatedStateOnPrefChange(toolbar, key)
         if (key == Settings.PREF_ALWAYS_INCOGNITO_MODE)
             GlobalScope.launch { delay(10); withContext(Dispatchers.Main) { updateKeys() } }
+        if (key == Settings.PREF_VOICE_KEY_PULSE)
+            post { updateVoiceKey() }
     }
 
     override fun onVisibilityChanged(view: View, visibility: Int) {
@@ -352,6 +354,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        stopVoicePulse()
         dismissMoreSuggestionsPanel()
     }
 
@@ -574,11 +577,67 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private var voiceActiveGlow: Drawable? = null
     private var voiceActiveKey: String? = null
 
+    private var voicePulseRunnable: Runnable? = null
+    private var voicePulseTimeoutRunnable: Runnable? = null
+    private var voicePulseState = false
+
+    private fun stopVoicePulse(clearPref: Boolean = false) {
+        voicePulseRunnable?.let { removeCallbacks(it) }
+        voicePulseRunnable = null
+        voicePulseTimeoutRunnable?.let { removeCallbacks(it) }
+        voicePulseTimeoutRunnable = null
+        voicePulseState = false
+        if (clearPref) {
+            context.prefs().edit().putBoolean(Settings.PREF_VOICE_KEY_PULSE, false).apply()
+        }
+    }
+
+    private fun startVoicePulse() {
+        if (voicePulseRunnable != null) return
+        val button = voiceAnchor.findViewWithTag<View>(ToolbarKey.VOICE) ?: return
+
+        // Timeout: automatically stop pulsing and clear pref after 15 seconds
+        val timeoutRunnable = Runnable {
+            stopVoicePulse(clearPref = true)
+            updateVoiceKeyButton(voiceAnchor.findViewWithTag(ToolbarKey.VOICE), true, isActivated = false)
+        }
+        voicePulseTimeoutRunnable = timeoutRunnable
+        postDelayed(timeoutRunnable, 15000L)
+
+        voicePulseState = true
+        updateVoiceKeyButton(button, true, isActivated = true)
+
+        val pulseRunnable = object : Runnable {
+            override fun run() {
+                val ime = KeyboardSwitcher.getInstance().latinIME
+                if (ime?.isRecordingVoice == true ||
+                    !context.prefs().getBoolean(Settings.PREF_VOICE_KEY_PULSE, Defaults.PREF_VOICE_KEY_PULSE)) {
+                    stopVoicePulse(clearPref = true)
+                    updateVoiceKeyButton(voiceAnchor.findViewWithTag(ToolbarKey.VOICE), true, isActivated = false)
+                    return
+                }
+                voicePulseState = !voicePulseState
+                updateVoiceKeyButton(voiceAnchor.findViewWithTag(ToolbarKey.VOICE), true, isActivated = voicePulseState)
+                postDelayed(this, 500L)
+            }
+        }
+        voicePulseRunnable = pulseRunnable
+        postDelayed(pulseRunnable, 500L)
+    }
+
     fun updateVoiceKey() {
         val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
-        // VibeVoice key is always visible — it is not gated on system voice IME availability, and
-        // it lives in the anchor rather than in either of the two containers that can move it.
-        updateVoiceKeyButton(voiceAnchor.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+        val shouldPulse = !isActivated && context.prefs().getBoolean(Settings.PREF_VOICE_KEY_PULSE, Defaults.PREF_VOICE_KEY_PULSE)
+        val button = voiceAnchor.findViewWithTag<View>(ToolbarKey.VOICE)
+        if (isActivated) {
+            stopVoicePulse(clearPref = true)
+            updateVoiceKeyButton(button, true, isActivated = true)
+        } else if (shouldPulse) {
+            startVoicePulse()
+        } else {
+            stopVoicePulse()
+            updateVoiceKeyButton(button, true, isActivated = false)
+        }
     }
 
     private fun updateVoiceKeyButton(view: View?, show: Boolean, isActivated: Boolean) {

@@ -1748,6 +1748,8 @@ public class LatinIME extends InputMethodService implements
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
             VibeVoiceDebugLogger.log("Starting new session");
+            helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
+                    .edit().putBoolean(Settings.PREF_VOICE_KEY_PULSE, false).apply();
             updateVoiceInputState(true);
 
             mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
