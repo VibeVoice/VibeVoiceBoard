@@ -38,7 +38,7 @@ data class KeyboardId(
     val internalAction: KeyboardLayoutSet.InternalAction?,
     val emojiSearchAvailable: Boolean
 ) {
-    lateinit var editorInfo: EditorInfo // we don't want it in the data class constructor
+    var editorInfo: EditorInfo = EditorInfo() // we don't want it in the data class constructor
 
     constructor(element: KeyboardElement, params: KeyboardLayoutSet.Params) : this(
         element,

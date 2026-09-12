@@ -77,7 +77,9 @@ object Defaults {
     const val PREF_BLOCK_POTENTIALLY_OFFENSIVE = true
     const val PREF_SHOW_LANGUAGE_SWITCH_KEY = false
     const val PREF_LANGUAGE_SWITCH_KEY = "internal"
-    const val PREF_SHOW_EMOJI_KEY = false
+    // On by default: upstream hides it because its own audience toggles what it wants, but a keyboard
+    // whose emoji view is reachable only through a long press on comma reads as not having one.
+    const val PREF_SHOW_EMOJI_KEY = true
     const val PREF_VARIABLE_TOOLBAR_DIRECTION = true
     const val PREF_ADDITIONAL_SUBTYPES = "de${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwerty${Separators.SETS}" +
             "fr${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwertz${Separators.SETS}" +
@@ -97,6 +99,56 @@ object Defaults {
     @JvmField
     val PREF_KEY_GAP_SCALE = Array(4) { DEFAULT_SIZE_SCALE }
     const val PREF_FONT_SCALE = DEFAULT_SIZE_SCALE
+    /** Peak excursion as a fraction of the gap between waves, before the level multiplies it. */
+    // Off by default: a keyboard that keeps the microphone open after it is dismissed is not what
+    // anyone expects of a keyboard, so it is something the user turns on rather than discovers.
+    const val PREF_VOICE_BACKGROUND = false
+    // On by default: a session running without the keyboard needs something on screen saying so,
+    // and this is the part of that a user can actually see without pulling the shade down.
+    /** Whether the one-off "this could have kept running" notice has been shown. */
+    const val PREF_BG_HINT_SHOWN = false
+    const val PREF_OVERLAY_ENABLED = true
+    // The geometry is expressed from the inside out -- the V decides the size, the padding decides
+    // the disc, the bars grow outward from it -- so changing one does not silently rescale the rest.
+    const val PREF_OVERLAY_ICON = 32f
+    const val PREF_OVERLAY_PADDING = 6f
+    const val PREF_OVERLAY_BARS = 14f
+    const val PREF_OVERLAY_BAR_WIDTH = 3.0f
+    const val PREF_OVERLAY_BAR_COUNT = 36f
+    const val PREF_OVERLAY_REST = 0.06f
+    // The glow behind the mark, in the toolbar and on the floating mark alike. Size is the blur
+    // radius as a fraction of the mark; gain is how far the blurred coverage is multiplied before
+    // it is painted. They are separate because one moves how far the light reaches and the other
+    // how solid it is, and tuning either through the other never worked.
+    // These are also what ships: in a release build the sliders are gone, so the defaults are the
+    // whole of it.
+    const val PREF_GLOW_SIZE = 0.20f
+    const val PREF_GLOW_GAIN = 1.0f
+    // The floating mark's own pair. Separate from the toolbar's because the mark sits on a dark
+    // disc with nothing else competing, where the same numbers read considerably stronger -- and
+    // because the toolbar's are settled and must not move when this is tuned.
+    const val PREF_OVERLAY_GLOW_SIZE = 0.08f
+    const val PREF_OVERLAY_GLOW_GAIN = 1.0f
+    /** Where the mark was left. Negative means it has never been moved. */
+    const val PREF_OVERLAY_X = -1
+    const val PREF_OVERLAY_Y = -1
+    const val PREF_WAVE_AMPLITUDE = 0.19f
+    /** How much a loud voice multiplies the amplitude. */
+    const val PREF_WAVE_REACTION = 4.0f
+    /** Periods of the fundamental across the keyboard width. */
+    const val PREF_WAVE_CYCLES = 1.2f
+    /** Phase advance per frame. Apparent travel is this divided by the spatial frequency. */
+    const val PREF_WAVE_SPEED = 0.024f
+    /** How far the waves are spread around the cycle. At 1.0 they are evenly spread and cross;
+     *  at 0.0 they run parallel and merely follow each other. */
+    const val PREF_WAVE_SPREAD = 1.0f
+    /** Short-wavelength roughness that only appears while there is sound. */
+    const val PREF_WAVE_JITTER = 0.21f
+    const val PREF_WAVE_COUNT = 6.0f
+    /** How fast the waves follow a rising voice. */
+    const val PREF_WAVE_ATTACK = 0.70f
+    /** How fast they settle once it stops. Low values let them swing on like a resonator. */
+    const val PREF_WAVE_DAMPING = 0.25f
     const val PREF_HINT_FONT_SCALE = DEFAULT_SIZE_SCALE
     const val PREF_EMOJI_FONT_SCALE = DEFAULT_SIZE_SCALE
     const val PREF_EMOJI_KEY_FIT = true
@@ -169,15 +221,14 @@ object Defaults {
     const val PREF_QUICK_PIN_TOOLBAR_KEYS = false
     val PREF_PINNED_TOOLBAR_KEYS = defaultPinnedToolbarPref
     val PREF_TOOLBAR_KEYS = defaultToolbarPref
-    const val PREF_AUTO_SHOW_TOOLBAR = false
-    const val PREF_AUTO_HIDE_TOOLBAR = false
+    const val PREF_AUTO_SHOW_TOOLBAR = true
+    const val PREF_AUTO_HIDE_TOOLBAR = true
     val PREF_CLIPBOARD_TOOLBAR_KEYS = defaultClipboardToolbarPref
     const val PREF_ABC_AFTER_EMOJI = false
     const val PREF_ABC_AFTER_CLIP = false
     const val PREF_ABC_AFTER_SYMBOL_SPACE = true
     const val PREF_ABC_AFTER_NUMPAD_SPACE = false
     const val PREF_REMOVE_REDUNDANT_POPUPS = false
-    const val PREF_SPACE_BAR_TEXT = ""
     const val PREF_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss"
     const val PREF_RECENT_EMOJIS = ""
     const val PREF_LAST_SHOWN_EMOJI_CATEGORY_PAGE_ID = 0

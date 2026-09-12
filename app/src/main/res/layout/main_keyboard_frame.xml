@@ -24,6 +24,14 @@
         android:layout_height="wrap_content"
         android:layoutDirection="ltr" >
 
+        <!-- First child so it paints under the keys: MainKeyboardView draws keys only, and the
+             keyboard's base colour lives on main_keyboard_frame, so the waves show through the
+             gaps between keys. -->
+        <helium314.keyboard.latin.vibevoice.VoiceWaveView
+            android:id="@+id/voice_wave_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
         <helium314.keyboard.keyboard.MainKeyboardView
             android:id="@+id/keyboard_view"
             android:layoutDirection="ltr"

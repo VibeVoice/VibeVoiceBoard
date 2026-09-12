@@ -10,11 +10,18 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.graphics.Color
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.OvalShape
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.Gravity
+import androidx.core.content.ContextCompat
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.LayoutInflater
@@ -24,6 +31,7 @@ import android.view.View.OnLongClickListener
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityEvent
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
@@ -45,6 +53,7 @@ import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.ToolbarMode
 import helium314.keyboard.latin.utils.addPinnedKey
@@ -115,8 +124,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     // toolbar views, drawables and setup
     private val toolbar: ViewGroup = findViewById(R.id.toolbar)
-    private val toolbarContainer: View = findViewById(R.id.toolbar_container)
+    private val toolbarContainer: ToolbarScrollView = findViewById(R.id.toolbar_container)
     private val pinnedKeys: ViewGroup = findViewById(R.id.pinned_keys)
+    /** The fixed right edge. Holds the VibeVoice key, never scrolls, never shrinks. */
+    private val voiceAnchor: ViewGroup = findViewById(R.id.voice_anchor)
     private val suggestionsStrip: ViewGroup = findViewById(R.id.suggestions_strip)
     private val toolbarExpandKey = findViewById<ImageButton>(R.id.suggestions_strip_toolbar_key)
     private val incognitoIcon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.INCOGNITO.name, context)
@@ -125,10 +136,19 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val enabledToolKeyBackground = GradientDrawable()
     private var direction = 1 // 1 if LTR, -1 if RTL
 
-    private val toolbarKeyLayoutParams = LinearLayout.LayoutParams(
-        resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width),
-        LinearLayout.LayoutParams.MATCH_PARENT
-    )
+    private val toolbarKeyWidth = resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width)
+
+    /**
+     * Fresh params per key, never one instance shared between them.
+     *
+     * It used to be a single `val` handed to every key, and LinearLayout keeps the reference rather
+     * than copying it -- so setting a width or a weight through any one key set it for all of them,
+     * including the pinned row and the close button. That already produced one bug. It would
+     * produce another immediately below, where [fitToolbarKeys] narrows the carousel's keys and
+     * must not narrow anything else.
+     */
+    private fun newToolbarKeyParams() =
+        LinearLayout.LayoutParams(toolbarKeyWidth, LinearLayout.LayoutParams.MATCH_PARENT)
 
     init {
         val colors = Settings.getValues().mColors
@@ -155,25 +175,48 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
 
         // toolbar keys setup (no need to hide them any more when locked, because then suggestion strip is gone anyway
-        for (key in getEnabledToolbarKeys(context.prefs())) {
+        //
+        // VOICE is filtered out of both lists and given its own anchor instead. In the carousel it
+        // scrolled out of reach whenever the tools were open; among the pinned keys it sat inside
+        // the region that shrinks, so a strip of long suggestions at a high display zoom pushed it
+        // past the right edge. Neither is acceptable for the control that stops a recording.
+        val enabledKeys = getEnabledToolbarKeys(context.prefs())
+        val pinnedKeyList = getPinnedToolbarKeys(context.prefs())
+        for (key in enabledKeys) {
+            if (key == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, key)
-            button.layoutParams = toolbarKeyLayoutParams
+            button.layoutParams = newToolbarKeyParams()
             setupKey(button, colors)
             toolbar.addView(button)
         }
-        for (pinnedKey in getPinnedToolbarKeys(context.prefs())) {
+        for (pinnedKey in pinnedKeyList) {
+            if (pinnedKey == ToolbarKey.VOICE) continue
             val button = createToolbarKey(context, pinnedKey)
-            button.layoutParams = toolbarKeyLayoutParams
+            button.layoutParams = newToolbarKeyParams()
             setupKey(button, colors)
             pinnedKeys.addView(button)
             val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
             if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
                 pinnedKeyInToolbar.background = enabledToolKeyBackground
         }
-        toolbarContainer.doOnNextLayout {
-            // set min with of the toolbar so the weight of the toolbar keys actually does something
-            // todo: results in requestLayout() improperly called by android.widget.LinearLayout during layout: running second layout pass
-            toolbar.minimumWidth = toolbarContainer.width
+        // Anchored, but still the user's to switch off. Creating it unconditionally made the
+        // toolbar customiser lie: turning VOICE off there changed nothing, because this bypassed
+        // the preference that screen writes. Anchoring is about where the key sits when it exists,
+        // not about overruling somebody who does not want it.
+        if (ToolbarKey.VOICE in enabledKeys || ToolbarKey.VOICE in pinnedKeyList) {
+            val button = createToolbarKey(context, ToolbarKey.VOICE)
+            button.layoutParams = newToolbarKeyParams()
+            setupKey(button, colors)
+            voiceAnchor.addView(button)
+        }
+        // Every layout, not just the first one. The carousel's width changes with the display zoom,
+        // with a rotation, with one-handed mode, and it is zero for as long as the toolbar is
+        // hidden -- which is the state it is inflated in. A single shot could therefore run against
+        // a width that was never the real one and leave the fit stale for the life of the view.
+        // Posted because the fit sets layout params, which must not happen during a layout pass.
+        toolbarContainer.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (right - left != oldRight - oldLeft)
+                toolbarContainer.post { fitToolbarKeys() }
         }
 
         updateKeys()
@@ -265,7 +308,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             suggestionsStrip.addView(wrapper)
 
             val closeButton = createToolbarKey(context, ToolbarKey.CLOSE_HISTORY)
-            closeButton.layoutParams = toolbarKeyLayoutParams
+            closeButton.layoutParams = newToolbarKeyParams()
             setupKey(closeButton, Settings.getValues().mColors)
             closeButton.setOnClickListener {
                 listener.removeExternalSuggestions()
@@ -298,7 +341,12 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     override fun onVisibilityChanged(view: View, visibility: Int) {
         super.onVisibilityChanged(view, visibility)
         // workaround for a bug with inline suggestions views that just keep showing up otherwise, https://github.com/HeliBorg/HeliBoard/pull/386
-        if (view === this)
+        //
+        // Guarded the way clear() guards the same invariant. Both the toolbar and the suggestion
+        // strip carry weight now, so showing them together splits the row in half instead of one
+        // simply covering the other. That state was reachable: open the toolbar, tap emoji or
+        // clipboard and come back, and this line forced the strip visible underneath it.
+        if (view === this && !toolbarContainer.isVisible)
             suggestionsStrip.visibility = visibility
     }
 
@@ -366,7 +414,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     private fun onLongClickToolbarKey(view: View) {
         val tag = view.tag as? ToolbarKey ?: return
-        if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys) {
+        // voiceAnchor belongs with pinnedKeys here: neither is a key you can pin or unpin, so a
+        // long press on one is an ordinary long press. Without it the anchored voice key consumed
+        // the gesture and did nothing -- no haptic, and any custom long-press code configured for
+        // VOICE stopped firing -- but only when quick-pin was on, which is the default.
+        if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys || view.parent === voiceAnchor) {
             onLongClickToolbarKey(view) { code, isRepeat -> listener.onCodeInput(code, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, isRepeat) }
         } else if (view.parent === toolbar) {
             AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
@@ -375,7 +427,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 addKeyToPinnedKeys(tag)
                 toolbar.findViewWithTag<View>(tag).background = enabledToolKeyBackground
                 addPinnedKey(context.prefs(), tag)
-            } else {
+            } else if (tag != ToolbarKey.VOICE) {
                 removePinnedKey(context.prefs(), tag)
                 toolbar.findViewWithTag<View>(tag).background = defaultToolbarBackground.constantState?.newDrawable(resources)
                 pinnedKeys.removeView(pinnedKeyView)
@@ -500,10 +552,85 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
+    /**
+     * The glow drawable that sits behind the active microphone key.
+     *
+     * Centred and not stretched: a BitmapDrawable used as a background is scaled to the view by
+     * default, which would pull the light out of shape as the key's size changes.
+     */
+    private fun buildVoiceGlow(mark: Drawable, box: Int, accent: Int, prefs: SharedPreferences): Drawable? {
+        val margin = IntArray(1)
+        val bitmap = VoiceGlow.render(
+            mark, box, accent,
+            prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE),
+            prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN),
+            margin
+        ) ?: return null
+        return BitmapDrawable(resources, bitmap).apply { gravity = Gravity.CENTER }
+    }
+
+    /** The rendered pieces, and what they were rendered for. */
+    private var voiceActiveMark: android.graphics.Bitmap? = null
+    private var voiceActiveGlow: Drawable? = null
+    private var voiceActiveKey: String? = null
+
     fun updateVoiceKey() {
-        val show = Settings.getValues().mShowsVoiceInputKey
-        toolbar.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
-        pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
+        val isActivated = KeyboardSwitcher.getInstance().latinIME?.isRecordingVoice == true
+        // VibeVoice key is always visible — it is not gated on system voice IME availability, and
+        // it lives in the anchor rather than in either of the two containers that can move it.
+        updateVoiceKeyButton(voiceAnchor.findViewWithTag(ToolbarKey.VOICE), true, isActivated)
+    }
+
+    private fun updateVoiceKeyButton(view: View?, show: Boolean, isActivated: Boolean) {
+        val button = view as? ImageButton ?: return
+        button.isVisible = show
+        button.isActivated = isActivated
+        if (isActivated) {
+            // The full VibeVoice logo while recording -- the two-tone one with the dark backing
+            // shape, the same artwork the floating mark uses. Not tinted: TOOL_BAR_KEY would
+            // flatten both tones into one and throw away the thing that makes it read as the logo
+            // rather than as a glyph.
+            val plain = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
+            val inkPx = plain?.intrinsicWidth?.takeIf { it > 0 }
+                ?: (VOICE_GLOW_BOX_DP * resources.displayMetrics.density).toInt()
+            // Built once and kept. updateVoiceKey runs on every recording state change and on every
+            // window show, and rebuilding here meant a software blur and several bitmap
+            // allocations on the UI thread each time -- during a rotation, exactly when there is
+            // least room for it.
+            val prefs = context.prefs()
+            val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
+            val key = "$inkPx|$accent|" +
+                    prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE) + "|" +
+                    prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN)
+            if (key != voiceActiveKey) {
+                val logo = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+                // Sized by its ink, not its viewport: the launcher artwork carries an adaptive
+                // icon's padding, so drawn at its own bounds it would sit a third smaller than the
+                // key it replaces.
+                voiceActiveMark = logo?.let { VoiceGlow.renderMark(it, inkPx) }
+                voiceActiveGlow = voiceActiveMark?.let {
+                    buildVoiceGlow(BitmapDrawable(resources, it), inkPx, accent, prefs)
+                }
+                voiceActiveKey = key
+            }
+            val mark = voiceActiveMark
+            button.clearColorFilter()
+            if (mark != null) button.setImageBitmap(mark) else button.setImageDrawable(plain)
+            button.scaleType = ImageView.ScaleType.CENTER
+            // The glow goes on the layer underneath as the view's background, which is also what
+            // keeps it out of any tint: a colour filter on an ImageView applies to its image and
+            // not to its background.
+            button.background = voiceActiveGlow
+        } else {
+            button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
+            // No "pinned" highlight to preserve any more: the key is not in the toolbar and not in
+            // the pinned row, it is the anchor's only child, so the plain background is always the
+            // right one.
+            button.background = defaultToolbarBackground.constantState?.newDrawable(resources)
+            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
+            button.scaleType = ImageView.ScaleType.CENTER
+            view.rotation = 0f // an older build left the key tilted; clear it once
+        }
     }
 
     private fun updateKeys() {
@@ -534,10 +661,64 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         copy.scaleY = original.scaleY
         copy.contentDescription = original.contentDescription
         copy.setImageDrawable(original.drawable)
-        copy.layoutParams = original.layoutParams
+        // Its own params. Sharing the original's instance would hand the pinned row whatever width
+        // the fit pass gave the carousel -- the pinned keys have their own space and do not scroll,
+        // so they are never the ones that need squeezing -- and setupKey below would write the copy's
+        // weight straight back into the carousel key.
+        copy.layoutParams = newToolbarKeyParams()
         copy.isActivated = original.isActivated
         setupKey(copy, Settings.getValues().mColors)
         pinnedKeys.addView(copy)
+    }
+
+    /**
+     * Narrows the carousel's keys when a small overflow can be absorbed, so nothing has to scroll,
+     * and decides whether the carousel may scroll at all.
+     *
+     * The best affordance for hidden content is not having any. One key over the edge is the common
+     * case -- somebody enabled a tenth tool -- and taking a few dp off each key makes the whole set
+     * visible, which beats any amount of signalling that there is more.
+     *
+     * It stops at [MIN_KEY_WIDTH_FRACTION]. Past that the icons get too small to hit reliably, and
+     * a scrolling toolbar with a permanent scrollbar is the better trade: the bar then says both
+     * that there is more and how much, which is more than a fading edge could.
+     *
+     * All or nothing. Shrinking as far as the floor and still overflowing would leave keys that are
+     * both cramped and scrolling, which is the worst of each.
+     *
+     * The keys get the viewport minus the toolbar's own padding, which the first version of this
+     * forgot. ?attr/suggestionWordStyle used to put 6dp on each side of the toolbar, so a set the
+     * fit pass had declared to fit still ran 12dp long, and the result was the worst possible bar:
+     * permanent, a few pixels of travel, and nothing at either end of it. The layout zeroes that
+     * padding now; the pass still subtracts whatever is actually there rather than trusting it to
+     * stay zero. Whatever is left over decides whether scrolling is allowed at all, so a bar
+     * appears only when dragging it actually brings a key into view.
+     */
+    private fun fitToolbarKeys() {
+        val count = toolbar.childCount
+        if (count == 0) return
+        val viewport = toolbarContainer.width - toolbarContainer.paddingLeft - toolbarContainer.paddingRight
+        val forKeys = viewport - toolbar.paddingLeft - toolbar.paddingRight
+        if (forKeys <= 0) return
+
+        val target = if (count * toolbarKeyWidth <= forKeys) toolbarKeyWidth
+            else (forKeys / count).takeIf { it >= toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION }
+                ?: toolbarKeyWidth
+
+        for (i in 0 until count) {
+            val child = toolbar.getChildAt(i)
+            val params = child.layoutParams
+            if (params.width != target) {
+                params.width = target
+                child.layoutParams = params
+            }
+        }
+
+        // so the weight of the toolbar keys actually does something: with a minimum the width of
+        // the viewport, keys that fit are stretched across it instead of huddling at the left.
+        if (toolbar.minimumWidth != viewport)
+            toolbar.minimumWidth = viewport
+        toolbarContainer.isScrollingEnabled = count * target > forKeys
     }
 
     private fun setupKey(view: ImageButton, colors: Colors) {
@@ -553,5 +734,15 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         var DEBUG_SUGGESTIONS = false
         private const val DEBUG_INFO_TEXT_SIZE_IN_DIP = 6.5f
         private val TAG = SuggestionStripView::class.java.simpleName
+        /** The box the glowing mark is rendered at; FIT_CENTER scales it to whatever the key is. */
+        /**
+         * How far a toolbar key may be squeezed before scrolling is the better answer.
+         *
+         * 0.75 of 36dp is 27dp. Below that the touch target is smaller than anyone can reliably hit
+         * on a strip this short, and a key too small to press is worse than one you have to scroll to.
+         */
+        private const val MIN_KEY_WIDTH_FRACTION = 0.75f
+
+        private const val VOICE_GLOW_BOX_DP = 40f
     }
 }

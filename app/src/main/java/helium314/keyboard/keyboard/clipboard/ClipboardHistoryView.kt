@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -120,9 +121,44 @@ class ClipboardHistoryView @JvmOverloads constructor(
     }
 
     private fun setupToolbarKeys() {
-        // set layout params
-        val toolbarKeyLayoutParams = LayoutParams(resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width), LayoutParams.MATCH_PARENT)
-        toolbarKeys.forEach { it.layoutParams = toolbarKeyLayoutParams }
+        // One LayoutParams per key. A single shared instance is stored by reference, so the fit pass
+        // below would write its width into every key through whichever one it touched -- and the same
+        // shape of bug already cost the suggestion strip once.
+        val width = resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width)
+        toolbarKeys.forEach { it.layoutParams = LayoutParams(width, LayoutParams.MATCH_PARENT) }
+        KeyboardSwitcher.getInstance().clipboardStrip.let { strip ->
+            strip.post { fitToolbarKeys(strip) }
+        }
+    }
+
+    /**
+     * Narrows the clipboard strip's keys when a small overflow can be absorbed, so nothing has to
+     * scroll. Same policy as the suggestion strip's toolbar, and for the same reason: the best
+     * affordance for hidden content is not having any, and one key over the edge is the common case.
+     *
+     * Below [MIN_KEY_WIDTH_FRACTION] the icons stop being reliable targets, and a scrolling strip
+     * with a permanent scrollbar is the better trade. All or nothing -- shrinking to the floor and
+     * still overflowing leaves keys that are cramped *and* scrolling.
+     */
+    private fun fitToolbarKeys(strip: ViewGroup) {
+        if (toolbarKeys.isEmpty()) return
+        val scroller = strip.parent as? View ?: return
+        val forKeys = scroller.width - scroller.paddingLeft - scroller.paddingRight -
+                strip.paddingLeft - strip.paddingRight
+        if (forKeys <= 0) return
+
+        val natural = resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width)
+        val target = if (toolbarKeys.size * natural <= forKeys) natural
+            else (forKeys / toolbarKeys.size).takeIf { it >= natural * MIN_KEY_WIDTH_FRACTION }
+                ?: natural
+
+        toolbarKeys.forEach { key ->
+            val params = key.layoutParams
+            if (params.width != target) {
+                params.width = target
+                key.layoutParams = params
+            }
+        }
     }
 
     private fun setupBottomRowKeyboard(editorInfo: EditorInfo, listener: KeyboardActionListener) {
@@ -228,18 +264,24 @@ class ClipboardHistoryView @JvmOverloads constructor(
     }
 
     override fun onClipInserted(position: Int) {
-        clipboardAdapter.notifyItemInserted(position)
-        clipboardRecyclerView.smoothScrollToPosition(position)
+        post {
+            clipboardAdapter.notifyItemInserted(position)
+            clipboardRecyclerView.smoothScrollToPosition(position)
+        }
     }
 
     override fun onClipsRemoved(position: Int, count: Int) {
-        clipboardAdapter.notifyItemRangeRemoved(position, count)
+        post {
+            clipboardAdapter.notifyItemRangeRemoved(position, count)
+        }
     }
 
     override fun onClipMoved(oldPosition: Int, newPosition: Int) {
-        clipboardAdapter.notifyItemMoved(oldPosition, newPosition)
-        clipboardAdapter.notifyItemChanged(newPosition)
-        if (newPosition < oldPosition) clipboardRecyclerView.smoothScrollToPosition(newPosition)
+        post {
+            clipboardAdapter.notifyItemMoved(oldPosition, newPosition)
+            clipboardAdapter.notifyItemChanged(newPosition)
+            if (newPosition < oldPosition) clipboardRecyclerView.smoothScrollToPosition(newPosition)
+        }
     }
 
     override fun onSharedPreferenceChanged(prefs: SharedPreferences?, key: String?) {
@@ -252,5 +294,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
             clipboardHistoryManager.sortHistoryEntries()
             clipboardAdapter.notifyDataSetChanged()
         }
+    }
+
+    companion object {
+        private const val MIN_KEY_WIDTH_FRACTION = 0.75f
     }
 }

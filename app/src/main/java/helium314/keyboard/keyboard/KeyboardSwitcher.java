@@ -67,6 +67,7 @@ public final class KeyboardSwitcher {
 
     private InputView mCurrentInputView;
     private KeyboardWrapperView mKeyboardViewWrapper;
+    private helium314.keyboard.latin.vibevoice.VoiceWaveView mVoiceWaveView;
     private View mMainKeyboardFrame;
     private MainKeyboardView mKeyboardView;
     private EmojiPalettesView mEmojiPalettesView;
@@ -108,6 +109,10 @@ public final class KeyboardSwitcher {
         sInstance.initInternal(latinIme);
     }
 
+    public LatinIME getLatinIME() {
+        return mLatinIME;
+    }
+
     private void initInternal(final LatinIME latinIme) {
         mLatinIME = latinIme;
         mRichImm = RichInputMethodManager.getInstance();
@@ -120,23 +125,27 @@ public final class KeyboardSwitcher {
                 displayContext, KeyboardTheme.getKeyboardTheme(displayContext));
         if (themeUpdated) {
             Settings settings = Settings.getInstance();
-            settings.loadSettings(displayContext, settings.getCurrent().mLocale, settings.getCurrent().mInputAttributes);
+            settings.loadSettings(displayContext, settings.getCurrent().mLocale,
+                    settings.getCurrent().mInputAttributes);
             if (mKeyboardView != null)
                 mLatinIME.setInputView(onCreateInputView(displayContext, mIsHardwareAcceleratedDrawingEnabled));
-        } else if (mCurrentInputView != null && mLatinIME.hasSuggestionStripView()
-                    == (Settings.getValues().mToolbarMode == ToolbarMode.HIDDEN || mLatinIME.isEmojiSearch())) {
+        } else if (mCurrentInputView != null
+                && mLatinIME.hasSuggestionStripView() == (Settings.getValues().mToolbarMode == ToolbarMode.HIDDEN
+                        || mLatinIME.isEmojiSearch())) {
             mLatinIME.updateSuggestionStripView(mCurrentInputView);
         }
     }
 
-    private boolean updateKeyboardThemeAndContextThemeWrapper(final Context context, final KeyboardTheme keyboardTheme) {
+    private boolean updateKeyboardThemeAndContextThemeWrapper(final Context context,
+            final KeyboardTheme keyboardTheme) {
         final Resources res = context.getResources();
         if (mThemeNeedsReload
                 || mThemeContext == null
                 || !keyboardTheme.equals(mKeyboardTheme)
                 || mCurrentDpi != res.getDisplayMetrics().densityDpi
                 || mCurrentOrientation != res.getConfiguration().orientation
-                || (mCurrentUiMode & Configuration.UI_MODE_NIGHT_MASK) != (res.getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                || (mCurrentUiMode & Configuration.UI_MODE_NIGHT_MASK) != (res.getConfiguration().uiMode
+                        & Configuration.UI_MODE_NIGHT_MASK)
                 || !mThemeContext.getResources().equals(res)
                 || Settings.getValues().mColors.haveColorsChanged(context)) {
             mThemeNeedsReload = false;
@@ -174,7 +183,8 @@ public final class KeyboardSwitcher {
         } catch (KeyboardLayoutSet.Companion.KeyboardLayoutSetException e) {
             Log.e(TAG, "loading keyboard failed: " + e.getKeyboardId(), e.getCause());
             try {
-                final InputMethodSubtype defaults = SubtypeUtilsAdditional.INSTANCE.createDefaultSubtype(mRichImm.getCurrentSubtypeLocale());
+                final InputMethodSubtype defaults = SubtypeUtilsAdditional.INSTANCE
+                        .createDefaultSubtype(mRichImm.getCurrentSubtypeLocale());
                 mKeyboardLayoutSet = builder.setKeyboardGeometry(keyboardWidth, keyboardHeight)
                         .setSubtype(RichInputMethodSubtype.Companion.get(defaults))
                         .setNumberRowEnabled(settingsValues.mShowsNumberRow)
@@ -247,14 +257,17 @@ public final class KeyboardSwitcher {
     private void setMainKeyboardFrame(
             @NonNull final SettingsValues settingsValues,
             @NonNull final KeyboardSwitchState toggleState) {
-        final int visibility = isImeSuppressedByHardwareKeyboard(settingsValues, toggleState) ? View.GONE : View.VISIBLE;
-        final int stripVisibility = mLatinIME.hasSuggestionStripView()? View.VISIBLE : View.GONE;
+        final int visibility = isImeSuppressedByHardwareKeyboard(settingsValues, toggleState) ? View.GONE
+                : View.VISIBLE;
+        final int stripVisibility = mLatinIME.hasSuggestionStripView() ? View.VISIBLE : View.GONE;
         mStripContainer.setVisibility(stripVisibility);
         PointerTracker.switchTo(mKeyboardView);
         mKeyboardView.setVisibility(visibility);
-        // The visibility of {@link #mKeyboardView} must be aligned with {@link #MainKeyboardFrame}.
+        // The visibility of {@link #mKeyboardView} must be aligned with {@link
+        // #MainKeyboardFrame}.
         // @see #getVisibleKeyboardView() and
-        // @see LatinIME#onComputeInset(android.inputmethodservice.InputMethodService.Insets)
+        // @see
+        // LatinIME#onComputeInset(android.inputmethodservice.InputMethodService.Insets)
         mMainKeyboardFrame.setVisibility(visibility);
         mKeyboardViewWrapper.setVisibility(Settings.getInstance().readShowToolbarOnly() ? View.GONE : View.VISIBLE);
         mEmojiPalettesView.setVisibility(View.GONE);
@@ -294,8 +307,8 @@ public final class KeyboardSwitcher {
     public KeyboardSwitchState getKeyboardSwitchState() {
         boolean hidden = !isShowingEmojiPalettes() && !isShowingClipboardHistory()
                 && (mKeyboardLayoutSet == null
-                || mKeyboardView == null
-                || !mKeyboardView.isShown());
+                        || mKeyboardView == null
+                        || !mKeyboardView.isShown());
         if (hidden) {
             return KeyboardSwitchState.HIDDEN;
         } else if (isShowingEmojiPalettes()) {
@@ -393,10 +406,11 @@ public final class KeyboardSwitcher {
     /**
      * Displays a toast message.
      *
-     * @param text The text to display in the toast message.
-     * @param briefToast If true, the toast duration will be short; otherwise, it will last longer.
+     * @param text       The text to display in the toast message.
+     * @param briefToast If true, the toast duration will be short; otherwise, it
+     *                   will last longer.
      */
-    public void showToast(final String text, final boolean briefToast){
+    public void showToast(final String text, final boolean briefToast) {
         // In API 32 and below, toasts can be shown without a notification permission.
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
             final int toastLength = briefToast ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG;
@@ -413,9 +427,11 @@ public final class KeyboardSwitcher {
         return Settings.getValues().isSecondaryStripVisible()? View.VISIBLE : View.GONE;
     }
 
-    // Displays a toast-like message with the provided text for a specified duration.
+    // Displays a toast-like message with the provided text for a specified
+    // duration.
     private void showFakeToast(final String text, final int timeMillis) {
-        if (mFakeToastView.getVisibility() == View.VISIBLE) return;
+        if (mFakeToastView.getVisibility() == View.VISIBLE)
+            return;
 
         final Drawable appIcon = mFakeToastView.getCompoundDrawables()[0];
         if (appIcon != null) {
@@ -435,7 +451,7 @@ public final class KeyboardSwitcher {
     }
 
     public void setBackgroundGatheringIndicator(boolean enabled, boolean hasData, boolean saving) {
-        if (mCurrentInputView == null) return;
+        if (mCurrentInputView == null || mBackgroundGatheringIndicator == null) return;
         mBackgroundGatheringIndicator.setVisibility(enabled ? View.VISIBLE : View.GONE);
         if (!enabled) return;
         mBackgroundGatheringIndicator.setImageResource(hasData ? R.drawable.btn_keyboard_key_action_normal_lxx_base : R.drawable.ring);
@@ -456,7 +472,8 @@ public final class KeyboardSwitcher {
     }
 
     /**
-     * Updates state machine to figure out when to automatically switch back to the previous mode.
+     * Updates state machine to figure out when to automatically switch back to the
+     * previous mode.
      */
     public void onEvent(final Event event, final int currentAutoCapsState,
             @Nullable final RecapitalizeMode currentRecapitalizeState) {
@@ -523,11 +540,18 @@ public final class KeyboardSwitcher {
         return mClipboardStripView;
     }
 
+    @Nullable
+    public helium314.keyboard.latin.vibevoice.VoiceWaveView getVoiceWaveView() {
+        return mVoiceWaveView;
+    }
+
     public MainKeyboardView getMainKeyboardView() {
         return mKeyboardView;
     }
 
-    public FrameLayout getStripContainer() { return mStripContainer; }
+    public FrameLayout getStripContainer() {
+        return mStripContainer;
+    }
 
     public void deallocateMemory() {
         if (mKeyboardView != null) {
@@ -560,11 +584,13 @@ public final class KeyboardSwitcher {
             prefs.unregisterOnSharedPreferenceChangeListener(mSuggestionStripView);
         if (mClipboardHistoryView != null)
             prefs.unregisterOnSharedPreferenceChangeListener(mClipboardHistoryView);
-        if (mThemeNeedsReload) // necessary in some cases (e.g. theme switch) when mThemeNeedsReload is set before first keyboard load
-            Settings.getInstance().loadSettings(displayContext, Settings.getValues().mLocale, Settings.getValues().mInputAttributes);
+        if (mThemeNeedsReload) // necessary in some cases (e.g. theme switch) when mThemeNeedsReload is set
+                               // before first keyboard load
+            Settings.getInstance().loadSettings(displayContext, Settings.getValues().mLocale,
+                    Settings.getValues().mInputAttributes);
 
         updateKeyboardThemeAndContextThemeWrapper(displayContext, KeyboardTheme.getKeyboardTheme(displayContext));
-        mCurrentInputView = (InputView)LayoutInflater.from(mThemeContext).inflate(R.layout.input_view, null);
+        mCurrentInputView = (InputView) LayoutInflater.from(mThemeContext).inflate(R.layout.input_view, null);
         mMainKeyboardFrame = mCurrentInputView.findViewById(R.id.main_keyboard_frame);
         mEmojiPalettesView = mCurrentInputView.findViewById(R.id.emoji_palettes_view);
         mClipboardHistoryView = mCurrentInputView.findViewById(R.id.clipboard_history_view);
@@ -572,6 +598,7 @@ public final class KeyboardSwitcher {
 
         mKeyboardViewWrapper = mCurrentInputView.findViewById(R.id.keyboard_view_wrapper);
         mKeyboardViewWrapper.setKeyboardActionListener(mLatinIME.mKeyboardActionListener);
+        mVoiceWaveView = mCurrentInputView.findViewById(R.id.voice_wave_view);
         mKeyboardView = mCurrentInputView.findViewById(R.id.keyboard_view);
         mKeyboardView.setHardwareAcceleratedDrawingEnabled(isHardwareAcceleratedDrawingEnabled);
         mKeyboardView.setKeyboardActionListener(mLatinIME.mKeyboardActionListener);
@@ -616,20 +643,25 @@ public final class KeyboardSwitcher {
         return mLatinIME.getLocaleAndConfidenceInfo();
     }
 
-    /** Marks the theme as outdated. The theme will be reloaded next time the keyboard is shown.
-     *  If the keyboard is currently showing, theme will be reloaded immediately. */
+    /**
+     * Marks the theme as outdated. The theme will be reloaded next time the
+     * keyboard is shown.
+     * If the keyboard is currently showing, theme will be reloaded immediately.
+     */
     public void setThemeNeedsReload() {
         mThemeNeedsReload = true;
         if (mLatinIME == null || !mLatinIME.isInputViewShown())
             return; // will be reloaded right before showing IME
 
         // Hide and show IME, showing will trigger the reload.
-        // Reloading while IME is shown is glitchy, and hiding / showing is so fast the user shouldn't notice.
+        // Reloading while IME is shown is glitchy, and hiding / showing is so fast the
+        // user shouldn't notice.
         mLatinIME.hideWindow();
         try {
             mLatinIME.showWindow(true);
         } catch (IllegalStateException e) {
-            // in tests isInputViewShown returns true, but showWindow throws "IllegalStateException: Window token is not set yet."
+            // in tests isInputViewShown returns true, but showWindow throws
+            // "IllegalStateException: Window token is not set yet."
         }
     }
 
@@ -783,7 +815,12 @@ public final class KeyboardSwitcher {
             keyboardView.setKeyboard(newKeyboard);
             mCurrentInputView.setKeyboardTopPadding(newKeyboard.mTopPadding);
             keyboardView.setKeyPreviewPopupEnabled(currentSettingsValues.mKeyPreviewPopupOn);
-            keyboardView.updateShortcutKey(mRichImm.isShortcutImeReady());
+            // Always enabled, never isShortcutImeReady(): that asks whether the system has a voice
+            // recognition IME such as Google Voice Typing installed, which is the right question
+            // upstream and the wrong one here -- this fork brings its own dictation. The toolbar mic
+            // key was freed of the same gate; a mic key placed in a layout was still greyed out on any
+            // device without Google's, which is exactly the audience most likely to place one.
+            keyboardView.updateShortcutKey(true);
             boolean subtypeChanged = (oldKeyboard == null) || !newKeyboard.mId.getSubtype().equals(oldKeyboard.mId.getSubtype());
             int languageOnSpacebarFormatType = LanguageOnSpacebarUtils.getLanguageOnSpacebarFormatType(newKeyboard.mId.getSubtype());
             boolean hasMultipleEnabledIMEsOrSubtypes = mRichImm.hasMultipleEnabledIMEsOrSubtypes(true);

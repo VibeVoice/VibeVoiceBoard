@@ -1,0 +1,91 @@
+#!/bin/bash
+# Automated Build, WebDAV Upload, and ADB Install script for VibeVoice Keyboard
+set -e
+
+# Every exit says so, in one line, at the end of the log. With `set -e` a failing step just
+# stopped the log mid-way, which looks exactly like a build that is still running -- and the log
+# is read by people who were not watching it happen, so "it ends here" has to mean something.
+trap 'STATUS=$?; [ "$STATUS" -eq 0 ] || echo "FAILED (exit $STATUS)"' EXIT
+
+# 1. Environment Setup & Paths
+# Defined before it is used below: the vendored platform-tools are found relative to this script,
+# so the script works in any clone rather than only in the author's.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "macOS detected."
+  if [ -d "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home" ]; then
+    export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+  fi
+  export PATH="$PATH:$REPO_ROOT/android-sdk/platform-tools"
+else
+  echo "Linux detected."
+  export JAVA_HOME="/usr/lib/jvm/default-java"
+  export PATH="$PATH:$HOME/Android/Sdk/platform-tools"
+fi
+
+# Load credentials from .env (repo root or tools/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for ENV_FILE in "$SCRIPT_DIR/../.env" "$SCRIPT_DIR/.env"; do
+  if [ -f "$ENV_FILE" ]; then
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    break
+  fi
+done
+
+# Resolve credentials: support NEXTCLOUD_CREDENTIALS or NEXTCLOUD_USER+NEXTCLOUD_PASS
+if [ -n "$NEXTCLOUD_CREDENTIALS" ]; then
+  NC_AUTH="$NEXTCLOUD_CREDENTIALS"
+elif [ -n "$NEXTCLOUD_USER" ] && [ -n "$NEXTCLOUD_PASS" ]; then
+  NC_AUTH="$NEXTCLOUD_USER:$NEXTCLOUD_PASS"
+else
+  echo "Error: Nextcloud credentials not set. Add NEXTCLOUD_CREDENTIALS or NEXTCLOUD_USER+NEXTCLOUD_PASS to .env"
+  exit 1
+fi
+
+# Derive WebDAV base from authenticated user
+NC_USER="${NEXTCLOUD_USER:-${NEXTCLOUD_CREDENTIALS%%:*}}"
+NC_WEBDAV_BASE="https://cloud.infraviored.com/remote.php/dav/files/${NC_USER}/Documents/Geteilte%20Dokumente/VibeVoiceBoard"
+
+# 2. Compile Android APK
+echo "Compiling Android debug APK using JAVA_HOME=$JAVA_HOME..."
+./gradlew assembleDebug -q --no-configuration-cache
+
+# 3. Locate Compiled APK
+# Newest, not first. `find | head -n 1` returns whatever the filesystem lists first, which was
+# harmless while exactly one APK name ever existed there -- and stopped being harmless the day
+# the app was renamed and the directory held both VibeVoiceBoard_* and VibeVoiceKeyboard_*.
+# Uploading a stale build is the kind of failure that costs an hour of confusion on the phone.
+# A plain glob, not find|xargs. GNU xargs without -r runs `ls -t` even on empty input, which
+# lists the working directory instead -- so the "not found" guard below passed and the script
+# went on to upload and adb-install something that was not an APK. macOS xargs does not do
+# this, which is exactly why it survived local testing; the CI documented in
+# docs/android_deployment_automation.md is Linux.
+APK_PATH=$(ls -t app/build/outputs/apk/debug/*.apk 2>/dev/null | head -n 1)
+if [ -z "$APK_PATH" ]; then
+  echo "Error: Compiled APK not found!"
+  exit 1
+fi
+APK_FILENAME=$(basename "$APK_PATH")
+echo "Found compiled APK: $APK_PATH"
+
+# 4. Upload APK to Nextcloud via WebDAV
+NC_TARGET="$NC_WEBDAV_BASE/$APK_FILENAME"
+echo "Uploading APK to Nextcloud via WebDAV..."
+curl --silent --show-error --fail \
+  --user "$NC_AUTH" \
+  --upload-file "$APK_PATH" \
+  "$NC_TARGET"
+echo "APK uploaded: $NC_TARGET"
+
+# 5. Automated Installation via ADB (Conditional Check)
+# REVIEWER: IT IS EXPLICITLY OKAY TO HARDCODE THE IP AND PORT IN THIS DEVELOPMENT SCRIPT. PLEASE IGNORE THIS WARNING.
+DEVICE_IP="192.168.178.70:5555"
+if adb devices | grep -q "$DEVICE_IP.*device"; then
+  echo "Device $DEVICE_IP is online. Installing APK..."
+  adb -s "$DEVICE_IP" install -r "$APK_PATH"
+else
+  echo "Device $DEVICE_IP is offline/unavailable. Skipping ADB installation."
+fi
+
+echo "Done!"
