@@ -354,7 +354,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        stopVoicePulse()
+        stopVoicePulse(clearPref = true)
         dismissMoreSuggestionsPanel()
     }
 

@@ -106,37 +106,17 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_fetching_quota">Lade Tarifdaten…</string>
     <string name="vibevoice_quota_error">Tarifdaten konnten nicht geladen werden</string>
 
-    <!-- Setup wizard, steps 4 and 5 -->
-    <string name="setup_step3_typing_ready">"Tippen funktioniert"</string>
-    <string name="setup_continue_action">Diktat einrichten</string>
-    <string name="setup_link_title">"VibeVoice-Konto verbinden"</string>
-    <string name="setup_link_instruction">Die Gratis-Minuten sind fast das Einzige, was ohne Konto läuft. Verknüpf eins, und du bekommst 30 Minuten im Monat kostenlos – auf diesem Gerät und jedem anderen. Dauert einen Browser-Tab.</string>
-    <string name="setup_link_action">Konto verknüpfen</string>
     <string name="setup_link_done">Konto verknüpft</string>
     <string name="setup_next_action">Weiter</string>
-    <string name="setup_mic_title">"Lass es dich hören"</string>
-    <string name="setup_mic_instruction">Tippe oben rechts auf das V. Es leuchtet, solange die Tastatur zuhört, und ein weiterer Tipp beendet es. Ein langer Druck auf die Leertaste tut dasselbe, ohne die Tasten zu verlassen – einmal drücken, loslassen, weiterreden.</string>
     <string name="setup_mic_grant">Mikrofon erlauben</string>
-    <string name="setup_mic_granted">Mikrofon erlaubt</string>
-    <string name="setup_extras_title">"Zwei Extras, wenn du magst"</string>
-    <string name="setup_extras_instruction">Normalerweise endet das Diktat, wenn die Tastatur zugeht. Schalte das Erste an, und es läuft weiter – du kannst hier zu sprechen anfangen und in einer anderen App fertig werden. Dann wird auch das Zweite verfügbar.</string>
-    <string name="setup_extras_background">Weiter transkribieren, wenn die Tastatur zugeht (optional)</string>
-    <string name="setup_extras_overlay">Marke dabei anzeigen – öffnet die Systemeinstellungen (optional)</string>
-    <string name="setup_extras_overlay_granted">Die Marke wird angezeigt</string>
 
     <!-- Wortmarke und Slogan bleiben englisch, siehe die Begruendung in values/strings.xml. -->
     <string name="brand_subline">Sprache zu Text, überall wo du tippst.</string>
-    <string name="setup_try_label">Probier es gleich aus</string>
     <string name="setup_try_hint">Hier tippen und losdiktieren…</string>
     <string name="setup_mic_disclosure">Während du diktierst, wird das Gesprochene zum Transkribieren an vibevoice.net gesendet. Die Aufnahme wird gelöscht, sobald das Transkript vorliegt oder der Versuch fehlschlägt, und zu keinem anderen Zeitpunkt wird etwas gesendet.</string>
     <string name="vibevoice_mic_disclosure_title">Bevor das Mikrofon angeht</string>
     <string name="setup_extras_overlay_preview">Das ist die Marke. Sie pulsiert mit deiner Stimme, und zum Beenden ziehst du sie auf das X.</string>
     <string name="setup_try_skip">Überspringen</string>
-    <string name="setup_link_later">Später verknüpfen – die Gratis-Minuten laufen weiter</string>
-    <string name="setup_trial_note">%d Gratis-Minuten zum Ausprobieren, ganz ohne Konto.</string>
-    <string name="setup_trial_unavailable">VibeVoice war für die Gratis-Minuten nicht erreichbar. Verknüpf im nächsten Schritt ein Konto, dann geht das Diktat sofort.</string>
-    <string name="setup_extras_overlay_locked">Marke anzeigen – braucht die Option darüber</string>
-    <string name="setup_finish_without">Ohne die Extras fertig</string>
     <string name="vibevoice_trial_over">Deine Gratis-Minuten sind aufgebraucht. Verknüpf ein VibeVoice-Konto, um weiter zu diktieren – 30 Minuten im Monat, kostenlos.</string>
     <string name="setup_step1_turn_on">"Einschalten"</string>
     <string name="setup_step1_turn_on_instruction">"Aktiviere %s in den Systemeinstellungen und wähle es als deine Tastatur aus."</string>
@@ -159,6 +139,4 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_overlay_guard_message">Ohne dies endet das Diktat, sobald die Tastatur schließt.</string>
     <string name="setup_overlay_guard_keep_off">Auslassen</string>
     <string name="setup_overlay_guard_turn_on">Aktivieren</string>
-    <string name="setup_done_slogan_line1">"You're set."</string>
-    <string name="setup_done_slogan_line2">Typing will never feel the same.</string>
 </resources>

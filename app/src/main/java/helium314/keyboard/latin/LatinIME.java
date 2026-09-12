@@ -837,6 +837,12 @@ public class LatinIME extends InputMethodService implements
 
     @Override
     public void onStartInputView(final EditorInfo editorInfo, final boolean restarting) {
+        // Defensive backstop: voice key pulsing belongs only to the setup wizard's practice step.
+        // If the keyboard opens for any other package or target, ensure the pulse flag is cleared.
+        if (editorInfo == null || !getPackageName().equals(editorInfo.packageName)) {
+            helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
+                    .edit().putBoolean(Settings.PREF_VOICE_KEY_PULSE, false).apply();
+        }
         mHandler.onStartInputView(editorInfo, restarting);
         mStatsUtilsManager.onStartInputView();
     }
@@ -1770,6 +1776,10 @@ public class LatinIME extends InputMethodService implements
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId)
                             return;
+                        if (!text.trim().isEmpty()) {
+                            helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(LatinIME.this)
+                                    .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
+                        }
                         if (isNewSegment) {
                             if (!mVoiceComposingText.isEmpty()) {
                                 mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
@@ -1791,6 +1801,10 @@ public class LatinIME extends InputMethodService implements
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId)
                             return;
+                        if (!text.trim().isEmpty()) {
+                            helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(LatinIME.this)
+                                    .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
+                        }
                         if (isNewSegment && !text.trim().isEmpty()) {
                              if (!mVoiceComposingText.isEmpty()) {
                                 mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
@@ -1939,6 +1953,8 @@ public class LatinIME extends InputMethodService implements
             VibeVoiceDebugLogger.log("finishVoiceSession: length=" + commitText.length() + ", suffix='" + suffix.trim() + "' multiline=" + isMultiline);
             mInputLogic.mConnection.commitText(commitText + suffix, 1);
             mClipboardHistoryManager.addTextToHistory(commitText);
+            helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
+                    .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
         }
         mVoiceComposingText = "";
         mVibeVoiceClient.stopStreaming();

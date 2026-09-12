@@ -67,6 +67,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import android.content.SharedPreferences
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.DisposableEffect
@@ -74,6 +75,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings as KeySettings
@@ -182,6 +184,8 @@ fun WelcomeWizard(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     @Composable fun OnResume(block: () -> Unit) {
         val owner = LocalLifecycleOwner.current
         DisposableEffect(owner) {
@@ -199,9 +203,11 @@ fun WelcomeWizard(
 
     LaunchedEffect(step) {
         if (step == 1) {
-            while (step == 1) {
-                updateImeState()
-                delay(200)
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (step == 1) {
+                    updateImeState()
+                    delay(200)
+                }
             }
         }
     }
@@ -339,10 +345,39 @@ fun WelcomeWizard(
                 } else if (step == 2) {
                     var phase by rememberSaveable { mutableStateOf(TryPhase.A) }
                     var practiceText by rememberSaveable { mutableStateOf("") }
+                    var hasDictated by rememberSaveable { mutableStateOf(false) }
                     var micGranted by rememberSaveable {
                         mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
                                 == PackageManager.PERMISSION_GRANTED)
                     }
+
+                    // Refresh microphone permission on resume from Android Settings or PermissionActivity
+                    OnResume {
+                        val granted = ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        micGranted = granted
+                        if (granted && phase == TryPhase.B) {
+                            phase = TryPhase.C
+                        }
+                    }
+
+                    // Reset PREF_HAS_DICTATED on entering Step 2, and listen for dictation events from LatinIME
+                    DisposableEffect(step) {
+                        if (step == 2) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_HAS_DICTATED, false).apply()
+                            val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+                                if (key == KeySettings.PREF_HAS_DICTATED && prefs.getBoolean(KeySettings.PREF_HAS_DICTATED, false)) {
+                                    hasDictated = true
+                                }
+                            }
+                            ctx.prefs().registerOnSharedPreferenceChangeListener(listener)
+                            onDispose {
+                                ctx.prefs().unregisterOnSharedPreferenceChangeListener(listener)
+                            }
+                        } else {
+                            onDispose {}
+                        }
+                    }
+
                     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                         micGranted = granted
                         if (granted) {
@@ -368,11 +403,11 @@ fun WelcomeWizard(
                         }
                     }
 
-                    // Phase A timeout: advances after 6s if user types nothing
-                    LaunchedEffect(step, phase) {
-                        if (step == 2 && phase == TryPhase.A) {
+                    // Phase A timeout: advances after 6s if user types nothing (resets if typing starts)
+                    LaunchedEffect(step, phase, practiceText.isEmpty()) {
+                        if (step == 2 && phase == TryPhase.A && practiceText.isEmpty()) {
                             delay(6000)
-                            if (phase == TryPhase.A) {
+                            if (phase == TryPhase.A && practiceText.isEmpty()) {
                                 phase = if (micGranted) TryPhase.C else TryPhase.B
                             }
                         }
@@ -438,15 +473,25 @@ fun WelcomeWizard(
                         }
                     }
 
-                    val tried = practiceText.isNotBlank()
                     Spacer(Modifier.height(8.dp))
-                    ActionRow(
-                        if (tried) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
-                        stringResource(if (tried) R.string.setup_next_action else R.string.setup_try_skip),
-                        tried
-                    ) {
-                        ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
-                        step = 3
+                    if (hasDictated) {
+                        ActionRow(
+                            R.drawable.ic_setup_check,
+                            stringResource(R.string.setup_next_action),
+                            active = true
+                        ) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+                            step = 3
+                        }
+                    } else {
+                        ActionRow(
+                            R.drawable.ic_setup_select,
+                            stringResource(R.string.setup_try_skip),
+                            active = false
+                        ) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+                            step = 3
+                        }
                     }
                 } else if (step == 3) {
                     var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.isLinked(ctx)) }
@@ -488,7 +533,13 @@ fun WelcomeWizard(
                     }
                 } else if (step == 4) {
                     var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
-                    OnResume { overlay = VoiceOverlay.isAllowed(ctx) }
+                    OnResume {
+                        val allowed = VoiceOverlay.isAllowed(ctx)
+                        overlay = allowed
+                        if (allowed) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, true).apply()
+                        }
+                    }
                     var showGuardDialog by rememberSaveable { mutableStateOf(false) }
                     var guardDialogShown by rememberSaveable { mutableStateOf(false) }
 
@@ -523,14 +574,16 @@ fun WelcomeWizard(
                             R.drawable.ic_setup_check,
                             stringResource(R.string.setup_next_action),
                             active = true
-                        ) { step = 5 }
+                        ) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, true).apply()
+                            step = 5
+                        }
                     } else {
                         ActionRow(
                             R.drawable.ic_setup_select,
                             stringResource(R.string.setup_overlay_enable),
                             active = true
                         ) {
-                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, true).apply()
                             val intent = Intent(
                                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                 android.net.Uri.parse("package:" + ctx.packageName)
@@ -549,6 +602,7 @@ fun WelcomeWizard(
                                         guardDialogShown = true
                                         showGuardDialog = true
                                     } else {
+                                        ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
                                         step = 5
                                     }
                                 }
@@ -567,6 +621,7 @@ fun WelcomeWizard(
                         AlertDialog(
                             onDismissRequest = {
                                 showGuardDialog = false
+                                ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
                                 step = 5
                             },
                             text = {
@@ -581,7 +636,6 @@ fun WelcomeWizard(
                                     modifier = Modifier
                                         .clickable {
                                             showGuardDialog = false
-                                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, true).apply()
                                             val intent = Intent(
                                                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                                 android.net.Uri.parse("package:" + ctx.packageName)
@@ -602,6 +656,7 @@ fun WelcomeWizard(
                                     modifier = Modifier
                                         .clickable {
                                             showGuardDialog = false
+                                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
                                             step = 5
                                         }
                                         .padding(8.dp),
@@ -712,31 +767,36 @@ fun WizardHero(
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             // Shrink to fit rather than wrap.
             //
-            // The longest line is the slogan's second, and it needs about HERO_DP_PER_SP of width
-            // for every sp of size. On a wide phone at the default font scale that lands well
-            // under the cap and nothing happens; on a narrow one, or for somebody running the
-            // system font at 130%, the alternative was "START SPEAKING." breaking over two lines,
-            // which turns a three-line composition into a four-line one and loses the shape
-            // entirely. Dividing by fontScale is what keeps the accessibility setting working:
-            // the type still grows with it, just not past the width it has.
+            // Derive required dp per sp dynamically from the longest line, weighted for weight:
+            // Thin is ~0.51 dp per sp per character, SemiBold is ~0.65 dp per sp per character.
+            // This prevents wrapping on narrow phones or large system font scales while keeping the
+            // single-block 3-line typography.
             val scale = LocalDensity.current.fontScale
-            val size = minOf(HERO_TYPE_SP.toFloat(), maxWidth.value / (HERO_DP_PER_SP * scale))
+            val line1 = stringResource(
+                if (closing) R.string.setup_done_slogan_line1 else R.string.brand_wordmark
+            ).uppercase()
+            val line2 = stringResource(
+                if (closing) R.string.setup_done_slogan_line2 else R.string.brand_slogan_line1
+            ).uppercase()
+            val line3 = stringResource(
+                if (closing) R.string.setup_done_slogan_line3 else R.string.brand_slogan_line2
+            ).uppercase()
+            val maxCostDpPerSp = maxOf(
+                line1.length * 0.65f,
+                line2.length * 0.51f,
+                line3.length * 0.51f
+            )
+            val size = minOf(HERO_TYPE_SP.toFloat(), maxWidth.value / (maxCostDpPerSp * scale))
             Text(
                 buildAnnotatedString {
                     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                        append(stringResource(
-                            if (closing) R.string.setup_done_slogan_line1 else R.string.brand_wordmark
-                        ).uppercase())
+                        append(line1)
                     }
                     append("\n")
                     withStyle(SpanStyle(fontWeight = FontWeight.Thin)) {
-                        if (closing) {
-                            append(stringResource(R.string.setup_done_slogan_line2).uppercase())
-                        } else {
-                            append(stringResource(R.string.brand_slogan_line1).uppercase())
-                            append("\n")
-                            append(stringResource(R.string.brand_slogan_line2).uppercase())
-                        }
+                        append(line2)
+                        append("\n")
+                        append(line3)
                     }
                 },
                 fontFamily = BrandFont,

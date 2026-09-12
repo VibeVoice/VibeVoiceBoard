@@ -724,23 +724,10 @@ language, hence "No language". -->
     <!-- The label of the button that triggers the settings screen for the keyboard. -->
     <string name="setup_step3_action">Configure the keyboard</string>
     <!-- The label of the button that finishes the setup wizard. -->
-    <!-- Replaces upstream's "you're all set" at step 3: this wizard has two more steps after it. -->
-    <string name="setup_step3_typing_ready">"Typing works"</string>
-    <string name="setup_continue_action">Set up dictation</string>
-    <string name="setup_link_title">"Connect your VibeVoice account"</string>
-    <string name="setup_link_instruction">The free minutes are nearly the only thing that runs without an account. Link one and you get 30 minutes a month at no cost, on this device and any other. It takes a browser tab.</string>
     <string name="setup_link_action">Link an account</string>
     <string name="setup_link_done">Account linked</string>
     <string name="setup_next_action">Next</string>
-    <string name="setup_mic_title">"Let it hear you"</string>
-    <string name="setup_mic_instruction">Tap the V at the top right. It lights up while the keyboard is listening, and another tap ends it. Holding the space bar does the same without leaving the keys — press once, let go, keep talking.</string>
     <string name="setup_mic_grant">Allow the microphone</string>
-    <string name="setup_mic_granted">Microphone allowed</string>
-    <string name="setup_extras_title">"Two extras, if you want them"</string>
-    <string name="setup_extras_instruction">Dictation normally stops when the keyboard closes. Turn the first one on and it carries on, so you can start talking here and finish in another app — and then the second one becomes available.</string>
-    <string name="setup_extras_background">Keep transcribing after the keyboard closes (optional)</string>
-    <string name="setup_extras_overlay">Show the mark while it runs \u2014 opens system settings (optional)</string>
-    <string name="setup_extras_overlay_granted">The mark will be shown</string>
 
     <!-- The brand, shown on the wizard's first page. The wordmark and the slogan are the same two
          lines the landing page opens with, and they stay English everywhere: a slogan is a name for
@@ -751,8 +738,6 @@ language, hence "No language". -->
     <string name="brand_slogan_line2" translatable="false">Start speaking.</string>
     <string name="brand_subline">Speech to text for everywhere you type.</string>
 
-    <!-- The practice field, step 5. Shown only once the microphone has been granted. -->
-    <string name="setup_try_label">Try it now</string>
     <string name="setup_try_hint">Tap here, then start dictating…</string>
     <!-- Prominent disclosure. Play requires this to be visible in the foreground, before the
          first microphone access, and not only in the privacy policy. It sits on the step that
@@ -761,13 +746,6 @@ language, hence "No language". -->
     <string name="vibevoice_mic_disclosure_title">Before the microphone</string>
     <string name="setup_extras_overlay_preview">This is the mark. It pulses with your voice, and you drag it onto the X to stop.</string>
     <string name="setup_try_skip">Skip this</string>
-    <string name="setup_link_later">Link later — the free minutes still work</string>
-    <!-- %d is the number of minutes the server granted, never typed here: it is server config and
-         a copy in the app would drift the moment it changes. -->
-    <string name="setup_trial_note">%d free minutes to try, no account needed.</string>
-    <string name="setup_trial_unavailable">Couldn\'t reach VibeVoice for the free minutes. Link an account in the next step and dictation works straight away.</string>
-    <string name="setup_extras_overlay_locked">Show the mark — needs the option above</string>
-    <string name="setup_finish_without">Finish without these</string>
 
     <!-- Shown when the free trial minutes have been spent. Not an error: an invitation. -->
     <string name="vibevoice_trial_over">Your free minutes are used up. Link a VibeVoice account to keep dictating — 30 minutes a month, no cost.</string>
@@ -799,8 +777,9 @@ language, hence "No language". -->
     <string name="setup_overlay_guard_keep_off">Keep it off</string>
     <string name="setup_overlay_guard_turn_on">Turn it on</string>
 
-    <string name="setup_done_slogan_line1">"You're set."</string>
-    <string name="setup_done_slogan_line2">Typing will never feel the same.</string>
+    <string name="setup_done_slogan_line1" translatable="false">"You're set."</string>
+    <string name="setup_done_slogan_line2" translatable="false">Typing will never</string>
+    <string name="setup_done_slogan_line3" translatable="false">feel the same.</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
     <!-- Description for the option to show setup wizard application icon of this IME in the launcher. -->
