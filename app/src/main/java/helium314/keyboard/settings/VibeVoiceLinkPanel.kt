@@ -77,7 +77,7 @@ fun VibeVoiceLinkPanel(
         errorMessage = null
         scope.launch {
             val res = VibeVoiceClient.requestDeviceCode(
-                "VibeVoiceBoard Android", BuildConfig.VERSION_NAME, VibeVoiceClient.installId(context)
+                "VibeVoice Keyboard Android", BuildConfig.VERSION_NAME, VibeVoiceClient.installId(context)
             )
             isLoading = false
             if (res == null) {
