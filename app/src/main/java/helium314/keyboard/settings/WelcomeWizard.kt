@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -33,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +62,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -145,9 +149,13 @@ fun WelcomeWizard(
 
     val useWideLayout = isWideScreen()
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val stepBackgroundColor = Brand.card(dark)
+    // Flat surfaces, no hairline border, a small radius. Every element used to be its own outlined
+    // card with a 14dp radius, so the header, the explanation and each action all weighed the same
+    // and the screen read as a stack of boxes. Now the explanation sits on the ground as text, the
+    // actions are flat rows, and only the primary one carries colour.
+    val stepBackgroundColor = if (dark) Color(0x17FFFFFF) else Color(0x0F000000)
     val stepBorderColor = Brand.cardBorder(dark)
-    val cardShape = RoundedCornerShape(Brand.corner.dp)
+    val cardShape = RoundedCornerShape(6.dp)
     val textColor = Brand.text(dark)
     val textColorDim = Brand.textFaint(dark)
     val titleColor = Brand.text(dark)
@@ -156,11 +164,12 @@ fun WelcomeWizard(
     @Composable fun bigText() {
         // Nothing above the hero or closing screens
         if (step == 0 || step == 5) return
-        Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text(
                 stringResource(R.string.brand_wordmark).uppercase(),
                 fontFamily = BrandFont,
-                style = MaterialTheme.typography.headlineSmall,
+                fontSize = 36.sp,
+                letterSpacing = 0.08.em,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 color = titleColor,
@@ -234,54 +243,65 @@ fun WelcomeWizard(
 
     @Composable fun StepHeader(current: Int, title: String, instruction: String) {
         StepNumbers(current)
-        Column(Modifier
-            .fillMaxWidth()
-            .clip(cardShape)
-            .background(color = stepBackgroundColor)
-            .border(1.dp, stepBorderColor, cardShape)
-            .padding(16.dp)
-        ) {
-            Text(title)
+        Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.merge(color = textColor),
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(6.dp))
             Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = Brand.textDim(dark)))
         }
     }
 
-    // `brand` shows the mark on its own dark rounded tile -- white mark on a black ground --
-    // so it reads identically on dark and light mode without tinting or flattening.
-    @Composable fun ActionRow(icon: Int, text: String, active: Boolean, brand: Boolean = false, onClick: () -> Unit) {
+    // `brand` shows the mark on its own dark tile -- white mark on a black ground -- so it reads the
+    // same on dark and light without tinting or flattening.
+    //
+    // `primary` decides the fill and defaults to `active`. They are separate because a status row such
+    // as "Account linked" is active (accent tick) without being the thing to press; giving it the
+    // accent fill too put two primary buttons on one screen.
+    @Composable fun ActionRow(
+        icon: Int,
+        text: String,
+        active: Boolean,
+        brand: Boolean = false,
+        primary: Boolean = active,
+        onClick: () -> Unit
+    ) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .clip(cardShape)
+                .background(if (primary) Brand.accent.copy(alpha = if (dark) 0.20f else 0.14f) else stepBackgroundColor)
                 .clickable { onClick() }
-                .background(color = stepBackgroundColor)
-                .border(1.dp, stepBorderColor, cardShape)
-                .padding(16.dp),
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (brand) {
                 Box(
                     modifier = Modifier
-                        .padding(end = 10.dp)
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(5.dp))
                         .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(icon),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Image(painter = painterResource(icon), contentDescription = null, modifier = Modifier.size(18.dp))
                 }
             } else {
                 Icon(
                     painterResource(icon), null,
-                    Modifier.padding(end = 10.dp).size(28.dp),
+                    Modifier.size(20.dp),
                     tint = if (active) Brand.accent else textColorDim
                 )
             }
-            Text(text, Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge.merge(color = textColor),
+                fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium
+            )
         }
     }
 
@@ -311,8 +331,7 @@ fun WelcomeWizard(
                             .fillMaxWidth()
                             .clip(cardShape)
                             .background(color = stepBackgroundColor)
-                            .border(1.dp, stepBorderColor, cardShape)
-                            .padding(16.dp)
+                            .padding(14.dp)
                     ) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Icon(
@@ -476,24 +495,25 @@ fun WelcomeWizard(
                     StepHeader(2, title, instruction)
 
                     Spacer(Modifier.height(8.dp))
-                    Column(
-                        Modifier
+                    OutlinedTextField(
+                        value = practiceText,
+                        onValueChange = { practiceText = it },
+                        modifier = Modifier
                             .fillMaxWidth()
-                            .clip(cardShape)
-                            .background(color = stepBackgroundColor)
-                            .border(1.dp, stepBorderColor, cardShape)
-                            .padding(16.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = practiceText,
-                            onValueChange = { practiceText = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester),
-                            placeholder = { Text(stringResource(R.string.setup_try_hint)) },
-                            minLines = 3
+                            .focusRequester(focusRequester),
+                        placeholder = { Text(stringResource(R.string.setup_try_hint)) },
+                        minLines = 3,
+                        shape = cardShape,
+                        textStyle = MaterialTheme.typography.bodyLarge.merge(color = textColor),
+                        // Brand colours, not the Material defaults, which resolve to the wallpaper accent.
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Brand.accent,
+                            unfocusedBorderColor = stepBorderColor,
+                            cursorColor = Brand.accent,
+                            focusedContainerColor = stepBackgroundColor,
+                            unfocusedContainerColor = stepBackgroundColor
                         )
-                    }
+                    )
 
                     if (phase == TryPhase.B) {
                         Spacer(Modifier.height(12.dp))
@@ -542,7 +562,7 @@ fun WelcomeWizard(
                     )
                     Spacer(Modifier.height(8.dp))
                     if (linked) {
-                        ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_link_done), true) { }
+                        ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_link_done), true, primary = false) { }
                         Spacer(Modifier.height(8.dp))
                         ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
                             step = 4
@@ -552,8 +572,7 @@ fun WelcomeWizard(
                             .fillMaxWidth()
                             .clip(cardShape)
                             .background(color = stepBackgroundColor)
-                            .border(1.dp, stepBorderColor, cardShape)
-                            .padding(16.dp)
+                            .padding(14.dp)
                         VibeVoiceLinkPanel(
                             modifier = Modifier.fillMaxWidth(),
                             cardModifier = linkCardModifier,
@@ -601,8 +620,7 @@ fun WelcomeWizard(
                             .fillMaxWidth()
                             .clip(cardShape)
                             .background(color = stepBackgroundColor)
-                            .border(1.dp, stepBorderColor, cardShape)
-                            .padding(16.dp),
+                            .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Image(
@@ -728,7 +746,7 @@ fun WelcomeWizard(
         Surface(color = Color.Transparent) {
         CompositionLocalProvider(
             LocalContentColor provides textColor,
-            LocalTextStyle provides MaterialTheme.typography.titleLarge.merge(color = textColor),
+            LocalTextStyle provides MaterialTheme.typography.bodyLarge.merge(color = textColor),
         ) {
             // Scrollable, and padded for the keyboard.
             //
@@ -747,8 +765,13 @@ fun WelcomeWizard(
                     .fillMaxSize()
                     .imePadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(32.dp),
-                verticalArrangement = Arrangement.Center,
+                    // Steps 1-4 start at the same height every time. Centred, each step sat wherever
+                    // its own height put it, so the wordmark and the step numbers jumped up and down
+                    // between steps. Anchored to the top, only the content below them changes. The
+                    // hero and the closing screen are single compositions and stay centred.
+                    .padding(horizontal = 28.dp)
+                    .padding(top = if (step == 0 || step == 5) 32.dp else 64.dp, bottom = 32.dp),
+                verticalArrangement = if (step == 0 || step == 5) Arrangement.Center else Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (useWideLayout)
