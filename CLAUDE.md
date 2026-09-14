@@ -58,8 +58,8 @@ JDK 17, `tools/build-and-deploy.sh` prefers Homebrew `openjdk@21` on macOS.
 ./gradlew assembleDebugNoMinify      # faster iteration build, no minify
 ./gradlew lint                       # lint.abortOnError = true
 
-./gradlew testRunTestsUnitTest       # what CI runs (see below)
-./gradlew testDebugUnitTest
+./gradlew testDebugUnitTest          # the one that exists -- see below
+
 ./gradlew testDebugUnitTest --tests "helium314.keyboard.latin.InputLogicTest"
 ./gradlew testDebugUnitTest --tests "*.InputLogicTest.testX"
 ```
@@ -67,8 +67,21 @@ JDK 17, `tools/build-and-deploy.sh` prefers Homebrew `openjdk@21` on macOS.
 Build types beyond the usual: `nouserlib` (release without user-supplied glide lib), `runTests`
 (non-minified CI variant), `debugNoMinify`. Tests are Robolectric-based and branch on
 `BuildConfig.BUILD_TYPE == "runTests"` to skip cases known to fail or that hit the network
-(`XLinkTest`, parts of `InputLogicTest`, `StringUtilsTest`) — so a green `testRunTestsUnitTest` is
-weaker than a green `testDebugUnitTest`.
+(`XLinkTest`, parts of `InputLogicTest`, `StringUtilsTest`).
+
+**`testRunTestsUnitTest` no longer exists.** AGP 9, which arrived with the upstream merge, generates
+unit-test tasks only for the `testBuildType` (default `debug`), so the `runTests` variant has no test
+task at all. `.github/workflows/build-test-auto.yml` — ours and upstream's — still invokes it and
+fails at task selection. Fixing that means choosing which variant tests run against, which is a
+decision rather than a rename, so it has been left open.
+
+Use `testDebugUnitTest`. It runs the cases `runTests` would skip, so **two failures are expected and
+are not regressions**: `StringUtilsTest.detectEmojisAtEndFails` and
+`InputLogicTest.insertLetterIntoWordHangulFails` — both carry the failure in their name, and
+upstream marks both as known. 176 of 178 is a clean run.
+
+Gradle also stops at the first failed task, so `./gradlew lint testDebugUnitTest` never reaches lint
+when those two fail. Run `lint` on its own.
 
 Full build + WebDAV upload + optional ADB install:
 
