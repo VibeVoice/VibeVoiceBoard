@@ -4,6 +4,7 @@ package helium314.keyboard.settings
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
@@ -114,7 +115,10 @@ fun SettingsNavHost(
         composable(SettingsDestination.Debug) {
             val isDebugUnlocked = BuildConfig.DEBUG || LocalContext.current.prefs().getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)
             if (!isDebugUnlocked) {
-                goBack()
+                // Navigation is a side effect, so it runs once from an effect rather than in the
+                // composable body -- called directly it fires again on every recomposition while the
+                // back stack is still settling.
+                LaunchedEffect(Unit) { goBack() }
             } else {
                 DebugScreen(onClickBack = ::goBack)
             }
