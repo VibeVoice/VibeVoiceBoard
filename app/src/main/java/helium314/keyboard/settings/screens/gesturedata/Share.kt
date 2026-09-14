@@ -276,4 +276,4 @@ private var progress: Int = 0
 
 private var zippedDataPath = "" // set after writing the file
 
-private const val MAIL_SUBJECT = "VibeVoiceBoard ${BuildConfig.VERSION_NAME} gesture data"
+private const val MAIL_SUBJECT = "VibeVoice Keyboard ${BuildConfig.VERSION_NAME} gesture data"

@@ -83,11 +83,15 @@ fun createAboutSettings(context: Context) = listOf(
             name = it.title,
             description = stringResource(R.string.version_text, BuildConfig.VERSION_NAME),
             onClick = {
+                // Debug builds show everything; release builds hide the debug screen until the
+                // version is tapped eight times. Single rule:
+                // DEBUG SCREEN VISIBLE <=> BuildConfig.DEBUG || PREF_SHOW_DEBUG_SETTINGS.
                 if (prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS))
                     return@Preference
                 count++
-                if (count < 5) return@Preference
+                if (count < 8) return@Preference
                 prefs.edit { putBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, true) }
+                SettingsActivity.settingsContainer = SettingsContainer(ctx)
                 Toast.makeText(ctx, R.string.prefs_debug_settings_enabled, Toast.LENGTH_LONG).show()
             },
             icon = R.drawable.ic_settings_about_version

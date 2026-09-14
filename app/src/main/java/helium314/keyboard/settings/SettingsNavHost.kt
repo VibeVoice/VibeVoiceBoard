@@ -4,6 +4,7 @@ package helium314.keyboard.settings
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
@@ -13,6 +14,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import helium314.keyboard.latin.BuildConfig
+import helium314.keyboard.latin.settings.DebugSettings
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.common.LocaleUtils.constructLocale
 import helium314.keyboard.latin.settings.SettingsSubtype.Companion.toSettingsSubtype
 import helium314.keyboard.latin.settings.getTransitionAnimationScale
@@ -108,7 +113,15 @@ fun SettingsNavHost(
             AdvancedSettingsScreen(onClickBack = ::goBack)
         }
         composable(SettingsDestination.Debug) {
-            DebugScreen(onClickBack = ::goBack)
+            val isDebugUnlocked = BuildConfig.DEBUG || LocalContext.current.prefs().getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)
+            if (!isDebugUnlocked) {
+                // Navigation is a side effect, so it runs once from an effect rather than in the
+                // composable body -- called directly it fires again on every recomposition while the
+                // back stack is still settling.
+                LaunchedEffect(Unit) { goBack() }
+            } else {
+                DebugScreen(onClickBack = ::goBack)
+            }
         }
         composable(SettingsDestination.Appearance) {
             AppearanceScreen(onClickBack = ::goBack)

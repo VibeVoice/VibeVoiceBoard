@@ -12,10 +12,14 @@ import helium314.keyboard.settings.screens.createAppearanceSettings
 import helium314.keyboard.settings.screens.createCorrectionSettings
 import helium314.keyboard.settings.screens.createGestureTypingSettings
 import helium314.keyboard.settings.screens.createLayoutSettings
+import helium314.keyboard.latin.BuildConfig
+import helium314.keyboard.latin.settings.DebugSettings
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.settings.screens.createPreferencesSettings
 import helium314.keyboard.settings.screens.createToolbarSettings
 
-class SettingsContainer(context: Context) {
+class SettingsContainer(private val context: Context) {
     private val list = createSettings(context)
     private val map: Map<String, Setting> = HashMap<String, Setting>(list.size).apply {
         list.forEach {
@@ -32,11 +36,19 @@ class SettingsContainer(context: Context) {
     //  show as disabled (i.e. no interaction possible) -> users confused
     //  show, but change will not do anything because another setting needs to be enabled first -> probably best
     fun filter(searchTerm: String): List<Setting> {
+        val showDebug = BuildConfig.DEBUG || context.prefs().getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)
         val term = searchTerm.lowercase()
         val results = mutableSetOf<Setting>()
-        list.forEach { setting -> if (setting.title.lowercase().startsWith(term)) results.add(setting) }
-        list.forEach { setting -> if (setting.title.lowercase().split(' ').any { it.startsWith(term) }) results.add(setting) }
         list.forEach { setting ->
+            if (setting.key == SettingsWithoutKey.DEBUG_SETTINGS && !showDebug) return@forEach
+            if (setting.title.lowercase().startsWith(term)) results.add(setting)
+        }
+        list.forEach { setting ->
+            if (setting.key == SettingsWithoutKey.DEBUG_SETTINGS && !showDebug) return@forEach
+            if (setting.title.lowercase().split(' ').any { it.startsWith(term) }) results.add(setting)
+        }
+        list.forEach { setting ->
+            if (setting.key == SettingsWithoutKey.DEBUG_SETTINGS && !showDebug) return@forEach
             if (setting.description?.lowercase()?.split(' ')?.any { it.startsWith(term) } == true)
                 results.add(setting)
         }

@@ -3,8 +3,10 @@ package helium314.keyboard.settings
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -14,6 +16,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +68,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import android.content.SharedPreferences
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.DisposableEffect
@@ -70,6 +76,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings as KeySettings
@@ -87,6 +94,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private enum class TryPhase { A, B, C }
+
 @Composable
 fun WelcomeWizard(
     close: () -> Unit,
@@ -94,61 +103,47 @@ fun WelcomeWizard(
 ) {
     val ctx = LocalContext.current
     val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-    /**
-     * The first step that still has something to do. Never the hero.
-     *
-     * This used to answer 0 when the keyboard was not yet enabled, and be used for two different
-     * questions, and it was wrong for both.
-     *
-     * As the opening step it meant the hero appeared only to somebody whose keyboard was not
-     * already enabled. Enabling an input method is a system setting, not app data, so clearing the
-     * app's data does not undo it -- which is why the brand page never showed on a device that had
-     * ever had the keyboard turned on, and why a user who enables it from Android's own prompt
-     * before opening the app would never have seen it either.
-     *
-     * As the return value after a trip to the system settings it was worse: tap "Enable" on step 1,
-     * think better of it, come back, and this answered 0 and threw you onto the welcome page for
-     * hesitating.
-     *
-     * So it answers 1, 2 or 3 now, and the hero is where the wizard starts rather than something it
-     * can be sent back to.
-     */
-    fun firstUnfinishedStep(): Int = when {
-        !UncachedInputMethodManagerUtils.isThisImeEnabled(ctx, imm) -> 1
-        !UncachedInputMethodManagerUtils.isThisImeCurrent(ctx, imm) -> 2
-        else -> 3
-    }
     var step by rememberSaveable { mutableIntStateOf(0) }
-    val scope = rememberCoroutineScope { Dispatchers.IO }
 
-    // The free minutes, asked for the moment the wizard opens rather than when they are needed.
-    // Between here and step 4 the user enables an input method and switches to it -- two trips
-    // through system settings -- so the key is in hand long before the practice field asks for it,
-    // and a slow network never shows as a spinner on the one screen that has to feel immediate.
-    // Null means "no answer yet"; the practice field distinguishes that from a refusal.
+    // Derived IME states for Step 1
+    var isImeEnabled by remember { mutableStateOf(UncachedInputMethodManagerUtils.isThisImeEnabled(ctx, imm)) }
+    var isImeCurrent by remember { mutableStateOf(UncachedInputMethodManagerUtils.isThisImeCurrent(ctx, imm)) }
+    var previousImeCurrent by rememberSaveable { mutableStateOf(isImeCurrent) }
+
+    fun updateImeState() {
+        isImeEnabled = UncachedInputMethodManagerUtils.isThisImeEnabled(ctx, imm)
+        isImeCurrent = UncachedInputMethodManagerUtils.isThisImeCurrent(ctx, imm)
+    }
+
+    // Free trial minutes pre-fetch: requested at start so dictation is ready by Step 2
     var trialMinutes by rememberSaveable { mutableStateOf(-1) }
     LaunchedEffect(Unit) {
         if (VibeVoiceClient.isLinked(ctx)) { trialMinutes = 0; return@LaunchedEffect }
         trialMinutes = when (val res = VibeVoiceClient.requestTrialKey(ctx)) {
             is TrialResult.Granted -> res.minutesGranted.toInt()
-            // Already used, rate limited or unreachable all land in the same place for the user:
-            // there are no free minutes, and the account step is where dictation comes from.
             else -> 0
         }
     }
-    LaunchedEffect(step) {
-        if (step == 2)
-            scope.launch {
-                while (step == 2 && !UncachedInputMethodManagerUtils.isThisImeCurrent(ctx, imm)) {
-                    delay(50)
-                }
-                step = 3
-            }
+
+    // Ensure pulse preference is cleared when wizard leaves composition
+    DisposableEffect(Unit) {
+        onDispose {
+            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+        }
     }
+
+    BackHandler {
+        if (step > 0) {
+            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+            step--
+        } else if (isImeEnabled && isImeCurrent) {
+            close()
+        } else {
+            finish()
+        }
+    }
+
     val useWideLayout = isWideScreen()
-    // The brand's palette, not res/values*/colors.xml. Those resolve to Material You on Android 12
-    // and up, so the wizard wore the user's wallpaper accent -- the loudest thing on a screen whose
-    // job is to be recognised as VibeVoice. See the note on Brand.
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val stepBackgroundColor = Brand.card(dark)
     val stepBorderColor = Brand.cardBorder(dark)
@@ -157,21 +152,11 @@ fun WelcomeWizard(
     val textColorDim = Brand.textFaint(dark)
     val titleColor = Brand.text(dark)
     val appName = stringResource(ctx.applicationInfo.labelRes)
+
     @Composable fun bigText() {
-        // Nothing above the hero. It carries the wordmark and the slogan itself, and a second
-        // heading over them would be the page saying its own name twice.
-        if (step == 0) return
-        Column(Modifier.padding(bottom = 20.dp)) {
-            // The wordmark, not "Setting up VibeVoice Board".
-            //
-            // That sentence set thin over two wrapped lines was weak to read and said nothing the
-            // page did not already say: the row of numbers under it means "you are in a setup", and
-            // the card below says what to do. It cost a fifth of the height on the one screen --
-            // step 4, with the practice field and the keyboard over it -- that has none to spare.
-            //
-            // The site's own header carries the wordmark on every page and no sentence at all, so
-            // this is what belongs here: one line, semibold, the same face and weight as the hero's
-            // first line, which makes the two screens read as one place.
+        // Nothing above the hero or closing screens
+        if (step == 0 || step == 5) return
+        Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
             Text(
                 stringResource(R.string.brand_wordmark).uppercase(),
                 fontFamily = BrandFont,
@@ -191,24 +176,13 @@ fun WelcomeWizard(
                 )
         }
     }
-    /**
-     * The 1..6 row, with three states rather than two.
-     *
-     * It used to draw every step that was not the current one in the same grey, and that made a
-     * correct behaviour look like a bug: a device that already has the keyboard enabled has nothing
-     * to do in step 1, so the wizard opens at 2 -- and the row said "1" in exactly the tone it used
-     * for the 6 that had not happened yet. Tapping "Get started" and landing on 2 read as skipping
-     * something.
-     *
-     * A step behind the current one has been dealt with, either done or found already done, because
-     * this wizard only moves forward. So it gets a tick, and the question does not arise.
-     */
+
     @Composable fun StepNumbers(current: Int) {
         Row(
             Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            (1..6).forEach {
+            (1..4).forEach {
                 Text(
                     if (it < current) "\u2713" else "$it",
                     fontFamily = BrandFont,
@@ -221,31 +195,9 @@ fun WelcomeWizard(
             }
         }
     }
-    @Composable
-    fun ColumnScope.Step(step: Int, title: String, instruction: String, actionText: String, icon: Painter, action: () -> Unit) {
-        StepNumbers(step)
-        Column(Modifier
-            .clip(cardShape)
-            .background(color = stepBackgroundColor)
-            .border(1.dp, stepBorderColor, cardShape)
-            .padding(16.dp)
-        ) {
-            Text(title)
-            Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = Brand.textDim(dark)))
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.clip(cardShape)
-                .clickable { action() }
-                .background(color = stepBackgroundColor)
-                .border(1.dp, stepBorderColor, cardShape)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, null, Modifier.padding(end = 10.dp).size(28.dp), tint = Brand.accent)
-            Text(actionText, Modifier.weight(1f))
-        }
-    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     @Composable fun OnResume(block: () -> Unit) {
         val owner = LocalLifecycleOwner.current
         DisposableEffect(owner) {
@@ -256,12 +208,34 @@ fun WelcomeWizard(
             onDispose { owner.lifecycle.removeObserver(observer) }
         }
     }
+
+    OnResume {
+        updateImeState()
+    }
+
+    LaunchedEffect(step) {
+        if (step == 1) {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (step == 1) {
+                    updateImeState()
+                    delay(200)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(isImeCurrent) {
+        if (step == 1 && isImeCurrent && !previousImeCurrent) {
+            delay(400)
+            step = 2
+        }
+        previousImeCurrent = isImeCurrent
+    }
+
     @Composable fun StepHeader(current: Int, title: String, instruction: String) {
-        // 12dp under the row, not zero: it used to sit flush on the card below, so a step whose
-        // instruction ran to four lines looked like one block with a strip of digits welded to the
-        // top of it.
         StepNumbers(current)
         Column(Modifier
+            .fillMaxWidth()
             .clip(cardShape)
             .background(color = stepBackgroundColor)
             .border(1.dp, stepBorderColor, cardShape)
@@ -271,246 +245,395 @@ fun WelcomeWizard(
             Text(instruction, style = MaterialTheme.typography.bodyLarge.merge(color = Brand.textDim(dark)))
         }
     }
-    @Composable fun ActionRow(icon: Int, text: String, active: Boolean, onClick: () -> Unit) {
+
+    // `brand` shows the mark on its own dark rounded tile -- white mark on a black ground --
+    // so it reads identically on dark and light mode without tinting or flattening.
+    @Composable fun ActionRow(icon: Int, text: String, active: Boolean, brand: Boolean = false, onClick: () -> Unit) {
         Row(
-            Modifier.clip(cardShape)
+            Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
                 .clickable { onClick() }
                 .background(color = stepBackgroundColor)
                 .border(1.dp, stepBorderColor, cardShape)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                painterResource(icon), null,
-                Modifier.padding(end = 10.dp).size(28.dp),
-                tint = if (active) Brand.accent else textColorDim
-            )
+            if (brand) {
+                Box(
+                    modifier = Modifier
+                        .padding(end = 10.dp)
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(icon),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                Icon(
+                    painterResource(icon), null,
+                    Modifier.padding(end = 10.dp).size(28.dp),
+                    tint = if (active) Brand.accent else textColorDim
+                )
+            }
             Text(text, Modifier.weight(1f))
         }
     }
+
     @Composable fun steps() {
-        if (step == 0)
-            WizardHero { step = firstUnfinishedStep() }
-        else
-            Column {
+        if (step == 0) {
+            WizardHero(closing = false) { step = 1 }
+        } else if (step == 5) {
+            WizardHero(closing = true) {
+                ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+                finish()
+            }
+        } else {
+            Column(Modifier.fillMaxWidth()) {
                 val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-                    // Only 1 to 3 are derived from the system. Step 6 uses this same launcher for
-                    // the overlay permission, and re-deriving there would send somebody who just
-                    // granted it back to "all set".
-                    if (step in 1..3) step = firstUnfinishedStep()
+                    updateImeState()
                 }
+
                 if (step == 1) {
-                    Step(
-                        step,
-                        stringResource(R.string.setup_step1_title, appName),
-                        stringResource(R.string.setup_step1_instruction, appName),
-                        stringResource(R.string.setup_step1_action),
-                        painterResource(R.drawable.ic_setup_key)
-                    ) {
-                        val intent = Intent()
-                        intent.action = Settings.ACTION_INPUT_METHOD_SETTINGS
-                        intent.addCategory(Intent.CATEGORY_DEFAULT)
-                        launcher.launch(intent)
-                    }
-                } else if (step == 2) {
-                    Step(
-                        step,
-                        stringResource(R.string.setup_step2_title, appName),
-                        stringResource(R.string.setup_step2_instruction, appName),
-                        stringResource(R.string.setup_step2_action),
-                        painterResource(R.drawable.ic_setup_select),
-                        imm::showInputMethodPicker
-                    )
-                    // No exit here. `close()` ends the wizard for good -- there is no way back
-                    // into it -- and offering that on the step before the keyboard has even been
-                    // switched to drops the user into a settings tree with nothing yet to
-                    // configure. The same exit was removed from step 3 for the same reason and
-                    // survived here because I fixed one and not the other.
-                } else if (step == 3) {
-                    // One way on, and it is forward. The settings used to be offered here, which
-                    // closed the wizard for good -- there is no way back into it -- two steps
-                    // before dictation was set up, and dropped the user into a settings tree they
-                    // have no reason to understand yet. That exit belongs at the end, once there
-                    // is something to configure.
-                    Step(
-                        step,
-                        stringResource(R.string.setup_step3_typing_ready),
-                        stringResource(R.string.setup_step3_instruction, appName),
-                        stringResource(R.string.setup_continue_action),
-                        painterResource(R.drawable.ic_vibevoice_active)
-                    ) { step = 4 }
-                } else if (step == 4) {
-                    // The microphone and the first dictation, BEFORE the account.
-                    //
-                    // It used to be the other way round, and that was the whole defect P-058 names:
-                    // the account is a cost the user pays, the transcription is the benefit they
-                    // have not yet seen, and asking for the cost first is asking someone to buy
-                    // something they have not been shown. The server now issues free minutes
-                    // against an install id, so this step can do the showing.
-                    var mic by rememberSaveable {
-                        mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
-                                == android.content.pm.PackageManager.PERMISSION_GRANTED)
-                    }
-                    // Asked for directly. PermissionActivity exists because an input method cannot
-                    // request a runtime permission; here we are in an activity and can.
-                    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-                        mic = it
-                    }
-                    var practice by rememberSaveable { mutableStateOf("") }
-                    StepHeader(4,
-                        stringResource(R.string.setup_mic_title),
-                        stringResource(R.string.setup_mic_instruction))
-                    if (trialMinutes > 0) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            stringResource(R.string.setup_trial_note, trialMinutes),
-                            style = MaterialTheme.typography.bodyMedium.merge(color = Brand.accent)
-                        )
-                    } else if (trialMinutes == 0 && !VibeVoiceClient.isLinked(ctx)) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            stringResource(R.string.setup_trial_unavailable),
-                            style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark))
-                        )
-                    }
-                    // Prominent disclosure, and prominent is the requirement: Play wants what leaves
-                    // the device stated in the foreground before the first microphone access, not
-                    // only in a policy the user would have to go and find. Full ink, not the dimmed
-                    // body colour -- a disclosure set as fine print is not one.
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        stringResource(R.string.setup_mic_disclosure),
-                        style = MaterialTheme.typography.bodyMedium.merge(color = textColor)
+                    StepHeader(
+                        1,
+                        stringResource(R.string.setup_step1_turn_on),
+                        stringResource(R.string.setup_step1_turn_on_instruction, appName)
                     )
                     Spacer(Modifier.height(8.dp))
-                    ActionRow(
-                        if (mic) R.drawable.ic_setup_check else R.drawable.ic_setup_key,
-                        stringResource(if (mic) R.string.setup_mic_granted else R.string.setup_mic_grant),
-                        mic
-                    ) {
-                        if (!mic) micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                    }
-                    if (mic && VibeVoiceClient.getApiKey(ctx) != null) {
-                        // The thing itself. Everything before this describes a product; this is the
-                        // product, and it happens before anybody has been asked for anything.
-                        Spacer(Modifier.height(8.dp))
-                        Column(Modifier
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
                             .clip(cardShape)
                             .background(color = stepBackgroundColor)
                             .border(1.dp, stepBorderColor, cardShape)
                             .padding(16.dp)
-                        ) {
-                            Text(
-                                stringResource(R.string.setup_try_label),
-                                style = MaterialTheme.typography.bodyLarge.merge(color = textColor)
+                    ) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painterResource(if (isImeEnabled) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
+                                null,
+                                Modifier.padding(end = 10.dp).size(24.dp),
+                                tint = if (isImeEnabled) Brand.accent else textColorDim
                             )
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = practice,
-                                onValueChange = { practice = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text(stringResource(R.string.setup_try_hint)) },
-                                minLines = 3
+                            Text(
+                                stringResource(R.string.setup_step1_tick_enable, appName),
+                                style = MaterialTheme.typography.bodyLarge.merge(
+                                    color = if (isImeEnabled) textColor else textColorDim
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painterResource(if (isImeCurrent) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
+                                null,
+                                Modifier.padding(end = 10.dp).size(24.dp),
+                                tint = if (isImeCurrent) Brand.accent else textColorDim
+                            )
+                            Text(
+                                stringResource(R.string.setup_step1_tick_select),
+                                style = MaterialTheme.typography.bodyLarge.merge(
+                                    color = if (isImeCurrent) textColor else textColorDim
+                                ),
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    // Always present, never hidden: somebody whose microphone or network refuses to
-                    // work would otherwise be shut in this step with no way out, and a wizard must
-                    // not close a door it cannot reopen. It changes weight instead of appearing --
-                    // quiet until something has been dictated, the obvious next move afterwards.
-                    val tried = practice.isNotBlank()
-                    ActionRow(
-                        if (tried) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
-                        stringResource(if (tried) R.string.setup_next_action else R.string.setup_try_skip),
-                        tried
-                    ) { step = 5 }
-                } else if (step == 5) {
-                    // The account, now that there is something to have an account for.
+                    when {
+                        !isImeEnabled -> {
+                            ActionRow(
+                                R.drawable.ic_setup_key,
+                                stringResource(R.string.setup_step1_action),
+                                active = true
+                            ) {
+                                val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {
+                                    addCategory(Intent.CATEGORY_DEFAULT)
+                                }
+                                launcher.launch(intent)
+                            }
+                        }
+                        !isImeCurrent -> {
+                            ActionRow(
+                                R.drawable.ic_setup_select,
+                                stringResource(R.string.setup_step1_action_switch, appName),
+                                active = true
+                            ) {
+                                imm.showInputMethodPicker()
+                            }
+                        }
+                        else -> {
+                            ActionRow(
+                                R.drawable.ic_setup_check,
+                                stringResource(R.string.setup_next_action),
+                                active = true
+                            ) {
+                                step = 2
+                            }
+                        }
+                    }
+                } else if (step == 2) {
+                    var phase by rememberSaveable { mutableStateOf(TryPhase.A) }
+                    var practiceText by rememberSaveable { mutableStateOf("") }
+                    var hasDictated by rememberSaveable { mutableStateOf(false) }
+                    var micGranted by rememberSaveable {
+                        mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
+                                == PackageManager.PERMISSION_GRANTED)
+                    }
+
+                    // Refresh microphone permission on resume from Android Settings or PermissionActivity
+                    OnResume {
+                        val granted = ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        micGranted = granted
+                        if (granted && phase == TryPhase.B) {
+                            phase = TryPhase.C
+                        }
+                    }
+
+                    // Reset PREF_HAS_DICTATED on entering Step 2, and listen for dictation events from LatinIME
+                    DisposableEffect(step) {
+                        if (step == 2) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_HAS_DICTATED, false).apply()
+                            val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+                                if (key == KeySettings.PREF_HAS_DICTATED && prefs.getBoolean(KeySettings.PREF_HAS_DICTATED, false)) {
+                                    hasDictated = true
+                                }
+                            }
+                            ctx.prefs().registerOnSharedPreferenceChangeListener(listener)
+                            onDispose {
+                                ctx.prefs().unregisterOnSharedPreferenceChangeListener(listener)
+                            }
+                        } else {
+                            onDispose {}
+                        }
+                    }
+
+                    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                        micGranted = granted
+                        if (granted) {
+                            phase = TryPhase.C
+                        }
+                    }
+                    val focusRequester = remember { FocusRequester() }
+
+                    LaunchedEffect(step) {
+                        if (step == 2) {
+                            delay(150)
+                            try { focusRequester.requestFocus() } catch (_: Exception) {}
+                        }
+                    }
+
+                    // Phase A: advances after user types >= 2 characters plus 1s pause
+                    LaunchedEffect(practiceText) {
+                        if (step == 2 && phase == TryPhase.A && practiceText.length >= 2) {
+                            delay(1000)
+                            if (phase == TryPhase.A) {
+                                phase = if (micGranted) TryPhase.C else TryPhase.B
+                            }
+                        }
+                    }
+
+                    // Phase A timeout: advances after 6s if user types nothing (resets if typing starts)
+                    LaunchedEffect(step, phase, practiceText.isEmpty()) {
+                        if (step == 2 && phase == TryPhase.A && practiceText.isEmpty()) {
+                            delay(6000)
+                            if (phase == TryPhase.A && practiceText.isEmpty()) {
+                                phase = if (micGranted) TryPhase.C else TryPhase.B
+                            }
+                        }
+                    }
+
+                    // Phase C pulse & timeout: pulses toolbar key, auto-clears after 15s
+                    LaunchedEffect(phase) {
+                        if (step == 2 && phase == TryPhase.C) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, true).apply()
+                            delay(15000)
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+                        }
+                    }
+
+                    val (title, instruction) = when (phase) {
+                        TryPhase.A -> Pair(
+                            stringResource(R.string.setup_try_phase_a_title),
+                            stringResource(R.string.setup_try_phase_a_instruction)
+                        )
+                        TryPhase.B -> Pair(
+                            stringResource(R.string.setup_try_phase_b_title),
+                            stringResource(R.string.setup_try_phase_b_instruction)
+                        )
+                        TryPhase.C -> Pair(
+                            stringResource(R.string.setup_try_phase_c_title),
+                            stringResource(R.string.setup_try_phase_c_instruction)
+                        )
+                    }
+                    StepHeader(2, title, instruction)
+
+                    Spacer(Modifier.height(8.dp))
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(cardShape)
+                            .background(color = stepBackgroundColor)
+                            .border(1.dp, stepBorderColor, cardShape)
+                            .padding(16.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = practiceText,
+                            onValueChange = { practiceText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
+                            placeholder = { Text(stringResource(R.string.setup_try_hint)) },
+                            minLines = 3
+                        )
+                    }
+
+                    if (phase == TryPhase.B) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.setup_mic_disclosure),
+                            style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ActionRow(
+                            R.drawable.ic_setup_key,
+                            stringResource(R.string.setup_mic_grant),
+                            active = true
+                        ) {
+                            micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    if (hasDictated) {
+                        ActionRow(
+                            R.drawable.ic_setup_check,
+                            stringResource(R.string.setup_next_action),
+                            active = true
+                        ) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+                            step = 3
+                        }
+                    } else {
+                        ActionRow(
+                            R.drawable.ic_setup_select,
+                            stringResource(R.string.setup_try_skip),
+                            active = false
+                        ) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+                            step = 3
+                        }
+                    }
+                } else if (step == 3) {
                     var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.isLinked(ctx)) }
                     OnResume { linked = VibeVoiceClient.isLinked(ctx) }
-                    StepHeader(5,
-                        stringResource(R.string.setup_link_title),
-                        stringResource(R.string.setup_link_instruction))
+                    StepHeader(
+                        3,
+                        stringResource(R.string.setup_minutes_title),
+                        stringResource(R.string.setup_minutes_instruction)
+                    )
                     Spacer(Modifier.height(8.dp))
                     if (linked) {
                         ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_link_done), true) { }
                         Spacer(Modifier.height(8.dp))
                         ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
-                            step = 6
+                            step = 4
                         }
                     } else {
-                        // Linked here rather than by sending the user into the settings screen,
-                        // which carries the account, the quota, bug reports and three tuning blocks
-                        // -- everything except the one thing they came for. The panel is the same
-                        // implementation that screen uses; only its button is ours.
+                        val linkCardModifier = Modifier
+                            .fillMaxWidth()
+                            .clip(cardShape)
+                            .background(color = stepBackgroundColor)
+                            .border(1.dp, stepBorderColor, cardShape)
+                            .padding(16.dp)
                         VibeVoiceLinkPanel(
-                            modifier = Modifier
-                                .clip(cardShape)
-                                .background(color = stepBackgroundColor)
-                                .border(1.dp, stepBorderColor, cardShape)
-                                .padding(16.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            cardModifier = linkCardModifier,
+                            codeColor = Brand.accent,
+                            textColor = textColor,
+                            textDimColor = Brand.textDim(dark),
+                            progressColor = Brand.accent,
                             trigger = { enabled, loading, onClick ->
                                 ActionRow(
-                                    R.drawable.ic_vibevoice_active,
+                                    R.drawable.ic_vibevoice_mark,
                                     stringResource(
                                         if (loading) R.string.vibevoice_polling_for_token
                                         else R.string.setup_link_action
                                     ),
-                                    enabled
+                                    enabled,
+                                    brand = true
                                 ) { if (enabled) onClick() }
                             }
-                        ) { linked = true; step = 6 }
+                        ) { linked = true; step = 4 }
                         Spacer(Modifier.height(8.dp))
-                        // Its own label, not the practice step's "Skip this". On the account step
-                        // that word promises the wrong thing -- it reads as "no thanks" when what
-                        // is on offer is "not now", and the free minutes are still there either
-                        // way. Somebody who has just heard their own voice come out as text is the
-                        // likeliest person in the world to link an account tomorrow; telling them
-                        // they have declined it makes that less likely, not more.
-                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_link_later), false) {
-                            step = 6
+                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_link_later_equal), false) {
+                            step = 4
                         }
                     }
-                } else { // step 6: two optional extras, one of which depends on the other
-                    val prefs = ctx.prefs()
-                    var background by rememberSaveable {
-                        mutableStateOf(prefs.getBoolean(KeySettings.PREF_VOICE_BACKGROUND, Defaults.PREF_VOICE_BACKGROUND))
-                    }
+                } else if (step == 4) {
                     var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
-                    OnResume { overlay = VoiceOverlay.isAllowed(ctx) }
-                    StepHeader(6,
-                        stringResource(R.string.setup_extras_title),
-                        stringResource(R.string.setup_extras_instruction))
+                    OnResume {
+                        val allowed = VoiceOverlay.isAllowed(ctx)
+                        overlay = allowed
+                        if (allowed) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, true).apply()
+                        }
+                    }
+                    var showGuardDialog by rememberSaveable { mutableStateOf(false) }
+                    var guardDialogShown by rememberSaveable { mutableStateOf(false) }
+
+                    StepHeader(
+                        4,
+                        stringResource(R.string.setup_floating_mark_title),
+                        stringResource(R.string.setup_floating_mark_instruction)
+                    )
                     Spacer(Modifier.height(8.dp))
-                    ActionRow(
-                        if (background) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
-                        stringResource(R.string.setup_extras_background),
-                        background
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(cardShape)
+                            .background(color = stepBackgroundColor)
+                            .border(1.dp, stepBorderColor, cardShape)
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        background = !background
-                        prefs.edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, background).apply()
+                        Image(
+                            painterResource(R.drawable.floating_mark_preview),
+                            null,
+                            Modifier.size(72.dp)
+                        )
+                        Text(
+                            stringResource(R.string.setup_extras_overlay_preview),
+                            style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 12.dp)
+                        )
                     }
                     Spacer(Modifier.height(8.dp))
-                    // Shown even when it cannot be taken, with the reason on it.
-                    //
-                    // It used to be hidden until the option above was on, and hiding it was worse
-                    // than the dependency it was hiding: the heading promises two extras and the
-                    // screen showed one, so the step read as either finished or broken. Allowing an
-                    // overlay for a mark that can never appear is still a permission asked for
-                    // nothing -- so the row stays inert, and says why.
-                    ActionRow(
-                        if (overlay && background) R.drawable.ic_setup_check else R.drawable.ic_setup_select,
-                        stringResource(
-                            when {
-                                !background -> R.string.setup_extras_overlay_locked
-                                overlay -> R.string.setup_extras_overlay_granted
-                                else -> R.string.setup_extras_overlay
-                            }
-                        ),
-                        background && overlay
-                    ) {
-                        if (background && !overlay) {
+                    if (overlay) {
+                        ActionRow(
+                            R.drawable.ic_setup_check,
+                            stringResource(R.string.setup_next_action),
+                            active = true
+                        ) {
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, true).apply()
+                            step = 5
+                        }
+                    } else {
+                        ActionRow(
+                            R.drawable.ic_setup_select,
+                            stringResource(R.string.setup_overlay_enable),
+                            active = true
+                        ) {
                             val intent = Intent(
                                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                 android.net.Uri.parse("package:" + ctx.packageName)
@@ -518,53 +641,90 @@ fun WelcomeWizard(
                             try {
                                 launcher.launch(intent)
                             } catch (_: android.content.ActivityNotFoundException) {
-                                // Some builds have no such screen. Nothing else breaks.
                             }
                         }
-                    }
-                    if (background) {
-                        // Show the thing before asking permission for it. "Show the mark" is an
-                        // abstraction until you have seen the mark; the picture is the same artwork
-                        // that will appear on screen, lifted off the black it was shot on.
-                        Spacer(Modifier.height(8.dp))
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Spacer(Modifier.height(16.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (!guardDialogShown) {
+                                        guardDialogShown = true
+                                        showGuardDialog = true
+                                    } else {
+                                        ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
+                                        step = 5
+                                    }
+                                }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Image(
-                                painterResource(R.drawable.floating_mark_preview),
-                                null,
-                                Modifier.size(72.dp)
-                            )
                             Text(
-                                stringResource(R.string.setup_extras_overlay_preview),
+                                stringResource(R.string.setup_overlay_not_now),
                                 style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
-                                modifier = Modifier.padding(start = 12.dp)
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    // The label says what is being given up. "Finished" under an untouched toggle
-                    // reads as "you are done" and hides the fact that there was anything to decide.
-                    ActionRow(
-                        R.drawable.ic_setup_check,
-                        stringResource(
-                            if (background) R.string.setup_finish_action else R.string.setup_finish_without
-                        ),
-                        background
-                    ) {
-                        finish()
+
+                    if (showGuardDialog) {
+                        AlertDialog(
+                            onDismissRequest = {
+                                showGuardDialog = false
+                                ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
+                                step = 5
+                            },
+                            text = {
+                                Text(
+                                    stringResource(R.string.setup_overlay_guard_message),
+                                    style = MaterialTheme.typography.bodyLarge.merge(color = textColor)
+                                )
+                            },
+                            confirmButton = {
+                                Text(
+                                    stringResource(R.string.setup_overlay_guard_turn_on),
+                                    modifier = Modifier
+                                        .clickable {
+                                            showGuardDialog = false
+                                            val intent = Intent(
+                                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                android.net.Uri.parse("package:" + ctx.packageName)
+                                            )
+                                            try {
+                                                launcher.launch(intent)
+                                            } catch (_: android.content.ActivityNotFoundException) {
+                                            }
+                                        }
+                                        .padding(8.dp),
+                                    color = Brand.accent,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            dismissButton = {
+                                Text(
+                                    stringResource(R.string.setup_overlay_guard_keep_off),
+                                    modifier = Modifier
+                                        .clickable {
+                                            showGuardDialog = false
+                                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
+                                            step = 5
+                                        }
+                                        .padding(8.dp),
+                                    color = Brand.textDim(dark)
+                                )
+                            },
+                            containerColor = stepBackgroundColor,
+                            shape = cardShape
+                        )
                     }
-                    // No second exit. "Finished" and "Configure the keyboard" both ended the wizard
-                    // and only one of them said so; the settings are one tap away afterwards.
                 }
             }
+        }
     }
     Box(Modifier.fillMaxSize()) {
         BrandBackground(dark)
-        // The waves only on the hero. They are the keyboard's signature -- what a running session
-        // looks like -- and putting them behind every page would spend that.
-        if (step == 0) HeroWaves()
+        // The waves on hero and closing screens
+        if (step == 0 || step == 5) HeroWaves()
         Surface(color = Color.Transparent) {
         CompositionLocalProvider(
             LocalContentColor provides textColor,
@@ -601,7 +761,7 @@ fun WelcomeWizard(
                         }
                     }
                 else
-                    Column {
+                    Column(Modifier.fillMaxWidth()) {
                         bigText()
                         steps()
                     }
@@ -623,7 +783,10 @@ fun WelcomeWizard(
  * same tap, and there is nothing else to do on this page.
  */
 @Composable
-fun WizardHero(onClick: () -> Unit) {
+fun WizardHero(
+    closing: Boolean = false,
+    onClick: () -> Unit
+) {
     val ctx = LocalContext.current
     // Drawn through renderMark for the reason it exists: a vector's bounds are not its ink. The
     // launcher foreground carries the adaptive-icon safe area, so laying it out at 160dp puts a
@@ -634,7 +797,7 @@ fun WizardHero(onClick: () -> Unit) {
             ?.let { VoiceGlow.renderMark(it, px) }
             ?.asImageBitmap()
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (logo != null)
             Image(BitmapPainter(logo), null, Modifier.size(HERO_LOGO_DP.dp))
         else
@@ -654,25 +817,42 @@ fun WizardHero(onClick: () -> Unit) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             // Shrink to fit rather than wrap.
             //
-            // The longest line is the slogan's second, and it needs about HERO_DP_PER_SP of width
-            // for every sp of size. On a wide phone at the default font scale that lands well
-            // under the cap and nothing happens; on a narrow one, or for somebody running the
-            // system font at 130%, the alternative was "START SPEAKING." breaking over two lines,
-            // which turns a three-line composition into a four-line one and loses the shape
-            // entirely. Dividing by fontScale is what keeps the accessibility setting working:
-            // the type still grows with it, just not past the width it has.
+            // Derive required dp per sp dynamically from the longest line, weighted for weight:
+            // Thin is ~0.51 dp per sp per character, SemiBold is ~0.65 dp per sp per character.
+            // This prevents wrapping on narrow phones or large system font scales while keeping the
+            // single-block 3-line typography.
+            //
+            // The Thin figure is measured, not guessed: "START SPEAKING." set in Ubuntu Sans Thin is
+            // 258.4dp wide at 34sp, 7.6dp per sp across its 15 characters, so 0.51 per character.
+            // It used to be one constant for that one phrase, which is why the closing line -- twice
+            // as long -- wrapped. Per character it holds for any line. Re-measure if the family
+            // changes; the SemiBold figure scales the same measurement by the weight's width.
             val scale = LocalDensity.current.fontScale
-            val size = minOf(HERO_TYPE_SP.toFloat(), maxWidth.value / (HERO_DP_PER_SP * scale))
+            val line1 = stringResource(
+                if (closing) R.string.setup_done_slogan_line1 else R.string.brand_wordmark
+            ).uppercase()
+            val line2 = stringResource(
+                if (closing) R.string.setup_done_slogan_line2 else R.string.brand_slogan_line1
+            ).uppercase()
+            val line3 = stringResource(
+                if (closing) R.string.setup_done_slogan_line3 else R.string.brand_slogan_line2
+            ).uppercase()
+            val maxCostDpPerSp = maxOf(
+                line1.length * 0.65f,
+                line2.length * 0.51f,
+                line3.length * 0.51f
+            )
+            val size = minOf(HERO_TYPE_SP.toFloat(), maxWidth.value / (maxCostDpPerSp * scale))
             Text(
                 buildAnnotatedString {
                     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                        append(stringResource(R.string.brand_wordmark).uppercase())
+                        append(line1)
                     }
                     append("\n")
                     withStyle(SpanStyle(fontWeight = FontWeight.Thin)) {
-                        append(stringResource(R.string.brand_slogan_line1).uppercase())
+                        append(line2)
                         append("\n")
-                        append(stringResource(R.string.brand_slogan_line2).uppercase())
+                        append(line3)
                     }
                 },
                 fontFamily = BrandFont,
@@ -682,19 +862,21 @@ fun WizardHero(onClick: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        Spacer(Modifier.height(24.dp))
-        Text(
-            stringResource(R.string.brand_subline),
-            fontFamily = BrandFont,
-            fontWeight = FontWeight.Normal,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+        if (!closing) {
+            Spacer(Modifier.height(24.dp))
+            Text(
+                stringResource(R.string.brand_subline),
+                fontFamily = BrandFont,
+                fontWeight = FontWeight.Normal,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         Spacer(Modifier.height(28.dp))
         Row(Modifier.clickable { onClick() }.padding(top = 4.dp, start = 4.dp, end = 4.dp)) {
             Text(
-                stringResource(R.string.setup_start_action),
+                stringResource(if (closing) R.string.setup_finish_action else R.string.setup_start_action),
                 fontFamily = BrandFont,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
@@ -735,13 +917,6 @@ private const val HERO_LOGO_DP = 140
 private const val HERO_TYPE_SP = 34
 private const val HERO_LEADING = 1.12f
 
-/**
- * How much width, in dp, one sp of headline costs.
- *
- * Measured, not guessed: "START SPEAKING." set in Ubuntu Sans Thin is 258.4dp wide at 34sp, which
- * is 7.6 to one. Re-measure it if the slogan or the family changes.
- */
-private const val HERO_DP_PER_SP = 7.6f
 
 /**
  * The waves' colour on the hero, which is the brand's and not the keyboard theme's.

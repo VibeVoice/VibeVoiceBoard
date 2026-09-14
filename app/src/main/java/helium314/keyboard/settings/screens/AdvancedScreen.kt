@@ -82,6 +82,8 @@ fun AdvancedSettingsScreen(
         Settings.PREF_MORE_POPUP_KEYS,
         Settings.PREF_TIMESTAMP_FORMAT,
         SettingsWithoutKey.BACKUP_RESTORE,
+        // Debug builds show everything; release builds hide the debug screen until unlocked
+        // (8 taps on Version in About). Single rule: visible <=> BuildConfig.DEBUG || PREF_SHOW_DEBUG_SETTINGS.
         if (BuildConfig.DEBUG || prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)) SettingsWithoutKey.DEBUG_SETTINGS else null,
         R.string.settings_category_experimental,
         Settings.PREF_EMOJI_MAX_SDK,
@@ -96,7 +98,7 @@ fun AdvancedSettingsScreen(
 }
 
 @SuppressLint("ApplySharedPref")
-fun createAdvancedSettings(context: Context) = listOf(
+fun createAdvancedSettings(context: Context) = listOfNotNull(
     Setting(context, Settings.PREF_ALWAYS_INCOGNITO_MODE,
         R.string.incognito, R.string.prefs_force_incognito_mode_summary)
     {
@@ -222,12 +224,14 @@ fun createAdvancedSettings(context: Context) = listOf(
     Setting(context, Settings.PREF_TIMESTAMP_FORMAT, R.string.timestamp_format_title) { setting ->
         TextInputPreference(setting, Defaults.PREF_TIMESTAMP_FORMAT, stringResource(R.string.timestamp_description)) { checkTimestampFormat(it) }
     },
-    Setting(context, SettingsWithoutKey.DEBUG_SETTINGS, R.string.debug_settings_title) {
-        Preference(
-            name = it.title,
-            onClick = { SettingsDestination.navigateTo(SettingsDestination.Debug) }
-        ) { NextScreenIcon() }
-    },
+    if (BuildConfig.DEBUG || context.prefs().getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)) {
+        Setting(context, SettingsWithoutKey.DEBUG_SETTINGS, R.string.debug_settings_title) {
+            Preference(
+                name = it.title,
+                onClick = { SettingsDestination.navigateTo(SettingsDestination.Debug) }
+            ) { NextScreenIcon() }
+        }
+    } else null,
     Setting(context, Settings.PREF_EMOJI_MAX_SDK, R.string.prefs_key_emoji_max_sdk) { setting ->
         val ctx = LocalContext.current
         SliderPreference(
