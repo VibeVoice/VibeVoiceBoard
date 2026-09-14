@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -128,6 +129,17 @@ fun WelcomeWizard(
     DisposableEffect(Unit) {
         onDispose {
             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+        }
+    }
+
+    BackHandler {
+        if (step > 0) {
+            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+            step--
+        } else if (isImeEnabled && isImeCurrent) {
+            close()
+        } else {
+            finish()
         }
     }
 
