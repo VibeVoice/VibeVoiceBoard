@@ -2,9 +2,15 @@
 <!--
     SPDX-License-Identifier: GPL-3.0-only
 -->
+<!--
+    Build-type overrides: these WIN over src/main in every debug build, which is every build that
+    goes to Nextcloud. A rename that only touches src/main leaves the phone showing the old name,
+    and that has happened twice. Keep the "(debug)" suffix: it is what tells this install apart from
+    the Play one when both are on the same device.
+-->
 <resources>
-    <string name="english_ime_name" translatable="false">VibeVoice Board</string>
-    <string name="spell_checker_service_name" translatable="false">VibeVoice Board Spell Checker</string>
-    <string name="ime_settings" translatable="false">VibeVoice Board Settings</string>
+    <string name="english_ime_name" translatable="false">VibeVoice Keyboard (debug)</string>
+    <string name="spell_checker_service_name" translatable="false">VibeVoice Keyboard Spell Checker (debug)</string>
+    <string name="ime_settings" translatable="false">VibeVoice Keyboard Settings (debug)</string>
 
 </resources>
