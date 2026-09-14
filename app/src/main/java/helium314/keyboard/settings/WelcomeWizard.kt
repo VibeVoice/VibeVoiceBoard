@@ -19,6 +19,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.AlertDialog
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -186,21 +188,39 @@ fun WelcomeWizard(
         }
     }
 
+    // A segmented progress bar rather than a row of digits. The digits read as a footnote under a
+    // 36sp wordmark; four segments across the full width say "how far along" at a glance, and the
+    // caption above gives the exact count. Done segments are a muted accent, the current one full
+    // accent, the rest a faint track, and the colour eases across when the step changes instead of
+    // snapping.
     @Composable fun StepNumbers(current: Int) {
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            (1..4).forEach {
-                Text(
-                    if (it < current) "\u2713" else "$it",
-                    fontFamily = BrandFont,
-                    color = when {
-                        it == current -> Brand.accent
-                        it < current -> Brand.accent.copy(alpha = 0.5f)
-                        else -> textColorDim
+        val total = 4
+        Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+            Text(
+                stringResource(R.string.setup_step_progress, current, total).uppercase(),
+                fontFamily = BrandFont,
+                fontSize = 12.sp,
+                letterSpacing = 0.16.em,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textDim(dark)
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                (1..total).forEach { i ->
+                    val target = when {
+                        i < current -> Brand.accent.copy(alpha = 0.5f)
+                        i == current -> Brand.accent
+                        else -> stepBorderColor
                     }
-                )
+                    val color by animateColorAsState(target, tween(durationMillis = 350), label = "step$i")
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(color)
+                    )
+                }
             }
         }
     }
