@@ -771,6 +771,12 @@ fun WizardHero(
             // Thin is ~0.51 dp per sp per character, SemiBold is ~0.65 dp per sp per character.
             // This prevents wrapping on narrow phones or large system font scales while keeping the
             // single-block 3-line typography.
+            //
+            // The Thin figure is measured, not guessed: "START SPEAKING." set in Ubuntu Sans Thin is
+            // 258.4dp wide at 34sp, 7.6dp per sp across its 15 characters, so 0.51 per character.
+            // It used to be one constant for that one phrase, which is why the closing line -- twice
+            // as long -- wrapped. Per character it holds for any line. Re-measure if the family
+            // changes; the SemiBold figure scales the same measurement by the weight's width.
             val scale = LocalDensity.current.fontScale
             val line1 = stringResource(
                 if (closing) R.string.setup_done_slogan_line1 else R.string.brand_wordmark
@@ -861,13 +867,6 @@ private const val HERO_LOGO_DP = 140
 private const val HERO_TYPE_SP = 34
 private const val HERO_LEADING = 1.12f
 
-/**
- * How much width, in dp, one sp of headline costs.
- *
- * Measured, not guessed: "START SPEAKING." set in Ubuntu Sans Thin is 258.4dp wide at 34sp, which
- * is 7.6 to one. Re-measure it if the slogan or the family changes.
- */
-private const val HERO_DP_PER_SP = 7.6f
 
 /**
  * The waves' colour on the hero, which is the brand's and not the keyboard theme's.
