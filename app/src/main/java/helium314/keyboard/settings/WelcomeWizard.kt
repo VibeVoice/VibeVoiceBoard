@@ -144,7 +144,7 @@ fun WelcomeWizard(
     @Composable fun bigText() {
         // Nothing above the hero or closing screens
         if (step == 0 || step == 5) return
-        Column(Modifier.padding(bottom = 20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
             Text(
                 stringResource(R.string.brand_wordmark).uppercase(),
                 fontFamily = BrandFont,
@@ -223,6 +223,7 @@ fun WelcomeWizard(
     @Composable fun StepHeader(current: Int, title: String, instruction: String) {
         StepNumbers(current)
         Column(Modifier
+            .fillMaxWidth()
             .clip(cardShape)
             .background(color = stepBackgroundColor)
             .border(1.dp, stepBorderColor, cardShape)
@@ -233,26 +234,41 @@ fun WelcomeWizard(
         }
     }
 
-    // `brand` shows the icon as drawn instead of tinting it. The mark is two-tone, white on #333333,
-    // and a tint flattens it to one colour -- which is how the account step came to show a purple
-    // silhouette where the logo should have been.
+    // `brand` shows the mark on its own dark rounded tile -- white mark on a black ground --
+    // so it reads identically on dark and light mode without tinting or flattening.
     @Composable fun ActionRow(icon: Int, text: String, active: Boolean, brand: Boolean = false, onClick: () -> Unit) {
         Row(
-            Modifier.clip(cardShape)
+            Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
                 .clickable { onClick() }
                 .background(color = stepBackgroundColor)
                 .border(1.dp, stepBorderColor, cardShape)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (brand) Image(
-                painterResource(icon), null,
-                Modifier.padding(end = 10.dp).size(28.dp)
-            ) else Icon(
-                painterResource(icon), null,
-                Modifier.padding(end = 10.dp).size(28.dp),
-                tint = if (active) Brand.accent else textColorDim
-            )
+            if (brand) {
+                Box(
+                    modifier = Modifier
+                        .padding(end = 10.dp)
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(icon),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                Icon(
+                    painterResource(icon), null,
+                    Modifier.padding(end = 10.dp).size(28.dp),
+                    tint = if (active) Brand.accent else textColorDim
+                )
+            }
             Text(text, Modifier.weight(1f))
         }
     }
@@ -266,7 +282,7 @@ fun WelcomeWizard(
                 finish()
             }
         } else {
-            Column {
+            Column(Modifier.fillMaxWidth()) {
                 val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
                     updateImeState()
                 }
@@ -280,12 +296,13 @@ fun WelcomeWizard(
                     Spacer(Modifier.height(8.dp))
                     Column(
                         Modifier
+                            .fillMaxWidth()
                             .clip(cardShape)
                             .background(color = stepBackgroundColor)
                             .border(1.dp, stepBorderColor, cardShape)
                             .padding(16.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 painterResource(if (isImeEnabled) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
                                 null,
@@ -296,11 +313,12 @@ fun WelcomeWizard(
                                 stringResource(R.string.setup_step1_tick_enable, appName),
                                 style = MaterialTheme.typography.bodyLarge.merge(
                                     color = if (isImeEnabled) textColor else textColorDim
-                                )
+                                ),
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Spacer(Modifier.height(12.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 painterResource(if (isImeCurrent) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
                                 null,
@@ -311,7 +329,8 @@ fun WelcomeWizard(
                                 stringResource(R.string.setup_step1_tick_select),
                                 style = MaterialTheme.typography.bodyLarge.merge(
                                     color = if (isImeCurrent) textColor else textColorDim
-                                )
+                                ),
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
@@ -447,6 +466,7 @@ fun WelcomeWizard(
                     Spacer(Modifier.height(8.dp))
                     Column(
                         Modifier
+                            .fillMaxWidth()
                             .clip(cardShape)
                             .background(color = stepBackgroundColor)
                             .border(1.dp, stepBorderColor, cardShape)
@@ -467,7 +487,8 @@ fun WelcomeWizard(
                         Spacer(Modifier.height(12.dp))
                         Text(
                             stringResource(R.string.setup_mic_disclosure),
-                            style = MaterialTheme.typography.bodyMedium.merge(color = textColor)
+                            style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(8.dp))
                         ActionRow(
@@ -515,9 +536,19 @@ fun WelcomeWizard(
                             step = 4
                         }
                     } else {
-                        // No card around the panel: its trigger is an ActionRow, which is already a card, so
-                        // wrapping it drew a button inside a button. "Later" below is a bare ActionRow too.
+                        val linkCardModifier = Modifier
+                            .fillMaxWidth()
+                            .clip(cardShape)
+                            .background(color = stepBackgroundColor)
+                            .border(1.dp, stepBorderColor, cardShape)
+                            .padding(16.dp)
                         VibeVoiceLinkPanel(
+                            modifier = Modifier.fillMaxWidth(),
+                            cardModifier = linkCardModifier,
+                            codeColor = Brand.accent,
+                            textColor = textColor,
+                            textDimColor = Brand.textDim(dark),
+                            progressColor = Brand.accent,
                             trigger = { enabled, loading, onClick ->
                                 ActionRow(
                                     R.drawable.ic_vibevoice_mark,
@@ -555,6 +586,7 @@ fun WelcomeWizard(
                     Spacer(Modifier.height(8.dp))
                     Row(
                         Modifier
+                            .fillMaxWidth()
                             .clip(cardShape)
                             .background(color = stepBackgroundColor)
                             .border(1.dp, stepBorderColor, cardShape)
@@ -569,7 +601,9 @@ fun WelcomeWizard(
                         Text(
                             stringResource(R.string.setup_extras_overlay_preview),
                             style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
-                            modifier = Modifier.padding(start = 12.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 12.dp)
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -715,7 +749,7 @@ fun WelcomeWizard(
                         }
                     }
                 else
-                    Column {
+                    Column(Modifier.fillMaxWidth()) {
                         bigText()
                         steps()
                     }
@@ -751,7 +785,7 @@ fun WizardHero(
             ?.let { VoiceGlow.renderMark(it, px) }
             ?.asImageBitmap()
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (logo != null)
             Image(BitmapPainter(logo), null, Modifier.size(HERO_LOGO_DP.dp))
         else

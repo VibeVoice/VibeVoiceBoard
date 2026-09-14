@@ -26,6 +26,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.core.content.edit
+import helium314.keyboard.latin.settings.DebugSettings
+import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.compat.locale
 import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.keyboard.internal.KeyboardIconsSet
@@ -65,6 +71,14 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
     private val prefs by lazy { this.prefs() }
     val prefChanged = MutableStateFlow(0) // simple counter, as the only relevant information is that something changed
     fun prefChanged() = prefChanged.value++
+    private val showWizardTrigger = MutableStateFlow(0)
+    fun openSetupWizard() {
+        prefs.edit {
+            putBoolean(Settings.PREF_VOICE_KEY_PULSE, false)
+            putBoolean(Settings.PREF_HAS_DICTATED, false)
+        }
+        showWizardTrigger.value++
+    }
     private val dictUriFlow = MutableStateFlow<Uri?>(null)
     private val cachedDictionaryFile by lazy { File(this.cacheDir.path + File.separator + "temp_dict") }
     private val crashReportFiles = MutableStateFlow<List<File>>(emptyList())
@@ -86,7 +100,13 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
         settingsContainer = SettingsContainer(this)
 
         val spellchecker = intent?.getBooleanExtra("spellchecker", false) ?: false
-        val startDestination = intent?.getStringExtra("startDestination")
+        val rawStartDestination = intent?.getStringExtra("startDestination")
+        val isDebugUnlocked = BuildConfig.DEBUG || prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)
+        val startDestination = if (rawStartDestination == SettingsDestination.Debug && !isDebugUnlocked) {
+            null // Fall back to main screen if debug screen is locked
+        } else {
+            rawStartDestination
+        }
 
         val cv = ComposeView(context = this)
         setContentView(cv)
@@ -100,6 +120,14 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                         !UncachedInputMethodManagerUtils.isThisImeCurrent(this, imm)
                                 || !UncachedInputMethodManagerUtils.isThisImeEnabled(this, imm)
                     ) }
+                    var wizardKey by rememberSaveable { mutableIntStateOf(0) }
+                    val triggerCount by showWizardTrigger.collectAsState()
+                    LaunchedEffect(triggerCount) {
+                        if (triggerCount > 0) {
+                            wizardKey = triggerCount
+                            showWelcomeWizard = true
+                        }
+                    }
                     if (spellchecker)
                         Scaffold(contentWindowInsets = WindowInsets.safeDrawing) { innerPadding ->
                             Column(Modifier.padding(innerPadding)) {
@@ -122,7 +150,9 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                     else {
                         SettingsNavHost(onClickBack = { this.finish() }, startDestination = startDestination)
                         if (showWelcomeWizard) {
-                            WelcomeWizard(close = { showWelcomeWizard = false }, finish = this::finish)
+                            key(wizardKey) {
+                                WelcomeWizard(close = { showWelcomeWizard = false }, finish = this::finish)
+                            }
                         } else if (crashReports.isNotEmpty()) {
                             ConfirmationDialog(
                                 cancelButtonText = "ignore",

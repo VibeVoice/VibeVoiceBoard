@@ -780,6 +780,7 @@ language, hence "No language". -->
     <string name="setup_done_slogan_line1" translatable="false">"You're set."</string>
     <string name="setup_done_slogan_line2" translatable="false">Typing will never</string>
     <string name="setup_done_slogan_line3" translatable="false">feel the same.</string>
+    <string name="debug_open_setup_wizard">Open setup wizard</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
     <!-- Description for the option to show setup wizard application icon of this IME in the launcher. -->

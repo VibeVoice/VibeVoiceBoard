@@ -83,17 +83,15 @@ fun createAboutSettings(context: Context) = listOf(
             name = it.title,
             description = stringResource(R.string.version_text, BuildConfig.VERSION_NAME),
             onClick = {
-                // Release builds never unlock the debug settings. Upstream's five taps on "Version"
-                // are an easter egg for a keyboard nobody can sell; on a Play build they hand a user
-                // dictionary dumps and internal switches. 7da60d40b removed the unlock for release,
-                // 552e5b505 put it back as "restore easter egg", and the intent is the first one:
-                // a debug build shows everything, a release build shows nothing extra.
-                if (!BuildConfig.DEBUG) return@Preference
+                // Debug builds show everything; release builds hide the debug screen until the
+                // version is tapped eight times. Single rule:
+                // DEBUG SCREEN VISIBLE <=> BuildConfig.DEBUG || PREF_SHOW_DEBUG_SETTINGS.
                 if (prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS))
                     return@Preference
                 count++
-                if (count < 5) return@Preference
+                if (count < 8) return@Preference
                 prefs.edit { putBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, true) }
+                SettingsActivity.settingsContainer = SettingsContainer(ctx)
                 Toast.makeText(ctx, R.string.prefs_debug_settings_enabled, Toast.LENGTH_LONG).show()
             },
             icon = R.drawable.ic_settings_about_version

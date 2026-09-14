@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Color
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
@@ -52,10 +54,21 @@ private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
  * hairline edges, and a filled `colorScheme.primary` button in the middle of that reads as
  * something pasted in from another app -- which is also the user's wallpaper accent, not ours.
  * The flow above the button is what had to stay single; its chrome never did.
+ *
+ * Similarly, in-progress and error states are styled via [cardModifier], [codeColor], [textColor],
+ * [textDimColor], [progressColor], and [errorColor]. In the settings screen these use Material defaults
+ * with no enclosing card; in the wizard, [cardModifier] cards the active/error state (while the idle
+ * trigger remains uncarded, as it is already an ActionRow card) and applies the brand palette.
  */
 @Composable
 fun VibeVoiceLinkPanel(
     modifier: Modifier = Modifier,
+    cardModifier: Modifier = Modifier,
+    codeColor: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = Color.Unspecified,
+    textDimColor: Color = Color.Unspecified,
+    progressColor: Color = MaterialTheme.colorScheme.primary,
+    errorColor: Color = MaterialTheme.colorScheme.error,
     trigger: @Composable (enabled: Boolean, loading: Boolean, onClick: () -> Unit) -> Unit = { enabled, loading, onClick ->
         Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
             if (loading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
@@ -138,21 +151,47 @@ fun VibeVoiceLinkPanel(
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (userCode != null) {
-            Text(stringResource(R.string.vibevoice_waiting_for_approval), style = MaterialTheme.typography.bodyLarge)
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(stringResource(R.string.vibevoice_enter_code_in_browser), style = MaterialTheme.typography.bodyMedium)
-            Text(userCode ?: "", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.size(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+            Column(modifier = cardModifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.vibevoice_waiting_for_approval),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = textColor
+                )
                 Spacer(modifier = Modifier.size(8.dp))
-                Text(stringResource(R.string.vibevoice_polling_for_token))
+                Text(
+                    stringResource(R.string.vibevoice_enter_code_in_browser),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textDimColor
+                )
+                Text(
+                    userCode ?: "",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = codeColor
+                )
+                Spacer(modifier = Modifier.size(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = progressColor
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(
+                        stringResource(R.string.vibevoice_polling_for_token),
+                        color = textColor
+                    )
+                }
             }
         } else {
             trigger(!isLoading, isLoading) { startLinking() }
             if (errorMessage != null) {
                 Spacer(modifier = Modifier.size(8.dp))
-                Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
+                Box(modifier = cardModifier.fillMaxWidth()) {
+                    Text(
+                        errorMessage!!,
+                        color = errorColor,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
     }
