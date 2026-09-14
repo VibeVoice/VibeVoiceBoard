@@ -149,7 +149,7 @@ class VoiceSessionService : Service() {
             this, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_vibevoice_active)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.vibevoice_session_title))
             .setOngoing(true)
             .setSilent(true)

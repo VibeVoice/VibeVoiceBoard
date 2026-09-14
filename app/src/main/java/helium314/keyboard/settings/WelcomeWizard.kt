@@ -233,7 +233,10 @@ fun WelcomeWizard(
         }
     }
 
-    @Composable fun ActionRow(icon: Int, text: String, active: Boolean, onClick: () -> Unit) {
+    // `brand` shows the icon as drawn instead of tinting it. The mark is two-tone, white on #333333,
+    // and a tint flattens it to one colour -- which is how the account step came to show a purple
+    // silhouette where the logo should have been.
+    @Composable fun ActionRow(icon: Int, text: String, active: Boolean, brand: Boolean = false, onClick: () -> Unit) {
         Row(
             Modifier.clip(cardShape)
                 .clickable { onClick() }
@@ -242,7 +245,10 @@ fun WelcomeWizard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
+            if (brand) Image(
+                painterResource(icon), null,
+                Modifier.padding(end = 10.dp).size(28.dp)
+            ) else Icon(
                 painterResource(icon), null,
                 Modifier.padding(end = 10.dp).size(28.dp),
                 tint = if (active) Brand.accent else textColorDim
@@ -509,20 +515,18 @@ fun WelcomeWizard(
                             step = 4
                         }
                     } else {
+                        // No card around the panel: its trigger is an ActionRow, which is already a card, so
+                        // wrapping it drew a button inside a button. "Later" below is a bare ActionRow too.
                         VibeVoiceLinkPanel(
-                            modifier = Modifier
-                                .clip(cardShape)
-                                .background(color = stepBackgroundColor)
-                                .border(1.dp, stepBorderColor, cardShape)
-                                .padding(16.dp),
                             trigger = { enabled, loading, onClick ->
                                 ActionRow(
-                                    R.drawable.ic_vibevoice_active,
+                                    R.drawable.ic_vibevoice_mark,
                                     stringResource(
                                         if (loading) R.string.vibevoice_polling_for_token
                                         else R.string.setup_link_action
                                     ),
-                                    enabled
+                                    enabled,
+                                    brand = true
                                 ) { if (enabled) onClick() }
                             }
                         ) { linked = true; step = 4 }
