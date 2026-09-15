@@ -188,8 +188,12 @@ private val BLUE_DARK = Color(0xFF3B82F6)
 /** `width: 140vmin` -- vmin being the shorter side of the container. */
 private const val BLOB_VMIN = 1.40f
 
-/** `opacity: 0.12; mix-blend-mode: multiply` and its dark counterpart, both measured in the CSS. */
-private const val ALPHA_LIGHT = 0.12f
+/**
+ * Dark is the CSS's `opacity: 0.165; mix-blend-mode: screen`. Light started as the CSS's 0.12 multiply
+ * and is raised: on a phone the page is seen without the site's cards and imagery around it, and at
+ * 0.12 the blobs were a tint nobody noticed rather than a background.
+ */
+private const val ALPHA_LIGHT = 0.28f
 private const val ALPHA_DARK = 0.165f
 
 private const val PURPLE_PERIOD_MS = 25_000
@@ -254,8 +258,12 @@ object Brand {
     fun card(dark: Boolean) = if (dark) Color(0x0FFFFFFF) else Color(0x0A000000)
     fun cardBorder(dark: Boolean) = if (dark) Color(0x24FFFFFF) else Color(0x1F000000)
 
-    /** primary-400, `tailwind.config.cjs`. The accent on icons and the current step. */
-    val accent = Color(0xFFA78BFA)
+    /**
+     * The accent on icons and the current step: primary-400 (`tailwind.config.cjs`) on dark, a step
+     * darker, primary-500, on light. 400 on a near-white ground came out at about 2.7:1, too faint
+     * for the progress bar and the icons that carry state.
+     */
+    fun accent(dark: Boolean) = if (dark) Color(0xFFA78BFA) else Color(0xFF8B5CF6)
 
     /** The "Start free" button: a solid pill in the ink colour, reversed out. */
     fun onAction(dark: Boolean) = ground(dark)

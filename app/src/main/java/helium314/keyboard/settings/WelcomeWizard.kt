@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -216,8 +217,8 @@ fun WelcomeWizard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 (1..total).forEach { i ->
                     val target = when {
-                        i < current -> Brand.accent.copy(alpha = 0.5f)
-                        i == current -> Brand.accent
+                        i < current -> Brand.accent(dark).copy(alpha = 0.5f)
+                        i == current -> Brand.accent(dark)
                         else -> stepBorderColor
                     }
                     val color by animateColorAsState(target, tween(durationMillis = 350), label = "step$i")
@@ -306,7 +307,7 @@ fun WelcomeWizard(
             Icon(
                 painterResource(R.drawable.ic_notification), null,
                 Modifier.size(96.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
-                tint = Brand.accent
+                tint = Brand.accent(dark)
             )
         }
     }
@@ -326,7 +327,7 @@ fun WelcomeWizard(
             Modifier
                 .fillMaxWidth()
                 .clip(cardShape)
-                .background(if (primary) Brand.accent.copy(alpha = if (dark) 0.20f else 0.14f) else stepBackgroundColor)
+                .background(if (primary) Brand.accent(dark).copy(alpha = if (dark) 0.20f else 0.14f) else stepBackgroundColor)
                 .clickable { onClick() }
                 .heightIn(min = 52.dp)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -346,7 +347,7 @@ fun WelcomeWizard(
                 Icon(
                     painterResource(icon), null,
                     Modifier.size(20.dp),
-                    tint = if (active) Brand.accent else textColorDim
+                    tint = if (active) Brand.accent(dark) else textColorDim
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -392,7 +393,7 @@ fun WelcomeWizard(
                                 painterResource(if (isImeEnabled) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
                                 null,
                                 Modifier.padding(end = 10.dp).size(24.dp),
-                                tint = if (isImeEnabled) Brand.accent else textColorDim
+                                tint = if (isImeEnabled) Brand.accent(dark) else textColorDim
                             )
                             Text(
                                 stringResource(R.string.setup_step1_tick_enable, appName),
@@ -408,7 +409,7 @@ fun WelcomeWizard(
                                 painterResource(if (isImeCurrent) R.drawable.ic_setup_check else R.drawable.ic_setup_select),
                                 null,
                                 Modifier.padding(end = 10.dp).size(24.dp),
-                                tint = if (isImeCurrent) Brand.accent else textColorDim
+                                tint = if (isImeCurrent) Brand.accent(dark) else textColorDim
                             )
                             Text(
                                 stringResource(R.string.setup_step1_tick_select),
@@ -576,9 +577,9 @@ fun WelcomeWizard(
                         textStyle = MaterialTheme.typography.bodyLarge.merge(color = textColor),
                         // Brand colours, not the Material defaults, which resolve to the wallpaper accent.
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Brand.accent,
+                            focusedBorderColor = Brand.accent(dark),
                             unfocusedBorderColor = stepBorderColor,
-                            cursorColor = Brand.accent,
+                            cursorColor = Brand.accent(dark),
                             focusedContainerColor = stepBackgroundColor,
                             unfocusedContainerColor = stepBackgroundColor
                         )
@@ -650,10 +651,10 @@ fun WelcomeWizard(
                         VibeVoiceLinkPanel(
                             modifier = Modifier.fillMaxWidth(),
                             cardModifier = linkCardModifier,
-                            codeColor = Brand.accent,
+                            codeColor = Brand.accent(dark),
                             textColor = textColor,
                             textDimColor = Brand.textDim(dark),
-                            progressColor = Brand.accent,
+                            progressColor = Brand.accent(dark),
                             trigger = { enabled, loading, onClick ->
                                 ActionRow(
                                     R.drawable.ic_vibevoice_mark,
@@ -697,11 +698,15 @@ fun WelcomeWizard(
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Image(
-                            painterResource(R.drawable.floating_mark_preview),
-                            null,
-                            Modifier.size(72.dp)
-                        )
+                        // On a black disc, as it was captured. The ring is light, lifted off black with
+                        // its transparency intact, so on a pale card it faded to a ghost -- correct
+                        // arithmetic, wrong picture. The disc shows it the way a dark screen does.
+                        Box(
+                            Modifier.size(76.dp).clip(CircleShape).background(Color.Black),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(painterResource(R.drawable.floating_mark_preview), null, Modifier.size(72.dp))
+                        }
                         Text(
                             stringResource(R.string.setup_extras_overlay_preview),
                             style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
@@ -786,7 +791,7 @@ fun WelcomeWizard(
                                             }
                                         }
                                         .padding(8.dp),
-                                    color = Brand.accent,
+                                    color = Brand.accent(dark),
                                     fontWeight = FontWeight.SemiBold
                                 )
                             },
@@ -889,12 +894,16 @@ fun WizardHero(
     onClick: () -> Unit
 ) {
     val ctx = LocalContext.current
+    // On a light ground the mark is the brand's black version: black where the everyday mark is
+    // white, light where it is dark. The white one all but disappeared into the page.
+    val logoRes = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) R.drawable.ic_launcher_foreground
+        else R.drawable.ic_launcher_foreground_dark
     // Drawn through renderMark for the reason it exists: a vector's bounds are not its ink. The
     // launcher foreground carries the adaptive-icon safe area, so laying it out at 160dp puts a
     // mark of about a hundred on screen, off centre by whatever the artwork is off centre by.
-    val logo = remember {
+    val logo = remember(logoRes) {
         val px = (ctx.resources.displayMetrics.density * HERO_LOGO_DP).toInt()
-        ContextCompat.getDrawable(ctx, R.drawable.ic_launcher_foreground)
+        ContextCompat.getDrawable(ctx, logoRes)
             ?.let { VoiceGlow.renderMark(it, px) }
             ?.asImageBitmap()
     }
@@ -902,7 +911,7 @@ fun WizardHero(
         if (logo != null)
             Image(BitmapPainter(logo), null, Modifier.size(HERO_LOGO_DP.dp))
         else
-            Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(HERO_LOGO_DP.dp))
+            Image(painterResource(logoRes), null, Modifier.size(HERO_LOGO_DP.dp))
         Spacer(Modifier.height(24.dp))
         // One Text, not three.
         //
