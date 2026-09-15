@@ -11,6 +11,5 @@
 <resources>
     <string name="english_ime_name" translatable="false">VibeVoice Keyboard (debug)</string>
     <string name="spell_checker_service_name" translatable="false">VibeVoice Keyboard Spell Checker (debug)</string>
-    <string name="ime_settings" translatable="false">VibeVoice Keyboard Settings (debug)</string>
 
 </resources>
