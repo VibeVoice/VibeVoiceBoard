@@ -84,6 +84,13 @@ class VoiceSessionService : Service() {
         // for an instance that already exists as well as for a fresh one.
         claimPending(this)
         startForegroundNotification()
+        if (client == null) {
+            // The session ended between attach() and this call, so detach() found nothing to stop yet.
+            // startForeground above is still owed -- startForegroundService without it is a crash --
+            // but staying would leave a notification for a session that no longer exists.
+            VibeVoiceDebugLogger.log("Service started after its session ended; stopping")
+            stopSelf()
+        }
         // START_NOT_STICKY: a session that died with the process should stay dead. Restarting the
         // service without the client it was holding would show a notification for a session that
         // does not exist.

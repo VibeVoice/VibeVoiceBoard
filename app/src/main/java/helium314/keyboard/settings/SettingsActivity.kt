@@ -102,10 +102,11 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
         val spellchecker = intent?.getBooleanExtra("spellchecker", false) ?: false
         val rawStartDestination = intent?.getStringExtra("startDestination")
         val isDebugUnlocked = BuildConfig.DEBUG || prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)
-        val startDestination = if (rawStartDestination == SettingsDestination.Debug && !isDebugUnlocked) {
-            null // Fall back to main screen if debug screen is locked
-        } else {
-            rawStartDestination
+        val startDestination = when {
+            rawStartDestination == SettingsDestination.Debug && !isDebugUnlocked -> null // locked: main screen
+            // The activity is exported, and NavHost throws on a route it does not know.
+            rawStartDestination != null && !SettingsDestination.isKnown(rawStartDestination) -> null
+            else -> rawStartDestination
         }
 
         val cv = ComposeView(context = this)

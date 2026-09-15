@@ -183,6 +183,12 @@ object SettingsDestination {
     const val Layouts = "layouts"
     const val Dictionaries = "dictionaries"
     const val VibeVoice = "vibevoice"
+
+    private val plainRoutes = setOf(Settings, About, TextCorrection, Preferences, Toolbar, GestureTyping, DataGathering,
+        DataReview, Advanced, Debug, Appearance, PersonalDictionaries, Languages, Layouts, Dictionaries, VibeVoice)
+    private val routePrefixes = listOf(Colors, ColorsNight, PersonalDictionary, Subtype)
+    fun isKnown(route: String) = route in plainRoutes || routePrefixes.any { route.startsWith(it) && route.length > it.length }
+
     val navTarget = MutableStateFlow(Settings)
 
     private val navScope = CoroutineScope(Dispatchers.Default)

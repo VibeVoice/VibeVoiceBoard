@@ -1046,8 +1046,11 @@ public class LatinIME extends InputMethodService implements
             // never receive them by accident -- a password field, or an editor asking for no
             // personalized learning, which is what a private browsing tab does.
             final EditorInfo newField = getCurrentInputEditorInfo();
+            // mNoLearning, not mIncognitoModeEnabled: the latter also carries the user's own
+            // "always incognito" switch, which is about learning words and would switch dictation
+            // off everywhere.
             if (newField != null && (InputTypeUtils.isAnyPasswordInputType(newField.inputType)
-                    || currentSettingsValues.mIncognitoModeEnabled)) {
+                    || currentSettingsValues.mInputAttributes.mNoLearning)) {
                 abortVoiceSession("focus moved to a password or incognito field");
             }
             mainKeyboardView.closing();
@@ -1121,7 +1124,7 @@ public class LatinIME extends InputMethodService implements
         // dropped: the input connection is still usable for the moment it takes the pending final
         // to arrive, so the words spoken before the keyboard went away still get committed.
         if (mIsRecordingVoice && !mIsStoppingVoice && mVibeVoiceClient != null) {
-            if (mSettings.getCurrent().mVoiceBackgroundEnabled) {
+            if (isBackgroundDictationUsable()) {
                 // The keyboard is gone but the session is not, and nothing on screen would say so.
                 // The mark takes its place: same statement, a fraction of the room. It is ended by
                 // dragging it onto the X rather than by tapping it -- getting it out of the way and
@@ -1741,7 +1744,7 @@ public class LatinIME extends InputMethodService implements
             // spoken should reach a password field or a private tab, so a session does not start there.
             final EditorInfo field = getCurrentInputEditorInfo();
             if ((field != null && InputTypeUtils.isAnyPasswordInputType(field.inputType))
-                    || mSettings.getCurrent().mIncognitoModeEnabled) {
+                    || mSettings.getCurrent().mInputAttributes.mNoLearning) {
                 android.widget.Toast
                         .makeText(this, R.string.vibevoice_blocked_private_field, android.widget.Toast.LENGTH_SHORT).show();
                 return;
@@ -1928,7 +1931,7 @@ public class LatinIME extends InputMethodService implements
             // is to already be running by the time the keyboard is dismissed. The stop callback
             // comes back through handleVoiceInput so the notification's button and the space key
             // end a session by exactly the same path.
-            if (mSettings.getCurrent().mVoiceBackgroundEnabled) {
+            if (isBackgroundDictationUsable()) {
                 VoiceSessionService.attach(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
                     if (sessionId == mVoiceSessionId) handleVoiceInput();
                 }));
@@ -1949,6 +1952,19 @@ public class LatinIME extends InputMethodService implements
         }
     }
 
+    /**
+     * Background dictation as the setting says, but only while a notification can show it. Without
+     * POST_NOTIFICATIONS on Android 13+ the session would run on with the keyboard gone and nothing in
+     * the shade saying so or offering a stop button -- permission can be revoked after the switch was
+     * turned on, so this is checked per session rather than trusted from the settings screen.
+     */
+    private boolean isBackgroundDictationUsable() {
+        if (!mSettings.getCurrent().mVoiceBackgroundEnabled) return false;
+        return android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU
+                || androidx.core.content.ContextCompat.checkSelfPermission(this,
+                        android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
     private void commitVoiceSegment(String segment) {
         mInputLogic.mConnection.commitText(segment + " ", 1);
         mVoiceSessionText.append(segment).append(' ');
@@ -1965,6 +1981,10 @@ public class LatinIME extends InputMethodService implements
         if (commitText.trim().isEmpty()) {
             VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession: skipping empty commit");
             mInputLogic.mConnection.commitText("", 1); // clear any composing text, insert nothing
+            // The final is empty by protocol whenever every segment was already committed on the way;
+            // the session still said something, and the clipboard entry is where it can be found again.
+            if (mVoiceSessionText.length() > 0)
+                mClipboardHistoryManager.addTextToHistory(mVoiceSessionText.toString().trim());
         } else {
             EditorInfo editorInfo = getCurrentInputEditorInfo();
             boolean isMultiline = editorInfo != null &&
@@ -1978,6 +1998,7 @@ public class LatinIME extends InputMethodService implements
                     .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
         }
         mVoiceComposingText = "";
+        mVoiceSessionText.setLength(0);
         mVibeVoiceClient.stopStreaming();
         mVibeVoiceClient = null;
         mIsStoppingVoice = false;

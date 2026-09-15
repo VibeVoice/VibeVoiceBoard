@@ -160,7 +160,15 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     }
     val askForNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> notificationsGranted = granted }
+    ) { granted ->
+        notificationsGranted = granted
+        // Denied means background dictation cannot show itself, so it does not stay switched on
+        // looking as if it worked; the keyboard also refuses it per session (LatinIME).
+        if (!granted) {
+            backgroundDictation = false
+            appPrefs.edit().putBoolean(Settings.PREF_VOICE_BACKGROUND, false).apply()
+        }
+    }
     var isBugReportSuccess by remember { mutableStateOf(false) }
 
     var quotaInfo by remember { mutableStateOf<org.json.JSONObject?>(null) }
