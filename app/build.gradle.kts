@@ -115,7 +115,7 @@ android {
             }
             variant.outputs.forEach { output ->
                 if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
-                    output.outputFileName = "VibeVoiceKeyboard_$versionString-${variant.buildType}.apk"
+                    output.outputFileName = "VibeVoiceKeyboard_$versionString-$computedVersionCode-${variant.buildType}.apk"
                 }
             }
         }
