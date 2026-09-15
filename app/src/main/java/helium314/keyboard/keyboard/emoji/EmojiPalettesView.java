@@ -208,7 +208,7 @@ public final class EmojiPalettesView extends LinearLayout
     public EmojiPalettesView(final Context context, final AttributeSet attrs, final int defStyle) {
         super(context, attrs, defStyle);
         mColors = Settings.getValues().mColors;
-        final KeyboardLayoutSet.Builder builder = new KeyboardLayoutSet.Builder(context, null);
+        final KeyboardLayoutSet.Builder builder = new KeyboardLayoutSet.Builder(context, null, null);
         final Resources res = context.getResources();
         mEmojiLayoutParams = new EmojiLayoutParams(res);
         builder.setSubtype(RichInputMethodSubtype.Companion.getEmojiSubtype());

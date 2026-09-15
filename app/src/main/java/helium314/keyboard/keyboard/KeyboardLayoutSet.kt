@@ -19,6 +19,7 @@ import helium314.keyboard.latin.RichInputMethodSubtype
 import helium314.keyboard.latin.RichInputMethodSubtype.Companion.emojiSubtype
 import helium314.keyboard.latin.RichInputMethodSubtype.Companion.noLanguageSubtype
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.settings.SettingsValues
 import helium314.keyboard.latin.utils.DictionaryInfoUtils.getLocalesWithEmojiDicts
 import helium314.keyboard.latin.utils.InputTypeUtils
 import helium314.keyboard.latin.utils.Log
@@ -113,14 +114,9 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
         lateinit var subtype: RichInputMethodSubtype
         val isSubtypeInitialized: Boolean
             get() = ::subtype.isInitialized
-        var voiceInputKeyEnabled = false
+        var settingsValues: SettingsValues? = null
         // When the device is still locked, features like showing the IME setting app need to be locked down.
         var deviceLocked = Settings.getValues().mIsLocked
-        var numberRowEnabled = false
-        var numberRowInSymbols = false
-        var languageSwitchKeyEnabled = false
-        var emojiKeyEnabled = false
-        var oneHandedModeEnabled = false
         var isSpellChecker = false
         var keyboardWidth = 0
         var keyboardHeight = 0
@@ -132,7 +128,7 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
         var isSplitLayoutEnabled = false
     }
 
-    class Builder(private val mContext: Context, ei: EditorInfo?) {
+    class Builder(private val mContext: Context, ei: EditorInfo?, settingsValues: SettingsValues?) {
         private val params = Params()
 
         init {
@@ -140,6 +136,7 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
             params.mode = getKeyboardMode(editorInfo)
             // TODO: Consolidate those with {@link InputAttributes}.
             params.editorInfo = editorInfo
+            params.settingsValues = settingsValues
         }
 
         fun setKeyboardGeometry(keyboardWidth: Int, keyboardHeight: Int): Builder {
@@ -161,43 +158,8 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
             return this
         }
 
-        fun setVoiceInputKeyEnabled(enabled: Boolean): Builder {
-            params.voiceInputKeyEnabled = enabled
-            return this
-        }
-
-        fun setNumberRowEnabled(enabled: Boolean): Builder {
-            params.numberRowEnabled = enabled
-            return this
-        }
-
-        fun setNumberRowInSymbolsEnabled(enabled: Boolean): Builder {
-            params.numberRowInSymbols = enabled
-            return this
-        }
-
-        fun setLanguageSwitchKeyEnabled(enabled: Boolean): Builder {
-            params.languageSwitchKeyEnabled = enabled
-            return this
-        }
-
-        fun setEmojiKeyEnabled(enabled: Boolean): Builder {
-            params.emojiKeyEnabled = enabled
-            return this
-        }
-
         fun disableTouchPositionCorrectionData(): Builder {
             params.disableTouchPositionCorrectionDataForTest = true
-            return this
-        }
-
-        fun setSplitLayoutEnabled(enabled: Boolean): Builder {
-            params.isSplitLayoutEnabled = enabled
-            return this
-        }
-
-        fun setOneHandedModeEnabled(enabled: Boolean): Builder {
-            params.oneHandedModeEnabled = enabled
             return this
         }
 
@@ -218,7 +180,7 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
             private val EMPTY_EDITOR_INFO = EditorInfo()
 
             fun buildEmojiClipBottomRow(context: Context, ei: EditorInfo?): KeyboardLayoutSet {
-                val builder = Builder(context, ei)
+                val builder = Builder(context, ei, null)
                 builder.params.mode = KeyboardMode.TEXT
                 builder.params.emojiSearchAvailable = getLocalesWithEmojiDicts(context).isNotEmpty()
                 val width = ResourceUtils.getKeyboardWidth(context, Settings.getValues())

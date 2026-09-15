@@ -160,22 +160,13 @@ public final class KeyboardSwitcher {
         return false;
     }
 
-    public void loadKeyboard(final EditorInfo editorInfo, final SettingsValues settingsValues,
-            final int currentAutoCapsState, @Nullable final RecapitalizeMode currentRecapitalizeState,
-            KeyboardLayoutSet.InternalAction internalAction) {
-        final KeyboardLayoutSet.Builder builder = new KeyboardLayoutSet.Builder(
-                mThemeContext, editorInfo);
-        final int keyboardWidth = ResourceUtils.getKeyboardWidth(mThemeContext, settingsValues);
-        final int keyboardHeight = ResourceUtils.getKeyboardHeight(mThemeContext.getResources(), settingsValues);
+    public void loadKeyboard(EditorInfo editorInfo, SettingsValues settingsValues, int currentAutoCapsState,
+                             @Nullable RecapitalizeMode currentRecapitalizeState, KeyboardLayoutSet.InternalAction internalAction) {
+        KeyboardLayoutSet.Builder builder = new KeyboardLayoutSet.Builder(mThemeContext, editorInfo, settingsValues);
+        int keyboardWidth = ResourceUtils.getKeyboardWidth(mThemeContext, settingsValues);
+        int keyboardHeight = ResourceUtils.getKeyboardHeight(mThemeContext.getResources(), settingsValues);
         mKeyboardLayoutSet = builder.setKeyboardGeometry(keyboardWidth, keyboardHeight)
                 .setSubtype(mRichImm.getCurrentSubtype())
-                .setVoiceInputKeyEnabled(settingsValues.mShowsVoiceInputKey)
-                .setNumberRowEnabled(settingsValues.mShowsNumberRow)
-                .setNumberRowInSymbolsEnabled(settingsValues.mShowsNumberRowInSymbols)
-                .setLanguageSwitchKeyEnabled(settingsValues.isLanguageSwitchKeyEnabled())
-                .setEmojiKeyEnabled(settingsValues.mShowsEmojiKey)
-                .setSplitLayoutEnabled(settingsValues.mIsSplitKeyboardEnabled)
-                .setOneHandedModeEnabled(settingsValues.mOneHandedModeEnabled)
                 .setInternalAction(internalAction)
                 .build();
         try {
@@ -183,14 +174,9 @@ public final class KeyboardSwitcher {
         } catch (KeyboardLayoutSet.Companion.KeyboardLayoutSetException e) {
             Log.e(TAG, "loading keyboard failed: " + e.getKeyboardId(), e.getCause());
             try {
-                final InputMethodSubtype defaults = SubtypeUtilsAdditional.INSTANCE
-                        .createDefaultSubtype(mRichImm.getCurrentSubtypeLocale());
+                InputMethodSubtype defaults = SubtypeUtilsAdditional.INSTANCE.createDefaultSubtype(mRichImm.getCurrentSubtypeLocale());
                 mKeyboardLayoutSet = builder.setKeyboardGeometry(keyboardWidth, keyboardHeight)
                         .setSubtype(RichInputMethodSubtype.Companion.get(defaults))
-                        .setNumberRowEnabled(settingsValues.mShowsNumberRow)
-                        .setNumberRowInSymbolsEnabled(settingsValues.mShowsNumberRowInSymbols)
-                        .setLanguageSwitchKeyEnabled(settingsValues.isLanguageSwitchKeyEnabled())
-                        .setEmojiKeyEnabled(settingsValues.mShowsEmojiKey)
                         .build();
                 mState.onLoadKeyboard(currentAutoCapsState, currentRecapitalizeState, false);
                 showToast("error loading the keyboard, falling back to defaults", false);

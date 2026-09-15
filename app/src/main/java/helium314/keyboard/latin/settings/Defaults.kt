@@ -80,6 +80,7 @@ object Defaults {
     // On by default: upstream hides it because its own audience toggles what it wants, but a keyboard
     // whose emoji view is reachable only through a long press on comma reads as not having one.
     const val PREF_SHOW_EMOJI_KEY = true
+    const val PREF_SHOW_DPAD_KEY = true
     const val PREF_VARIABLE_TOOLBAR_DIRECTION = true
     const val PREF_ADDITIONAL_SUBTYPES = "de${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwerty${Separators.SETS}" +
             "fr${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwertz${Separators.SETS}" +

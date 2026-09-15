@@ -292,7 +292,7 @@ class EmojiSearchActivity : ComponentActivity() {
         Log.d(TAG, "screenHeight: $screenHeight")
         hintLocales = LocaleList(DictionaryInfoUtils.getLocalesWithEmojiDicts(this).map { Locale(it.toLanguageTag()) })
         val keyboardWidth = ResourceUtils.getKeyboardWidth(this, Settings.getValues())
-        val layoutSet = KeyboardLayoutSet.Builder(this, null).setSubtype(RichInputMethodSubtype.emojiSubtype)
+        val layoutSet = KeyboardLayoutSet.Builder(this, null, null).setSubtype(RichInputMethodSubtype.emojiSubtype)
             .setKeyboardGeometry(keyboardWidth, EmojiLayoutParams(resources).emojiKeyboardHeight).build()
         val keyboard = DynamicGridKeyboard.ofRowCount(prefs(), layoutSet.getKeyboard(KeyboardElement.EMOJI_RECENTS),
             if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 1 else 2,

@@ -33,6 +33,7 @@ import helium314.keyboard.latin.common.LocaleUtils
 import helium314.keyboard.latin.common.LocaleUtils.localizedDisplayName
 import helium314.keyboard.latin.common.splitOnWhitespace
 import helium314.keyboard.latin.utils.DictionaryInfoUtils
+import helium314.keyboard.latin.utils.IntentUtils
 import helium314.keyboard.latin.utils.SubtypeLocaleUtils
 import helium314.keyboard.latin.utils.SubtypeSettings
 import helium314.keyboard.latin.utils.getDictionaryLocales
@@ -112,9 +113,8 @@ fun DictionaryScreen(
         ConfirmationDialog(
             onDismissRequest = { showAddDictDialog = false },
             onConfirmed = {
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                    .addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType("application/octet-stream")
+                val intent = IntentUtils.getResolvableTypeIntent(ctx, "application/octet-stream")
+                    .setAction(Intent.ACTION_OPEN_DOCUMENT)
                 dictPicker.launch(intent)
             },
             title = { Text(stringResource(R.string.add_new_dictionary_title)) },
