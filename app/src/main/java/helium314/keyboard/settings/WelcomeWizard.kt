@@ -285,14 +285,16 @@ fun WelcomeWizard(
     //
     // The mark that answers a finished link. It pops in with a spring and, when the link happened just
     // now, plays a short chime -- unless the phone is on silent or vibrate, where a sound would be rude.
-    @Composable fun LinkedMark(celebrate: Boolean) {
+    @Composable fun LinkedMark(celebrate: Boolean, onCelebrated: () -> Unit) {
         val scale = remember { Animatable(if (celebrate) 0.4f else 1f) }
         LaunchedEffect(Unit) {
             if (!celebrate) return@LaunchedEffect
+            onCelebrated()
             val audio = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             if (audio?.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
                 MediaPlayer.create(ctx, R.raw.linked_chime)?.apply {
                     setOnCompletionListener { it.release() }
+                    setOnErrorListener { mp, _, _ -> mp.release(); true }
                     start()
                 }
             }
@@ -606,6 +608,8 @@ fun WelcomeWizard(
                     var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.isLinked(ctx)) }
                     // Only a link made on this screen earns the chime; arriving already linked does not.
                     val linkedOnArrival = rememberSaveable { linked }
+                    // Saved so turning the phone after the chime does not ring it a second time.
+                    var celebrated by rememberSaveable { mutableStateOf(false) }
                     OnResume { linked = VibeVoiceClient.isLinked(ctx) }
                     StepHeader(
                         3,
@@ -614,7 +618,7 @@ fun WelcomeWizard(
                     )
                     Spacer(Modifier.height(8.dp))
                     if (linked) {
-                        LinkedMark(celebrate = !linkedOnArrival)
+                        LinkedMark(celebrate = !linkedOnArrival && !celebrated) { celebrated = true }
                         ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_link_done), true, primary = false) { }
                         Spacer(Modifier.height(8.dp))
                         ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
@@ -813,11 +817,15 @@ fun WelcomeWizard(
             // fillMaxSize before verticalScroll is deliberate: the column takes the viewport's
             // height, so Arrangement.Center still centres content that fits, and only content that
             // does not fit scrolls. Step 6 was already close to overflowing on a short screen.
+            // A step starts at its top: the practice field in step 2 scrolls the column down with
+            // the keyboard open, and without the reset step 3 opened with its header scrolled away.
+            val scrollState = rememberScrollState()
+            LaunchedEffect(step) { scrollState.scrollTo(0) }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     // Steps 1-4 start at the same height every time. Centred, each step sat wherever
                     // its own height put it, so the wordmark and the step numbers jumped up and down
                     // between steps. Anchored to the top, only the content below them changes. The
