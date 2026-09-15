@@ -127,6 +127,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
         val width = resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width)
         toolbarKeys.forEach { it.layoutParams = LayoutParams(width, LayoutParams.MATCH_PARENT) }
         KeyboardSwitcher.getInstance().clipboardStrip.let { strip ->
+            // Refit whenever the scroller's width changes, not once: right after inflation the width
+            // is still 0 and a single pass did nothing.
+            (strip.parent as? View)?.addOnLayoutChangeListener { v, left, _, right, _, oldLeft, _, oldRight, _ ->
+                if (right - left != oldRight - oldLeft) v.post { fitToolbarKeys(strip) }
+            }
             strip.post { fitToolbarKeys(strip) }
         }
     }
@@ -159,6 +164,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
                 key.layoutParams = params
             }
         }
+        // The layout keeps the scrollbar permanently visible so an overflowing strip says so; a strip
+        // that fits has nothing to say and showed an empty track.
+        scroller.isHorizontalScrollBarEnabled = toolbarKeys.size * target > forKeys
     }
 
     private fun setupBottomRowKeyboard(editorInfo: EditorInfo, listener: KeyboardActionListener) {

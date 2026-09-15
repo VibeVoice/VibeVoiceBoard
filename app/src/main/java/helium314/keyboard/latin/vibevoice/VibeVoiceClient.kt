@@ -476,7 +476,7 @@ class VibeVoiceClient(
                     // After a stop the user asked for, a dropped connection is how the session
                     // ended, not an error: the final has arrived or never will. Reporting it as one
                     // put "Dictation error" over a transcript that was committed cleanly.
-                    if (stopRequested) listener.onClosed()
+                    if (stopRequested) notifyClosed()
                     else listener.onError(t.message ?: "WebSocket Error")
                 }
             }
@@ -499,7 +499,7 @@ class VibeVoiceClient(
                     if (this@VibeVoiceClient.webSocket == webSocket) {
                         this@VibeVoiceClient.webSocket = null
                     }
-                    listener.onClosed()
+                    notifyClosed()
                 }
             }
         }
@@ -830,6 +830,10 @@ class VibeVoiceClient(
             VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
             delay(3000)
             VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
+            // A close first, which still lets a final that is on its way arrive; cancelled only if
+            // the socket does not finish closing in two more seconds.
+            ws?.close(1000, "Done (timeout)")
+            delay(2000)
             ws?.cancel()
             if (this@VibeVoiceClient.webSocket == ws) {
                 this@VibeVoiceClient.webSocket = null
@@ -839,8 +843,15 @@ class VibeVoiceClient(
             // left to deliver a final or a close -- and then nothing else ends the session: the
             // keyboard would sit in "finishing" for good. Ending it here is idempotent on the
             // listener's side, which ignores callbacks for a session it has already finished.
-            listener.onClosed()
+            notifyClosed()
         }
+    }
+
+    private val closedNotified = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** The listener hears that a session ended once, whichever of the socket, the backstop or a stop reports it. */
+    private fun notifyClosed() {
+        if (closedNotified.compareAndSet(false, true)) listener.onClosed()
     }
 
     fun cancel() {

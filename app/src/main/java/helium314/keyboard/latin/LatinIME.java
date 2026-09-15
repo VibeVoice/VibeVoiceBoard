@@ -814,6 +814,13 @@ public class LatinIME extends InputMethodService implements
         mInsetsUpdater = ViewOutlineProviderUtilsKt.setInsetsOutlineProvider(view);
         KtxKt.updateSoftInputWindowLayoutParameters(this, mInputView);
         updateSuggestionStripView(view);
+        // A rotation or theme change re-inflates the input view while the window stays shown, so
+        // onWindowShown does not come: the fresh waves and mic key would sit idle through a session
+        // that is still recording.
+        mUiHandler.post(() -> {
+            if (mSuggestionStripView != null) mSuggestionStripView.updateVoiceKey();
+            syncVoiceWaves();
+        });
     }
 
     public void updateSuggestionStripView(View view) {
@@ -1588,8 +1595,11 @@ public class LatinIME extends InputMethodService implements
             return;
         }
         // Typing during a session: the piece on display goes in first, so the key lands after it
-        // instead of being overwritten by the next partial's setComposingText.
-        if (mIsRecordingVoice && KeyCode.VOICE_INPUT != event.getKeyCode()) commitPendingVoiceText();
+        // instead of being overwritten by the next partial's setComposingText. Only keys that change
+        // the text -- a character, or delete. Shift, ?123, language switch and the like used to
+        // commit it too, with a trailing space, before anything had been typed.
+        if (mIsRecordingVoice && (event.getCodePoint() > 0 || event.getKeyCode() == KeyCode.DELETE))
+            commitPendingVoiceText();
         if (KeyCode.VOICE_INPUT == event.getKeyCode()) {
             handleVoiceInput();
             return;

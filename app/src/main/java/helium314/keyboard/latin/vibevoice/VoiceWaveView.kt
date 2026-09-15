@@ -192,10 +192,9 @@ class VoiceWaveView @JvmOverloads constructor(
         // Not laid out yet. This happens when a session is resumed on a freshly inflated input view
         // -- the window is shown before the wrapper has given us our bounds. Keep the loop alive
         // instead of returning into silence, or the animation never starts for that session.
-        if (width <= 0f || height <= 0f) {
-            if (animationsEnabled) postInvalidateDelayed(FRAME_INTERVAL_MS)
-            return
-        }
+        // onSizeChanged invalidates once the bounds arrive, so there is no need to poll for them --
+        // polling kept a 33 ms loop alive for as long as the view stayed 0x0.
+        if (width <= 0f || height <= 0f) return
 
         val raw = if (demo) demoLevel() else client?.get()?.currentLevel ?: 0f
         // Asymmetric, the way a level meter behaves: jump at the onset of a syllable, fall back

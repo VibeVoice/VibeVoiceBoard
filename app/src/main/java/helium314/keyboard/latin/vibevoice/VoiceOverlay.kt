@@ -17,6 +17,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.ColorType
@@ -114,9 +115,21 @@ class VoiceOverlay(context: Context) : View(context) {
     /** Set by [show]; running it ends the session. Reached by dropping on the target, never by a tap. */
     private var onDismiss: Runnable? = null
 
+    // Read per session: "Remove animations" in the accessibility settings holds the mark still.
+    private var animationsEnabled = true
+
     private fun start(client: VibeVoiceClient, onDismiss: Runnable) {
         this.levelSource = WeakReference(client)
         this.onDismiss = onDismiss
+        animationsEnabled = try {
+            AndroidSettings.Global.getFloat(context.contentResolver, AndroidSettings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
+        } catch (_: Exception) {
+            true
+        }
+        // The drag onto the X is not something a screen reader user can do. TalkBack's double tap is a
+        // click action, which ends the session; an ordinary finger tap still does not, see onDismiss.
+        contentDescription = context.getString(R.string.vibevoice_overlay_description)
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         readThemeColors()
         bars.fill(0f)
         running = true
@@ -239,7 +252,20 @@ class VoiceOverlay(context: Context) : View(context) {
             d.draw(canvas)
         }
 
-        postInvalidateDelayed(FRAME_INTERVAL_MS)
+        if (animationsEnabled) postInvalidateDelayed(FRAME_INTERVAL_MS)
+    }
+
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
+    }
+
+    override fun performAccessibilityAction(action: Int, arguments: android.os.Bundle?): Boolean {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK && running) {
+            dismiss()
+            return true
+        }
+        return super.performAccessibilityAction(action, arguments)
     }
 
     private var downX = 0f

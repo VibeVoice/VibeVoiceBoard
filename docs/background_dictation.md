@@ -1,6 +1,6 @@
 # Diktieren, das die Tastatur überlebt
 
-Stand: 2026-09-03. Vorschlag, nichts davon ist gebaut.
+Stand: 2026-09-03, damals ein Vorschlag. Inzwischen gebaut: `VoiceSessionService`, `VoiceOverlay` (das schwebende Zeichen) und `DismissTarget`; der Text unten ist die Begründung, nicht der aktuelle Code.
 
 ## Was heute passiert, wenn sich die Tastatur schließt
 

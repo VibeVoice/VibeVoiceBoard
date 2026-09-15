@@ -18,7 +18,7 @@ mit sichtbaren Fingertipps und kommt separat.
 | Store-Texte en-US + de-DE | geschrieben, aus den Zahlen der Landingpage |
 | 25 veraltete HeliBoard-Locales | entfernt |
 | App-Name | `VibeVoice Keyboard`, überall gleich |
-| APK-Dateiname | `VibeVoiceKeyboard_<version>-<type>.apk` |
+| APK-Dateiname | `VibeVoiceKeyboard_<version>-<versionCode>-<type>.apk` |
 | Signing-Konfiguration | vorhanden, liest `keystore.properties` (gitignored) |
 | Schwebende Marke, freigestellt | `marketing/assets/floating_mark.png` |
 | Rohaufnahmen | WhatsApp, Gmail_2, Google+Marke, Homescreen+Marke |

@@ -644,6 +644,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         val button = view as? ImageButton ?: return
         button.isVisible = show
         button.isActivated = isActivated
+        button.contentDescription = resources.getString(if (isActivated) R.string.vibevoice_stop_dictation else R.string.voice)
         if (isActivated) {
             // The full VibeVoice logo while recording -- the two-tone one with the dark backing
             // shape, the same artwork the floating mark uses. Not tinted: TOOL_BAR_KEY would

@@ -120,6 +120,14 @@ Layouts live in `app/src/main/assets/layouts` and are parsed by `KeyboardParser`
   `vibevoice_prefs` when the crypto provider is unavailable.
 - **`VibeVoiceDebugLogger.java`** — the on-device log described above; initialized from
   `LatinIME.onCreate`.
+- **`VoiceSessionService.kt`** — microphone-typed foreground service that keeps a session alive
+  after the keyboard is dismissed ("background dictation"), with a notification and a stop action.
+- **`VoiceOverlay.kt`** / **`DismissTarget.kt`** — the floating mark shown while a background session
+  runs, ended by dragging it onto the X; needs "draw over other apps".
+- **`VoiceWaveView.kt`** / **`VoiceGlow.kt`** — the waves behind the keyboard and the glow around the
+  recording mark.
+- **`settings/WelcomeWizard.kt`** + **`VibeVoiceLinkPanel.kt`** — the six-step setup (enable, select,
+  practice with trial minutes, link account, floating mark, done); `docs/onboarding_concept.md`.
 - **`VibeVoiceBugReporter.kt`**, **`PermissionActivity.kt`** — bug-report upload and the
   RECORD_AUDIO permission prompt (an IME cannot request runtime permissions itself).
 
@@ -154,5 +162,6 @@ that coupling has been a repeated source of bugs.
   `chore(version):`.
 - `.env`, `android-sdk/`, `*.log`, `crash_reports/` are gitignored; `tools/*.sh` is gitignored except
   `build-and-deploy.sh` and `tools/hooks/*.sh`.
-- New user-facing strings go in `app/src/main/res/values/strings.xml` only — all other locale
-  directories are managed by Weblate upstream and must not be hand-edited.
+- New user-facing strings go in `app/src/main/res/values/strings.xml` only. The upstream locale
+  files are managed by Weblate and must not be hand-edited; the fork's own translations live in
+  `values-<locale>/strings_vibevoice.xml` (German today), and the product is English first.

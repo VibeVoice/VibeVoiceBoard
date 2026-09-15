@@ -21,7 +21,7 @@ Verified against the app source, not assumed.
 |---|---|
 | **Voice or sound recordings** — collected, not shared, required, app functionality | `VibeVoiceClient` streams 16 kHz PCM to `wss://vibevoice.net/stream` while a session runs |
 | **Diagnostics** — collected, not shared, *optional*, app functionality | `VibeVoiceBugReporter` sends app version, OS, device model, memory stats and `client_logs` — but only when the user files a bug report |
-| **Device or other IDs** — collected, not shared, required, app functionality + fraud prevention | `install_id` goes to `/api/oauth/device/code` so the one-off free trial cannot be claimed twice |
+| **Device or other IDs** — collected, not shared, required, app functionality + fraud prevention | `install_id` goes to `POST /api/trial/key`, so the one-off free trial cannot be claimed twice, and along with `/api/oauth/device/code` when an account is linked |
 | Encrypted in transit: **yes** | WSS and HTTPS throughout |
 | Account creation methods: **none** | Accounts are made on vibevoice.net in a browser. The app links an existing one with an OAuth 2.0 device grant and stores only the resulting API key. Declared instead under "accounts created outside the app". |
 | Users can request deletion: **yes** | URL still to come, see below |

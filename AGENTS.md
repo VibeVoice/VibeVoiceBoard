@@ -41,13 +41,13 @@ The correct package name for the local debug keyboard app is `org.vibevoice.boar
 ```bash
 ./pull_vibevoice_logs.sh
 ```
-For more information, see [VIBEVOICE_DEBUGGING.md](file:///Users/schneider/repos/VibeVoiceBoard/VIBEVOICE_DEBUGGING.md).
+For more information, see [VIBEVOICE_DEBUGGING.md](./VIBEVOICE_DEBUGGING.md).
 
 
 ## Strings and translations
 
-The fork's own user-facing strings — every `vibevoice_*` key, plus the wizard's `setup_step4_*`,
-`setup_step5_*` and `setup_next_action` — are ours. Upstream has never heard of them.
+The fork's own user-facing strings — every `vibevoice_*` key and the setup wizard's `setup_*` keys
+— are ours. Upstream has never heard of them.
 
 - **English originals** go in `app/src/main/res/values/strings.xml`, alongside upstream's.
 - **Translations of them** go in `values-<locale>/strings_vibevoice.xml`, a separate file per locale.

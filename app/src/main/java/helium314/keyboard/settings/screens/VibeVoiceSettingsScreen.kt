@@ -122,8 +122,9 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     var apiKey by remember { mutableStateOf(prefs.getString(VIBEVOICE_API_KEY_PREF, null)) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    var showBugReportDialog by remember { mutableStateOf(false) }
-    var bugDescription by remember { mutableStateOf("") }
+    // Saveable: a rotation used to throw away a report half typed.
+    var showBugReportDialog by rememberSaveable { mutableStateOf(false) }
+    var bugDescription by rememberSaveable { mutableStateOf("") }
     var isSubmittingBugReport by remember { mutableStateOf(false) }
     var bugReportStatus by remember { mutableStateOf<String?>(null) }
 

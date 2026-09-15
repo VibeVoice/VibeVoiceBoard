@@ -56,8 +56,10 @@ feature of the keyboard works without network access.
 
 # Voice input
 
-Transcription requires a linked VibeVoice account. Open the keyboard settings, go to _VibeVoice
-Integration_ and link the device — the app shows a code to enter in your browser.
+A new install gets a one-off set of free minutes, requested by the setup wizard, so dictation works
+before any account exists. After that it needs a linked VibeVoice account: open the keyboard
+settings, go to _VibeVoice typing_ and link the device — the app shows a code to enter in your
+browser.
 
 There are three ways to start and stop a session:
 * the microphone key in the toolbar

@@ -901,7 +901,8 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         paint.setAlpha(mLanguageOnSpacebarAnimAlpha);
         if (!fitsTextIntoWidth(width, spaceText, paint)) {
             final float textWidth = TypefaceUtils.getStringWidth(spaceText, paint);
-            paint.setTextScaleX((width - mLanguageOnSpacebarHorizontalMargin * 2) / textWidth);
+            paint.setTextScaleX(Math.max(MINIMUM_XSCALE_OF_LANGUAGE_NAME,
+                    (width - mLanguageOnSpacebarHorizontalMargin * 2) / textWidth));
         }
         canvas.drawText(spaceText, width / 2f, baseline - descent, paint);
         paint.clearShadowLayer();

@@ -22,7 +22,8 @@ val versionString = if (versionFilePath.exists()) versionFilePath.readText().tri
 // longer reports a newer build as "already installed". Gaps between released codes are expected
 // and harmless: nobody sees the code, and many apps use a CI build number the same way.
 val versionCodeFile = rootProject.file("VERSION_CODE")
-val computedVersionCode = versionCodeFile.readText().trim().toInt()
+val computedVersionCode = check(versionCodeFile.exists()) { "VERSION_CODE is missing at the repo root; see AGENTS.md, Versioning" }
+    .let { versionCodeFile.readText().trim().toInt() }
 
 // Release signing material. Never committed: put it in keystore.properties (gitignored) or pass it
 // through the environment on CI. When it is absent the release variants stay unsigned, exactly as

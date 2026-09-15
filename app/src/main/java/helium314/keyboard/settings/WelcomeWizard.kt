@@ -93,8 +93,10 @@ import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings as KeySettings
 import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.latin.utils.getActivity
 import helium314.keyboard.latin.vibevoice.TrialResult
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import helium314.keyboard.latin.vibevoice.VibeVoiceDebugLogger
 import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.vibevoice.VoiceOverlay
 import helium314.keyboard.latin.vibevoice.VoiceWaveView
@@ -127,14 +129,14 @@ fun WelcomeWizard(
         isImeCurrent = UncachedInputMethodManagerUtils.isThisImeCurrent(ctx, imm)
     }
 
-    // Free trial minutes pre-fetch: requested at start so dictation is ready by Step 2
-    var trialMinutes by rememberSaveable { mutableStateOf(-1) }
-    LaunchedEffect(Unit) {
-        if (VibeVoiceClient.isLinked(ctx)) { trialMinutes = 0; return@LaunchedEffect }
-        trialMinutes = when (val res = VibeVoiceClient.requestTrialKey(ctx)) {
-            is TrialResult.Granted -> res.minutesGranted.toInt()
-            else -> 0
-        }
+    // Free trial key: requested at start so dictation is ready by Step 2, and again on reaching
+    // Step 2 if the first attempt found no network. Without a key the mic key in the practice step
+    // throws the user out of the wizard into settings.
+    LaunchedEffect(step == 0 || step == 2) {
+        if (step != 0 && step != 2) return@LaunchedEffect
+        if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx)) return@LaunchedEffect
+        if (VibeVoiceClient.requestTrialKey(ctx) !is TrialResult.Granted)
+            VibeVoiceDebugLogger.log("Wizard: no trial key (step $step)")
     }
 
     // Ensure pulse preference is cleared when wizard leaves composition
@@ -490,6 +492,19 @@ fun WelcomeWizard(
                         micGranted = granted
                         if (granted) {
                             phase = TryPhase.C
+                        } else {
+                            // Answered instantly by the system once denied for good: the button would
+                            // do nothing. App info is the only place left to allow it.
+                            val activity = ctx.getActivity()
+                            if (activity != null && !androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(
+                                    activity, android.Manifest.permission.RECORD_AUDIO)) {
+                                android.widget.Toast.makeText(ctx, R.string.vibevoice_mic_blocked, android.widget.Toast.LENGTH_LONG).show()
+                                try {
+                                    ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        android.net.Uri.fromParts("package", ctx.packageName, null)))
+                                } catch (_: Exception) {
+                                }
+                            }
                         }
                     }
                     val focusRequester = remember { FocusRequester() }
@@ -746,11 +761,9 @@ fun WelcomeWizard(
 
                     if (showGuardDialog) {
                         AlertDialog(
-                            onDismissRequest = {
-                                showGuardDialog = false
-                                ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
-                                step = 5
-                            },
+                            // Back or a tap outside is not "skip": it returns to the step, and the
+                            // buttons stay the only way to decide.
+                            onDismissRequest = { showGuardDialog = false },
                             text = {
                                 Text(
                                     stringResource(R.string.setup_overlay_guard_message),
@@ -837,7 +850,9 @@ fun WelcomeWizard(
                 verticalArrangement = if (step == 0 || step == 5) Arrangement.Center else Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (useWideLayout)
+                // Not for the hero and the closing screen: bigText has nothing for them, and the split
+                // left a blank 40 % column beside a squeezed screen.
+                if (useWideLayout && step != 0 && step != 5)
                     Row {
                         Box(Modifier.weight(0.4f)) {
                             bigText()

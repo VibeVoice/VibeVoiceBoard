@@ -15,6 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.currentCoroutineContext
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -81,9 +86,50 @@ fun VibeVoiceLinkPanel(
     val prefs = remember(context) { VibeVoiceClient.vibeVoicePrefs(context) }
     val scope = rememberCoroutineScope()
 
-    var userCode by remember { mutableStateOf<String?>(null) }
+    // Saveable, and resumed below: approving the code means leaving for the browser, which is exactly
+    // when the system is most likely to destroy this activity. With plain remember the approved code
+    // was never exchanged for a key and the user came back to a fresh "Link account" button.
+    var userCode by rememberSaveable { mutableStateOf<String?>(null) }
+    var deviceCode by rememberSaveable { mutableStateOf<String?>(null) }
+    var interval by rememberSaveable { mutableIntStateOf(5) }
+    var expiresAt by rememberSaveable { mutableLongStateOf(0L) }
     var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    suspend fun poll(code: String) {
+        while (currentCoroutineContext().isActive) {
+            delay(interval * 1000L)
+            if (System.currentTimeMillis() > expiresAt) {
+                userCode = null
+                deviceCode = null
+                errorMessage = context.getString(R.string.vibevoice_linking_failed, "expired_token")
+                return
+            }
+            val tokenRes = VibeVoiceClient.pollForToken(code) ?: continue
+            if (tokenRes.has("api_key")) {
+                prefs.edit().putString(VIBEVOICE_API_KEY_PREF, tokenRes.getString("api_key")).apply()
+                userCode = null
+                deviceCode = null
+                onLinked()
+                return
+            } else if (tokenRes.optString("error") == "slow_down") {
+                // RFC 8628 3.5: keep polling, five seconds slower. Treating it as fatal threw
+                // away a pairing that was about to succeed.
+                interval += 5
+            } else if (tokenRes.optString("error") != "authorization_pending") {
+                userCode = null
+                deviceCode = null
+                errorMessage = context.getString(R.string.vibevoice_linking_failed, tokenRes.optString("error"))
+                return
+            }
+        }
+    }
+
+    // Back from a recreation with a code still outstanding: carry on where the old composition stopped.
+    LaunchedEffect(Unit) {
+        val code = deviceCode ?: return@LaunchedEffect
+        if (userCode != null) poll(code)
+    }
 
     fun startLinking() {
         isLoading = true
@@ -102,16 +148,16 @@ fun VibeVoiceLinkPanel(
             // the whole activity down with it.
             val code = res.optString("user_code").takeIf { it.isNotBlank() }
             val uri = res.optString("verification_uri").takeIf { it.isNotBlank() }
-            val deviceCode = res.optString("device_code").takeIf { it.isNotBlank() }
-            if (code == null || uri == null || deviceCode == null) {
+            val newDeviceCode = res.optString("device_code").takeIf { it.isNotBlank() }
+            if (code == null || uri == null || newDeviceCode == null) {
                 errorMessage = context.getString(R.string.vibevoice_failed_request_device_code)
                 return@launch
             }
             userCode = code
-            var interval = res.optInt("interval", 5).coerceAtLeast(1)
-            // RFC 8628 device codes expire; without this the loop below polls forever whenever
+            interval = res.optInt("interval", 5).coerceAtLeast(1)
+            // RFC 8628 device codes expire; without this the loop polls forever whenever
             // pollForToken keeps returning null -- offline, or the user never finishes in the browser.
-            val expiresAt = System.currentTimeMillis() + res.optInt("expires_in", 600).coerceAtLeast(30) * 1000L
+            expiresAt = System.currentTimeMillis() + res.optInt("expires_in", 600).coerceAtLeast(30) * 1000L
 
             try {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$uri?code=$code")))
@@ -122,32 +168,8 @@ fun VibeVoiceLinkPanel(
                 userCode = null
                 return@launch
             }
-
-            var polling = true
-            while (polling && isActive) {
-                delay(interval * 1000L)
-                if (System.currentTimeMillis() > expiresAt) {
-                    polling = false
-                    userCode = null
-                    errorMessage = context.getString(R.string.vibevoice_linking_failed, "expired_token")
-                    break
-                }
-                val tokenRes = VibeVoiceClient.pollForToken(deviceCode) ?: continue
-                if (tokenRes.has("api_key")) {
-                    prefs.edit().putString(VIBEVOICE_API_KEY_PREF, tokenRes.getString("api_key")).apply()
-                    polling = false
-                    userCode = null
-                    onLinked()
-                } else if (tokenRes.optString("error") == "slow_down") {
-                    // RFC 8628 3.5: keep polling, five seconds slower. Treating it as fatal threw
-                    // away a pairing that was about to succeed.
-                    interval += 5
-                } else if (tokenRes.optString("error") != "authorization_pending") {
-                    polling = false
-                    userCode = null
-                    errorMessage = context.getString(R.string.vibevoice_linking_failed, tokenRes.optString("error"))
-                }
-            }
+            deviceCode = newDeviceCode
+            poll(newDeviceCode)
         }
     }
 
