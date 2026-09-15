@@ -1953,16 +1953,27 @@ public class LatinIME extends InputMethodService implements
     }
 
     /**
-     * Background dictation as the setting says, but only while a notification can show it. Without
-     * POST_NOTIFICATIONS on Android 13+ the session would run on with the keyboard gone and nothing in
-     * the shade saying so or offering a stop button -- permission can be revoked after the switch was
-     * turned on, so this is checked per session rather than trusted from the settings screen.
+     * Background dictation as the setting says, but only while something on screen shows it. That is
+     * the notification, or the floating mark: both say a session is running and both can end it.
+     * Without either -- POST_NOTIFICATIONS denied on Android 13+ and no mark -- the session would run
+     * on with the keyboard gone and nothing saying so. Checked per session, because either
+     * permission can be revoked after the switch was turned on.
+     *
+     * Requiring the notification alone was too strict: it switched background dictation, and with it
+     * the mark, off for everyone who allows the mark but not notifications.
      */
     private boolean isBackgroundDictationUsable() {
-        if (!mSettings.getCurrent().mVoiceBackgroundEnabled) return false;
-        return android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU
+        final SettingsValues settings = mSettings.getCurrent();
+        if (!settings.mVoiceBackgroundEnabled) return false;
+        final boolean notificationShows = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU
                 || androidx.core.content.ContextCompat.checkSelfPermission(this,
                         android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        final boolean markShows = settings.mVoiceOverlayEnabled && VoiceOverlay.isAllowed(this);
+        if (!notificationShows && !markShows) {
+            VibeVoiceDebugLogger.log("Background dictation refused: notifications denied and the floating mark is off or not allowed");
+            return false;
+        }
+        return true;
     }
 
     private void commitVoiceSegment(String segment) {

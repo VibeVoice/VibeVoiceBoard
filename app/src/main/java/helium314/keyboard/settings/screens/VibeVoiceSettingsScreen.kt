@@ -162,9 +162,9 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         notificationsGranted = granted
-        // Denied means background dictation cannot show itself, so it does not stay switched on
-        // looking as if it worked; the keyboard also refuses it per session (LatinIME).
-        if (!granted) {
+        // Denied with no floating mark either means background dictation cannot show itself, so it
+        // does not stay switched on looking as if it worked; the keyboard also checks per session.
+        if (!granted && !(overlayEnabled && VoiceOverlay.isAllowed(context))) {
             backgroundDictation = false
             appPrefs.edit().putBoolean(Settings.PREF_VOICE_BACKGROUND, false).apply()
         }
@@ -212,6 +212,15 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
             }.onFailure { err ->
                 isBugReportSuccess = false
                 bugReportStatus = err.message ?: "Failed to submit bug report"
+            }
+            if (result.isSuccess) {
+                // Thank, then get out of the way. The dialog used to stay open with Submit still
+                // enabled, which read as nothing having happened and invited sending it twice.
+                delay(1500)
+                showBugReportDialog = false
+                bugDescription = ""
+                bugReportStatus = null
+                isBugReportSuccess = false
             }
         }
     }
@@ -660,7 +669,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 4,
                             maxLines = 6,
-                            enabled = !isSubmittingBugReport
+                            enabled = !isSubmittingBugReport && !isBugReportSuccess
                         )
                         if (isSubmittingBugReport) {
                             Spacer(modifier = Modifier.size(16.dp))
@@ -684,7 +693,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 confirmButton = {
                     Button(
                         onClick = { submitBugReport() },
-                        enabled = bugDescription.isNotBlank() && !isSubmittingBugReport
+                        enabled = bugDescription.isNotBlank() && !isSubmittingBugReport && !isBugReportSuccess
                     ) {
                         Text(stringResource(R.string.vibevoice_report_bug_submit))
                     }
