@@ -1618,6 +1618,15 @@ public class LatinIME extends InputMethodService implements
     // Everything a session committed so far. Segments are committed to the field as they finalize,
     // and the clipboard entry made at the end has to hold all of them, not the last one alone.
     private final StringBuilder mVoiceSessionText = new StringBuilder();
+    /**
+     * The part of the segment being spoken that has already been committed as text.
+     *
+     * A partial carries the whole segment every time, and it is shown as composing text, so a later
+     * partial simply replaces it. Committing it early -- the keyboard closes, the user types, the
+     * focus moves -- ends the composing region, and the next partial would then insert the same
+     * words again after the ones just committed. This is what the next partial has to drop.
+     */
+    private String mVoiceCommittedPrefix = "";
 
     public boolean isRecordingVoice() {
         return mIsRecordingVoice;
@@ -1696,6 +1705,7 @@ public class LatinIME extends InputMethodService implements
         mVoiceSessionId++;
         mIsStoppingVoice = false;
         mVoiceComposingText = "";
+        mVoiceCommittedPrefix = "";
         mVoiceSessionText.setLength(0);
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
@@ -1785,6 +1795,7 @@ public class LatinIME extends InputMethodService implements
             }
 
             mVoiceComposingText = ""; // Clear state at start
+            mVoiceCommittedPrefix = "";
             mVoiceSessionText.setLength(0);
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
@@ -1799,10 +1810,7 @@ public class LatinIME extends InputMethodService implements
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId)
                             return;
-                        if (!mVoiceComposingText.isEmpty()) {
-                            commitVoiceSegment(mVoiceComposingText);
-                            mVoiceComposingText = "";
-                        }
+                        commitPendingVoiceText();
                     });
                 }
 
@@ -1819,10 +1827,13 @@ public class LatinIME extends InputMethodService implements
                             if (!mVoiceComposingText.isEmpty()) {
                                 commitVoiceSegment(mVoiceComposingText);
                             }
+                            mVoiceComposingText = "";
+                            mVoiceCommittedPrefix = "";
                         }
-                        mVoiceComposingText = text;
+                        final String shown = voiceRemainder(text);
+                        mVoiceComposingText = shown;
                         VoiceSessionService.showTranscript(text);
-                        mInputLogic.mConnection.setComposingText(text, 1);
+                        mInputLogic.mConnection.setComposingText(shown, 1);
                     });
                 }
 
@@ -1844,19 +1855,23 @@ public class LatinIME extends InputMethodService implements
                              if (!mVoiceComposingText.isEmpty()) {
                                 commitVoiceSegment(mVoiceComposingText);
                             }
+                            mVoiceComposingText = "";
+                            mVoiceCommittedPrefix = "";
                         }
+                        final String rest = voiceRemainder(text);
                         if (!mIsStoppingVoice) {
                             // Per the protocol the server may finalize a segment while the stream is
                             // still open -- VibeVoiceClient only closes the socket on a final when it
                             // has stopped streaming. Ending the session here would drop everything the
                             // user says afterwards, so commit the segment and keep recording.
-                            if (!text.trim().isEmpty()) {
-                                commitVoiceSegment(text);
-                                mVoiceComposingText = "";
+                            if (!rest.trim().isEmpty()) {
+                                commitVoiceSegment(rest);
                             }
+                            mVoiceComposingText = "";
+                            mVoiceCommittedPrefix = "";
                             return;
                         }
-                        finishVoiceSession(text, mIsStoppingVoice);
+                        finishVoiceSession(rest, mIsStoppingVoice);
                     });
                 }
 
@@ -1997,7 +2012,22 @@ public class LatinIME extends InputMethodService implements
     private void commitPendingVoiceText() {
         if (mVibeVoiceClient == null || mVoiceComposingText.isEmpty()) return;
         commitVoiceSegment(mVoiceComposingText);
+        mVoiceCommittedPrefix = mVoiceCommittedPrefix + mVoiceComposingText;
         mVoiceComposingText = "";
+    }
+
+    /** What is left of a partial once the part already committed within this segment is taken off. */
+    private String voiceRemainder(final String text) {
+        if (mVoiceCommittedPrefix.isEmpty()) return text;
+        if (!text.startsWith(mVoiceCommittedPrefix)) {
+            // The segment was rewritten rather than extended -- a reconnect replaying audio, or the
+            // server revising what it heard. Nothing can be dropped safely, so the prefix is given up.
+            VibeVoiceDebugLogger.log("Committed prefix no longer matches the segment; keeping the full text");
+            mVoiceCommittedPrefix = "";
+            return text;
+        }
+        // The space after a committed piece is added by commitVoiceSegment.
+        return text.substring(mVoiceCommittedPrefix.length()).replaceFirst("^\\s+", "");
     }
 
     private void commitVoiceSegment(String segment) {
@@ -2033,6 +2063,7 @@ public class LatinIME extends InputMethodService implements
                     .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
         }
         mVoiceComposingText = "";
+        mVoiceCommittedPrefix = "";
         mVoiceSessionText.setLength(0);
         mVibeVoiceClient.stopStreaming();
         mVibeVoiceClient = null;
