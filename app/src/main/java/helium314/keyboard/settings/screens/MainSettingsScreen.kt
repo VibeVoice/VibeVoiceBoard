@@ -56,6 +56,11 @@ fun MainSettingsScreen(
                 Modifier.verticalScroll(rememberScrollState()).then(Modifier.padding(innerPadding))
             ) {
                 Preference(
+                    name = stringResource(R.string.vibevoice_integration_title),
+                    onClick = onClickVibeVoice,
+                    icon = R.drawable.ic_notification
+                ) { NextScreenIcon() }
+                Preference(
                     name = stringResource(R.string.language_and_layouts_title),
                     description = enabledSubtypes.joinToString(", ") { it.displayName() },
                     onClick = onClickLanguage,
@@ -108,11 +113,6 @@ fun MainSettingsScreen(
                     name = stringResource(R.string.settings_screen_advanced),
                     onClick = onClickAdvanced,
                     icon = R.drawable.ic_settings_advanced
-                ) { NextScreenIcon() }
-                Preference(
-                    name = stringResource(R.string.vibevoice_integration_title),
-                    onClick = onClickVibeVoice,
-                    icon = R.drawable.sym_keyboard_voice_holo
                 ) { NextScreenIcon() }
                 Preference(
                     name = stringResource(R.string.settings_screen_about),

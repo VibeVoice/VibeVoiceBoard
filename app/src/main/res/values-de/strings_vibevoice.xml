@@ -13,7 +13,6 @@ SPDX-License-Identifier: GPL-3.0-only
 -->
 <resources>
     <!-- Account and linking -->
-    <string name="vibevoice_integration_title">VibeVoice-Integration</string>
     <string name="vibevoice_account_linking_description">Mit einem verknüpften VibeVoice-Konto kannst du direkt in der Tastatur diktieren.</string>
     <string name="vibevoice_status_linked">Status: verknüpft</string>
     <string name="vibevoice_unlink_device">Verknüpfung aufheben</string>

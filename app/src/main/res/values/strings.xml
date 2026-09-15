@@ -47,7 +47,7 @@
     <!-- Settings screen title for advanced settings -->
     <string name="settings_screen_advanced">Advanced</string>
     <!-- Settings screen title for VibeVoice integration -->
-    <string name="vibevoice_integration_title">VibeVoice Integration</string>
+    <string name="vibevoice_integration_title">VibeVoice typing</string>
     <!-- Description text on the VibeVoice account linking screen -->
     <string name="vibevoice_account_linking_description">VibeVoice account linking allows utilizing cloud transcription directly inside the keyboard.</string>
     <!-- Status text shown when VibeVoice is linked -->

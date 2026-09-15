@@ -21,6 +21,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.AlertDialog
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
+import android.media.AudioManager
+import android.media.MediaPlayer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -277,6 +283,30 @@ fun WelcomeWizard(
     // `brand` shows the mark on its own dark tile -- white mark on a black ground -- so it reads the
     // same on dark and light without tinting or flattening.
     //
+    // The mark that answers a finished link. It pops in with a spring and, when the link happened just
+    // now, plays a short chime -- unless the phone is on silent or vibrate, where a sound would be rude.
+    @Composable fun LinkedMark(celebrate: Boolean) {
+        val scale = remember { Animatable(if (celebrate) 0.4f else 1f) }
+        LaunchedEffect(Unit) {
+            if (!celebrate) return@LaunchedEffect
+            val audio = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            if (audio?.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+                MediaPlayer.create(ctx, R.raw.linked_chime)?.apply {
+                    setOnCompletionListener { it.release() }
+                    start()
+                }
+            }
+            scale.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessLow))
+        }
+        Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                painterResource(R.drawable.ic_notification), null,
+                Modifier.size(96.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+                tint = Brand.accent
+            )
+        }
+    }
+
     // `primary` decides the fill and defaults to `active`. They are separate because a status row such
     // as "Account linked" is active (accent tick) without being the thing to press; giving it the
     // accent fill too put two primary buttons on one screen.
@@ -574,6 +604,8 @@ fun WelcomeWizard(
                     }
                 } else if (step == 3) {
                     var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.isLinked(ctx)) }
+                    // Only a link made on this screen earns the chime; arriving already linked does not.
+                    val linkedOnArrival = rememberSaveable { linked }
                     OnResume { linked = VibeVoiceClient.isLinked(ctx) }
                     StepHeader(
                         3,
@@ -582,6 +614,7 @@ fun WelcomeWizard(
                     )
                     Spacer(Modifier.height(8.dp))
                     if (linked) {
+                        LinkedMark(celebrate = !linkedOnArrival)
                         ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_link_done), true, primary = false) { }
                         Spacer(Modifier.height(8.dp))
                         ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
@@ -611,7 +644,7 @@ fun WelcomeWizard(
                                     brand = true
                                 ) { if (enabled) onClick() }
                             }
-                        ) { linked = true; step = 4 }
+                        ) { linked = true }
                         Spacer(Modifier.height(8.dp))
                         ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_link_later_equal), false) {
                             step = 4
