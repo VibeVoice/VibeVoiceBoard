@@ -51,8 +51,10 @@ class VoiceOverlay(context: Context) : View(context) {
         strokeCap = Paint.Cap.ROUND
     }
     // The ordinary mark, not the purple one. Its colour comes from the glow behind it now, and
-    // the launcher asset is the one that is kept in step with the brand.
-    private val drawable = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+    // the launcher asset is the one that is kept in step with the brand. Which of its two versions
+    // follows the disc: the white mark on a dark keyboard, the black one on a light keyboard, where
+    // the white one stood on a white disc.
+    private var drawable = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
     /** The mark's own silhouette, blurred. Built once per session, never per frame. */
     private var glowBitmap: Bitmap? = null
     private val glowMargin = IntArray(1)
@@ -106,6 +108,7 @@ class VoiceOverlay(context: Context) : View(context) {
             val colors = Settings.getValues().mColors
             discColor = colors.get(ColorType.MAIN_BACKGROUND)
             barColor = colors.get(ColorType.GESTURE_TRAIL)
+            drawable = ContextCompat.getDrawable(context, VoiceGlow.markFor(discColor))
         } catch (e: Exception) {
             // Settings not loaded; the defaults above stand in for one session.
             VibeVoiceDebugLogger.log("Overlay could not read the theme: ${e.message}")
@@ -147,9 +150,42 @@ class VoiceOverlay(context: Context) : View(context) {
         onDismiss = null
     }
 
+    /**
+     * Runs the mark with no session behind it, for the setup wizard: the same drawing in the
+     * keyboard's own colours, so the picture is what will appear rather than a capture of one theme.
+     * A slow synthetic level stands in for a voice. Touch does nothing -- there is no window to drag
+     * -- and nothing can end a session that does not exist.
+     */
+    fun startPreview() {
+        readGeometry(context)
+        levelSource = null
+        onDismiss = null
+        preview = true
+        animationsEnabled = try {
+            AndroidSettings.Global.getFloat(context.contentResolver, AndroidSettings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
+        } catch (_: Exception) {
+            true
+        }
+        readThemeColors()
+        bars.fill(0f)
+        running = true
+        invalidate()
+    }
+
+    private var preview = false
+
+    override fun onDetachedFromWindow() {
+        // A preview has no hide() to stop it; leaving the wizard step is its end.
+        if (preview) stopAnimating()
+        super.onDetachedFromWindow()
+    }
+
+    /** The size [startPreview] draws at, in pixels, before any scaling by the caller. */
+    fun previewSizePx(): Int = requiredSizePx()
+
     override fun onDraw(canvas: Canvas) {
         if (!running) return
-        val raw = levelSource?.get()?.currentLevel ?: 0f
+        val raw = if (preview) 0.45f + 0.3f * sin(pulse * 1.7f) else levelSource?.get()?.currentLevel ?: 0f
         // Same asymmetry as the keyboard waves: jump on a syllable, ease back down. A mark that
         // tracked the level exactly would look like it was flickering rather than listening.
         level += (raw - level) * (if (raw > level) ATTACK else RELEASE)
@@ -257,11 +293,11 @@ class VoiceOverlay(context: Context) : View(context) {
 
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
-        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
+        if (!preview) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
     }
 
     override fun performAccessibilityAction(action: Int, arguments: android.os.Bundle?): Boolean {
-        if (action == AccessibilityNodeInfo.ACTION_CLICK && running) {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK && running && onDismiss != null) {
             dismiss()
             return true
         }

@@ -11,6 +11,8 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import androidx.core.graphics.ColorUtils
+import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.prefs
@@ -33,6 +35,15 @@ import helium314.keyboard.latin.utils.prefs
  * hardware-canvas draw.
  */
 object VoiceGlow {
+    /**
+     * The version of the mark to put on a given background: the everyday white mark on a dark one,
+     * the brand's black mark (logos/svgs/black_opaque_offset.svg) on a light one.
+     */
+    @JvmStatic
+    fun markFor(background: Int): Int =
+        if (ColorUtils.calculateLuminance(background) > 0.5) R.drawable.ic_launcher_foreground_dark
+        else R.drawable.ic_launcher_foreground
+
     /**
      * The accent to draw with when the keyboard's colours cannot be read.
      *

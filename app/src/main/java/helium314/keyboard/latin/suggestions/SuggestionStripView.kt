@@ -643,11 +643,15 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun updateVoiceKeyButton(view: View?, show: Boolean, isActivated: Boolean) {
         val button = view as? ImageButton ?: return
         button.isVisible = show
-        button.isActivated = isActivated
+        // Always activated, like every other toolbar key (setToolbarButtonActivatedState): the
+        // TOOL_BAR_KEY tint is a state list, and only the activated colour is the one the rest of the
+        // toolbar has. Using the flag for "recording" drew the idle mark a shade lighter than its
+        // neighbours. Recording is shown by the artwork below, not by this state.
+        button.isActivated = true
         button.contentDescription = resources.getString(if (isActivated) R.string.vibevoice_stop_dictation else R.string.voice)
         if (isActivated) {
-            // The full VibeVoice logo while recording -- the two-tone one with the dark backing
-            // shape, the same artwork the floating mark uses. Not tinted: TOOL_BAR_KEY would
+            // The full VibeVoice logo while recording -- the two-tone one, in the version that suits
+            // the keyboard's background, the same artwork the floating mark uses. Not tinted: TOOL_BAR_KEY would
             // flatten both tones into one and throw away the thing that makes it read as the logo
             // rather than as a glyph.
             val plain = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context)
@@ -659,11 +663,13 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // least room for it.
             val prefs = context.prefs()
             val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
-            val key = "$inkPx|$accent|" +
+            // The black mark on a light keyboard, the white one on a dark keyboard.
+            val markRes = VoiceGlow.markFor(Settings.getValues().mColors.get(ColorType.MAIN_BACKGROUND))
+            val key = "$inkPx|$accent|$markRes|" +
                     prefs.getFloat(Settings.PREF_GLOW_SIZE, Defaults.PREF_GLOW_SIZE) + "|" +
                     prefs.getFloat(Settings.PREF_GLOW_GAIN, Defaults.PREF_GLOW_GAIN)
             if (key != voiceActiveKey) {
-                val logo = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+                val logo = ContextCompat.getDrawable(context, markRes)
                 // Sized by its ink, not its viewport: the launcher artwork carries an adaptive
                 // icon's padding, so drawn at its own bounds it would sit a third smaller than the
                 // key it replaces.

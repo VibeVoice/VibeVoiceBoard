@@ -15,7 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -42,6 +41,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -698,15 +698,11 @@ fun WelcomeWizard(
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // On a black disc, as it was captured. The ring is light, lifted off black with
-                        // its transparency intact, so on a pale card it faded to a ghost -- correct
-                        // arithmetic, wrong picture. The disc shows it the way a dark screen does.
-                        Box(
-                            Modifier.size(76.dp).clip(CircleShape).background(Color.Black),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(painterResource(R.drawable.floating_mark_preview), null, Modifier.size(72.dp))
-                        }
+                        // The real mark, drawn live by VoiceOverlay in the keyboard's own colours. It
+                        // used to be a capture lifted off a black screen: right for a dark keyboard,
+                        // a ghost of pale light on a light one, and never the colours a user with
+                        // another theme would actually get.
+                        FloatingMarkPreview(Modifier.size(76.dp))
                         Text(
                             stringResource(R.string.setup_extras_overlay_preview),
                             style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
@@ -1001,6 +997,23 @@ fun WizardHero(
  * implementation and not a video: it is the one piece of the landing page's hero that this app
  * already had, and it costs a view and a sine to reuse it.
  */
+@Composable
+private fun FloatingMarkPreview(modifier: Modifier) {
+    val ctx = LocalContext.current
+    val native = remember { VoiceOverlay(ctx).previewSizePx() }
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val target = with(density) { maxWidth.toPx() }
+        val scale = if (native > 0) target / native else 1f
+        AndroidView(
+            factory = { VoiceOverlay(it).apply { startPreview() } },
+            modifier = Modifier
+                .requiredSize(with(density) { native.toDp() })
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+        )
+    }
+}
+
 @Composable
 private fun HeroWaves() {
     AndroidView(
