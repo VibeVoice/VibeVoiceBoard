@@ -22,7 +22,7 @@ for HOOK in "${HOOKS[@]}"; do
 done
 
 echo ""
-echo "All hooks installed. Version is currently: $(cat "$REPO_ROOT/VERSION")"
-echo "  pre-commit  -> bumps patch on every commit (included in same commit)"
-echo "  post-merge  -> bumps minor + resets patch on merges to main/master/feature-vibevoice"
+echo "All hooks installed. Release $(cat "$REPO_ROOT/VERSION"), version code $(cat "$REPO_ROOT/VERSION_CODE")"
+echo "  pre-commit  -> bumps VERSION_CODE on every commit (included in same commit)"
+echo "  post-merge  -> no-op (kept so an old minor-bump hook gets replaced)"
 echo "  pre-push    -> builds APK and uploads to Nextcloud in background on every push (skip with SKIP_APK_BUILD=1)"

@@ -27,24 +27,20 @@ summarizes them.
 
 ## Versioning
 
-`VERSION` at the repo root is the single source of truth; `app/build.gradle.kts` reads it and derives
-`versionCode = 500000 + major*100000 + minor*1000 + patch`, unless `VERSION_CODE` exists at the repo
-root, which then wins. The offset is not decoration: Play saw `403001` from the pre-release 4.x
-iterations, a version code may never go down, and the first release anyone outside sees is `1.0.0`.
-`VERSION_CODE` exists because Play also consumes a code permanently — rebuilding the same version
-name is rejected with *"Version code N has already been used"*, even when the release carrying it was
-replaced while still a draft. Bump `VERSION_CODE` for a re-upload; leave `VERSION` saying what the
-release is called. Version bumps are automated by git hooks that are
-**not** installed by a clone:
+`VERSION` holds the name of the next release and only a person changes it; `VERSION_CODE` holds
+the `versionCode` and the `pre-commit` hook bumps it on every commit. The split exists because Play
+users see one step between releases however many commits it took, while Play consumes every code
+permanently and never accepts a lower one (it has seen `403001` from the pre-release 4.x builds).
+Debug builds are named `<VERSION>-dev.<VERSION_CODE>`. `AGENTS.md` has the release procedure. Hooks
+are **not** installed by a clone:
 
 ```bash
 bash tools/hooks/install-hooks.sh
 ```
 
-- `pre-commit` — bumps patch and stages `VERSION` into the same commit (skipped if `VERSION` is
-  already staged, or during a merge). So do not hand-bump `VERSION` in a normal commit; just commit.
-- `post-merge` — bumps minor / resets patch on merges landing on `main`, `master`, or
-  `feature/vibevoice-integration`.
+- `pre-commit` — bumps `VERSION_CODE` and stages it into the same commit (skipped if already
+  staged, or during a merge). Do not hand-bump it in a normal commit; just commit.
+- `post-merge` — a no-op; it used to bump the minor version.
 - `pre-push` — kicks off a background debug build + Nextcloud upload (`tools/build-and-deploy.sh`).
   Set `SKIP_APK_BUILD=1` to suppress; log lands at `tools/last-build.log`.
 

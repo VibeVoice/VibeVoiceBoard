@@ -63,12 +63,26 @@ Currently translated: German, complete.
 
 ## Versioning
 
-Version is managed automatically via the [`VERSION`](./VERSION) file at the repo root. This is the **single source of truth** — `build.gradle.kts` reads it at build time.
+Two files at the repo root, read by `app/build.gradle.kts`:
 
-### Rules
-- **Patch** (`x.y.Z`) — bumped automatically *before* every commit via `pre-commit` git hook (included directly in same commit)
-- **Minor** (`x.Y.0`) — bumped automatically (patch reset to 0) on any merge landing on `main`, `master`, or `feature/vibevoice-integration`
-- **Major** — bumped manually by editing `VERSION` directly
+- **`VERSION`** — the name of the next release (`versionName`), e.g. `1.0.1`. **Only a person changes
+  it**, when a release is cut. For Play users everything between two releases is one step, however
+  many commits it took, so the name must not count commits.
+- **`VERSION_CODE`** — the ordering number (`versionCode`). The `pre-commit` hook bumps it by one on
+  every commit. Play consumes a code permanently and never accepts a lower one, and a per-commit
+  counter satisfies both; gaps between released codes are expected and invisible to users.
+
+Debug builds are named `<VERSION>-dev.<VERSION_CODE>` (e.g. `1.0.1-dev.600014`), so the phone shows
+which commit it runs. Build outputs are named `VibeVoiceKeyboard_<VERSION>-<VERSION_CODE>`.
+
+### Cutting a release
+1. `echo "1.0.2" > VERSION` and commit — the hook bumps `VERSION_CODE` in the same commit.
+2. Tag it: `git tag v1.0.2 && git push origin v1.0.2`.
+3. Build the Play bundle: `./gradlew --no-configuration-cache bundleNouserlib` (the configuration
+   cache does not notice a changed `VERSION`), check it with `aapt2 dump badging` or bundletool.
+4. Put the bundle in Nextcloud. **Uploading to Play is done by hand.**
+
+A re-upload of the same release needs only a new code: any commit bumps it.
 
 ### After cloning — install hooks once
 Git hooks are not committed to `.git/` automatically. After cloning, run:
@@ -77,13 +91,6 @@ bash tools/hooks/install-hooks.sh
 ```
 
 This installs:
-- `pre-commit` — auto-bumps patch before every non-version commit and includes it in the commit
-- `post-merge` — auto-bumps minor (resets patch) on merges to primary branches
+- `pre-commit` — bumps `VERSION_CODE` before every commit and includes it in the commit
+- `post-merge` — a no-op, kept so re-installing replaces the old minor-bump hook
 - `pre-push` — builds APK and uploads to Nextcloud in the background on every push (set `SKIP_APK_BUILD=1` to suppress)
-
-### Manual version override
-Edit `VERSION` directly if you need to set a specific version, then commit:
-```bash
-echo "4.1.0" > VERSION
-git add VERSION && git commit -m "chore(version): manual bump to 4.1.0"
-```

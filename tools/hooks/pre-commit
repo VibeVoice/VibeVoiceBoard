@@ -1,39 +1,33 @@
 #!/bin/bash
-# pre-commit: auto-bump patch version in VERSION file and stage it
-# Skips if VERSION is already staged in this commit or if merge is in progress.
+# pre-commit: bump VERSION_CODE by one and stage it into the same commit.
+#
+# VERSION (the release name) is not touched: a person sets it when a release is cut. See the
+# Versioning section of AGENTS.md for why the two are separate.
+# Skips during a merge, and when VERSION_CODE is already staged by hand.
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-VERSION_FILE="$REPO_ROOT/VERSION"
+CODE_FILE="$REPO_ROOT/VERSION_CODE"
 
-# Guard 1: Skip if merge is in progress (post-merge hook handles minor release bumps)
 # git rev-parse --git-path, not "$REPO_ROOT/.git": in a worktree .git is a file, not a directory.
 if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
   exit 0
 fi
 
-# Guard 2: Skip if VERSION file is already manually staged in this commit
-if git diff --cached --name-only | grep -q "^VERSION$"; then
+if git diff --cached --name-only | grep -q "^VERSION_CODE$"; then
   exit 0
 fi
 
-# Guard 3: Skip if VERSION file doesn't exist
-if [ ! -f "$VERSION_FILE" ]; then
+if [ ! -f "$CODE_FILE" ]; then
   exit 0
 fi
 
-# Read current version
-VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
-if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "[pre-commit] ERROR: VERSION file does not contain a valid semver. Got: '$VERSION'"
+CODE=$(tr -d '[:space:]' < "$CODE_FILE")
+if ! [[ "$CODE" =~ ^[0-9]+$ ]]; then
+  echo "[pre-commit] ERROR: VERSION_CODE is not a number. Got: '$CODE'"
   exit 1
 fi
-IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
-# Bump patch
-PATCH=$((PATCH + 1))
-NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-
-# Write and stage VERSION in current commit
-echo "$NEW_VERSION" > "$VERSION_FILE"
-git add "$VERSION_FILE"
-echo "[pre-commit] Auto-bumped VERSION to $NEW_VERSION"
+NEW_CODE=$((CODE + 1))
+echo "$NEW_CODE" > "$CODE_FILE"
+git add "$CODE_FILE"
+echo "[pre-commit] VERSION_CODE -> $NEW_CODE ($(tr -d '[:space:]' < "$REPO_ROOT/VERSION"))"

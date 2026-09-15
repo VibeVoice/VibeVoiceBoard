@@ -8,30 +8,21 @@ plugins {
     kotlin("plugin.compose") version "2.4.0"
 }
 
-// Read version from centralized VERSION file
+// VERSION is the name of the next release, and only a person changes it: it says what Play users
+// will see, and for them everything between two releases is one step (1.0.0 -> 1.0.1), however many
+// commits it took. It used to be bumped by a hook on every commit, which had the integration branch
+// at 1.1.7 before 1.0.1 was ever released.
 val versionFilePath = rootProject.file("VERSION")
 val versionString = if (versionFilePath.exists()) versionFilePath.readText().trim() else "1.0.0"
-val versionParts = versionString.split(".").mapNotNull { it.toIntOrNull() }
-val vMajor = versionParts.getOrElse(0) { 1 }
-val vMinor = versionParts.getOrElse(1) { 0 }
-val vPatch = versionParts.getOrElse(2) { 0 }
-// The offset exists because versionCode may never go down and Play has already seen 403001, from
-// the pre-release iterations this fork spent numbered 4.x. Those numbers were internal; the first
-// version anyone outside sees is 1.0.0, so versionName restarts and versionCode does not. 1.0.0
-// lands on 600000, above everything already uploaded, and stays monotonic from there.
-//
-// Android keeps these two independent on purpose: the name is for people, the code is for ordering.
-// Do not "fix" this by removing the offset -- that would make the next release unpublishable.
-val versionCodeOffset = 500000
-// VERSION_CODE overrides the derived number when it exists, and it exists because Play consumes a
-// version code permanently: "Version code 600000 has already been used" is what you get for
-// rebuilding the same version name, even after the release that carried it was replaced while still
-// a draft. A name can legitimately be built twice -- a merge landed, a signing key changed, an upload
-// was retried -- so the ordering number cannot be a pure function of the name. Bump this file, not
-// the offset, and leave VERSION saying what the release is called.
+// VERSION_CODE is the ordering number, and the pre-commit hook bumps it on every commit. Two facts
+// shape it. Play consumes a code permanently -- "Version code N has already been used" is what a
+// rebuild of the same release gets, even after the release carrying it was discarded as a draft --
+// and a code may never go down, with 403001 already seen from the pre-release 4.x iterations. A
+// per-commit counter satisfies both, and gives every debug build its own code, so an installer no
+// longer reports a newer build as "already installed". Gaps between released codes are expected
+// and harmless: nobody sees the code, and many apps use a CI build number the same way.
 val versionCodeFile = rootProject.file("VERSION_CODE")
-val computedVersionCode = if (versionCodeFile.exists()) versionCodeFile.readText().trim().toInt()
-    else versionCodeOffset + vMajor * 100000 + vMinor * 1000 + vPatch
+val computedVersionCode = versionCodeFile.readText().trim().toInt()
 
 // Release signing material. Never committed: put it in keystore.properties (gitignored) or pass it
 // through the environment on CI. When it is absent the release variants stay unsigned, exactly as
@@ -95,6 +86,8 @@ android {
             isMinifyEnabled = true
             isJniDebuggable = false
             applicationIdSuffix = ".debug"
+            // Which commit is on the phone: every debug build of 1.0.1 carries the same name otherwise.
+            versionNameSuffix = "-dev.$computedVersionCode"
         }
         create("runTests") { // build variant for running tests on CI that skips tests known to fail
             isMinifyEnabled = false
@@ -106,10 +99,11 @@ android {
             isJniDebuggable = false
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev.$computedVersionCode"
         }
         // archivesBaseName went away with the Gradle upgrade that came in with upstream; archivesName
         // is its replacement and is a Property, so it is set rather than assigned.
-        base.archivesName.set("VibeVoiceKeyboard_$versionString")
+        base.archivesName.set("VibeVoiceKeyboard_$versionString-$computedVersionCode")
         androidComponents.onVariants { variant: ApplicationVariant ->
             if (variant.buildType == "debug") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
