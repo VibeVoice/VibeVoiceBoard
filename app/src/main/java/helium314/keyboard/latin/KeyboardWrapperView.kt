@@ -33,6 +33,21 @@ class KeyboardWrapperView @JvmOverloads constructor(
     private lateinit var stopOneHandedModeBtn: ImageButton
     private lateinit var switchOneHandedModeBtn: ImageButton
     private lateinit var resizeOneHandedModeBtn: ImageButton
+    private var voiceWaveView: View? = null
+
+    /**
+     * Measures the wave view to exactly the bounds it is about to be laid out at, then lays it out.
+     * The measure is not ceremony: the view answers the wrap_content pass with 0x0 so it cannot
+     * stretch this container, and without an EXACTLY pass of its own its measured size would stay
+     * 0x0 forever while it painted at full size.
+     */
+    private fun View.setBounds(left: Int, top: Int, right: Int, bottom: Int) {
+        measure(
+            MeasureSpec.makeMeasureSpec(right - left, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(bottom - top, MeasureSpec.EXACTLY)
+        )
+        layout(left, top, right, bottom)
+    }
 
     var oneHandedModeEnabled = false
         set(enabled) {
@@ -63,6 +78,7 @@ class KeyboardWrapperView @JvmOverloads constructor(
         resizeOneHandedModeBtn = findViewById(R.id.btn_resize_one_handed_mode)
         resizeOneHandedModeBtn.setImageDrawable(keyboardIconsSet.getNewDrawable(KeyboardIconsSet.NAME_RESIZE_ONEHANDED_KEY, context))
         resizeOneHandedModeBtn.visibility = GONE
+        voiceWaveView = findViewById(R.id.voice_wave_view)
 
         stopOneHandedModeBtn.setOnClickListener(this)
         switchOneHandedModeBtn.setOnClickListener(this)
@@ -133,6 +149,9 @@ class KeyboardWrapperView @JvmOverloads constructor(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         if (!oneHandedModeEnabled) {
             super.onLayout(changed, left, top, right, bottom)
+            // Answers the wrap_content measure pass with 0x0 so it cannot inflate this container,
+            // so its bounds have to be handed to it here.
+            voiceWaveView?.setBounds(0, 0, right - left, bottom - top)
             return
         }
 
@@ -159,6 +178,14 @@ class KeyboardWrapperView @JvmOverloads constructor(
         fun View.setLayout(yPosition: Int) {
             layout(buttonXLeft, yPosition - buttonHeight / 2, buttonXRight, yPosition + buttonHeight / 2)
         }
+        // The branch above lays children out by hand, so anything it does not name stays at 0x0.
+        // Match the keyboard so the waves sit behind the keys here too.
+        voiceWaveView?.setBounds(
+                keyboardLeft,
+                0,
+                keyboardLeft + keyboardView.measuredWidth,
+                keyboardView.measuredHeight
+        )
         stopOneHandedModeBtn.setLayout((keyboardView.measuredHeight * 0.2f).toInt())
         switchOneHandedModeBtn.setLayout((keyboardView.measuredHeight * 0.5f).toInt())
         resizeOneHandedModeBtn.setLayout((keyboardView.measuredHeight * 0.8f).toInt())

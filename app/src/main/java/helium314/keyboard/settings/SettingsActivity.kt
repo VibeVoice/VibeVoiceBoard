@@ -27,6 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.core.content.edit
+import helium314.keyboard.latin.settings.DebugSettings
+import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.compat.locale
 import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.keyboard.internal.KeyboardIconsSet
@@ -67,6 +73,14 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
     private val prefs by lazy { this.prefs() }
     val prefChanged = MutableStateFlow(0) // simple counter, as the only relevant information is that something changed
     fun prefChanged() = prefChanged.value++
+    private val showWizardTrigger = MutableStateFlow(0)
+    fun openSetupWizard() {
+        prefs.edit {
+            putBoolean(Settings.PREF_VOICE_KEY_PULSE, false)
+            putBoolean(Settings.PREF_HAS_DICTATED, false)
+        }
+        showWizardTrigger.value++
+    }
     private val dictUriFlow = MutableStateFlow<Uri?>(null)
     private val cachedDictionaryFile by lazy { File(this.cacheDir.path + File.separator + "temp_dict") }
     private val crashReportFiles = MutableStateFlow<List<File>>(emptyList())
@@ -88,6 +102,14 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
         settingsContainer = SettingsContainer(this)
 
         val spellchecker = intent?.getBooleanExtra("spellchecker", false) ?: false
+        val rawStartDestination = intent?.getStringExtra("startDestination")
+        val isDebugUnlocked = BuildConfig.DEBUG || prefs.getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)
+        val startDestination = when {
+            rawStartDestination == SettingsDestination.Debug && !isDebugUnlocked -> null // locked: main screen
+            // The activity is exported, and NavHost throws on a route it does not know.
+            rawStartDestination != null && !SettingsDestination.isKnown(rawStartDestination) -> null
+            else -> rawStartDestination
+        }
 
         val cv = ComposeView(context = this)
         setContentView(cv)
@@ -101,6 +123,14 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                         !UncachedInputMethodManagerUtils.isThisImeCurrent(this, imm)
                                 || !UncachedInputMethodManagerUtils.isThisImeEnabled(this, imm)
                     ) }
+                    var wizardKey by rememberSaveable { mutableIntStateOf(0) }
+                    val triggerCount by showWizardTrigger.collectAsState()
+                    LaunchedEffect(triggerCount) {
+                        if (triggerCount > 0) {
+                            wizardKey = triggerCount
+                            showWelcomeWizard = true
+                        }
+                    }
                     if (spellchecker)
                         Scaffold(contentWindowInsets = WindowInsets.safeDrawing) { innerPadding ->
                             Column(Modifier.padding(innerPadding)) {
@@ -111,16 +141,21 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                                         BackButton { this@SettingsActivity.finish() }
                                     },
                                 )
-                                settingsContainer[Settings.PREF_USE_CONTACTS]!!.Preference()
+                                // No contacts row: READ_CONTACTS is not declared, so the switch
+                                // could never turn on. Hiding it from one list was not enough --
+                                // this screen rendered it by key, and settings search indexes every
+                                // Setting in the container regardless of which list shows it.
                                 settingsContainer[Settings.PREF_USE_APPS]!!.Preference()
                                 settingsContainer[Settings.PREF_BLOCK_POTENTIALLY_OFFENSIVE]!!.Preference()
                                 settingsContainer[Settings.PREF_SPELLCHECK_SUGGEST]!!.Preference()
                             }
                         }
                     else {
-                        SettingsNavHost(onClickBack = { this.finish() })
+                        SettingsNavHost(onClickBack = { this.finish() }, startDestination = startDestination)
                         if (showWelcomeWizard) {
-                            WelcomeWizard(close = { showWelcomeWizard = false }, finish = this::finish)
+                            key(wizardKey) {
+                                WelcomeWizard(close = { showWelcomeWizard = false }, finish = this::finish)
+                            }
                         } else if (crashReports.isNotEmpty()) {
                             val ctx = LocalContext.current
                             ConfirmationDialog(

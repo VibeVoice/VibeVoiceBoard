@@ -1,0 +1,49 @@
+01 — Die Tastatur beim Diktieren, in WhatsApp
+=============================================
+
+WOFÜR
+-----
+Screenshot 1 im Store. Das eine Bild, das jeder sieht, der auf den Eintrag klickt, und
+das meistens allein über Installieren oder Weiterscrollen entscheidet.
+
+Es soll in einer Sekunde zwei Dinge sagen: das ist eine echte Tastatur in einer echten
+App, und sie hört gerade zu.
+
+AUFBAU
+------
+* Ein WhatsApp-Chat, oben ein paar Nachrichten, unten unsere Tastatur.
+* Die Tastatur muss **während einer laufenden Session** aufgenommen sein: Schallwellen
+  hinter den Tasten sichtbar, das V oben rechts leuchtet.
+* Im Eingabefeld steht bereits diktierter Text — kein leeres Feld. Zwei bis drei Zeilen,
+  mit Komma und Punkt darin, damit die Interpunktion nebenbei mitläuft.
+* Am besten sichtbar, während du sprichst: die Wellen sind nur in Bewegung groß. Ein
+  Screenshot in einer Sprechpause zeigt sie flach.
+
+NICHT IM BILD
+-------------
+* Nichts im Chatverlauf, das nicht öffentlich sein soll — das Bild geht in den Play Store
+  und lässt sich später nicht zurückholen.
+* Keine Telefonnummer, keine Adresse, kein Anhang mit Vorschau.
+* Kein Benachrichtigungs-Banner, das über den Chat rutscht.
+
+Ein echter privater Chat ist ausdrücklich in Ordnung. Es muss nichts nachgestellt werden,
+solange der sichtbare Ausschnitt harmlos ist.
+
+AUFNAHME
+--------
+1. Dunkles Tastatur-Theme einstellen.
+2. Chat öffnen, ins Eingabefeld tippen.
+3. Diktat starten (V oben rechts oder Leertaste halten).
+4. Einen Satz sprechen, der Kommas erzwingt — z. B. „Ich bin gleich da, bring bitte Brot
+   mit, und ruf an, wenn es später wird."
+5. **Während du sprichst** den Screenshot auslösen. Die Wellen stehen dann hoch.
+6. Zwei, drei Versuche machen und den besten schicken — der Wellenstand ist Glückssache.
+
+DANACH
+------
+Ich lasse das Bild wie es ist, außer der Ausschnitt verlangt einen Beschnitt. Falls im
+Chatkopf etwas steht, das raus soll, tausche ich Name und Profilbild gegen einen
+Platzhalter — sag dann Bescheid, sonst fasse ich nichts an.
+
+Am Ende bekommt es oben eine kurze Textzeile im Markenlila, etwa „Sprich statt zu tippen
+— in jeder App". Die kommt von mir, nicht aus dem Screenshot.
