@@ -48,6 +48,7 @@
     <string name="settings_screen_advanced">Advanced</string>
     <!-- Settings screen title for VibeVoice integration -->
     <string name="vibevoice_integration_title">VibeVoice typing</string>
+    <string name="vibevoice_blocked_private_field">Dictation is off in password fields and private tabs</string>
     <!-- Description text on the VibeVoice account linking screen -->
     <string name="vibevoice_account_linking_description">VibeVoice account linking allows utilizing cloud transcription directly inside the keyboard.</string>
     <!-- Status text shown when VibeVoice is linked -->

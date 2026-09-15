@@ -1595,6 +1595,9 @@ public class LatinIME extends InputMethodService implements
     private VibeVoiceClient mVibeVoiceClient;
     private android.os.Handler mUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private String mVoiceComposingText = "";
+    // Everything a session committed so far. Segments are committed to the field as they finalize,
+    // and the clipboard entry made at the end has to hold all of them, not the last one alone.
+    private final StringBuilder mVoiceSessionText = new StringBuilder();
 
     public boolean isRecordingVoice() {
         return mIsRecordingVoice;
@@ -1673,6 +1676,7 @@ public class LatinIME extends InputMethodService implements
         mVoiceSessionId++;
         mIsStoppingVoice = false;
         mVoiceComposingText = "";
+        mVoiceSessionText.setLength(0);
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
         if (client != null) client.cancel();
@@ -1733,6 +1737,16 @@ public class LatinIME extends InputMethodService implements
                 return;
             }
 
+            // The same fields a running session is aborted for when focus moves into them: nothing
+            // spoken should reach a password field or a private tab, so a session does not start there.
+            final EditorInfo field = getCurrentInputEditorInfo();
+            if ((field != null && InputTypeUtils.isAnyPasswordInputType(field.inputType))
+                    || mSettings.getCurrent().mIncognitoModeEnabled) {
+                android.widget.Toast
+                        .makeText(this, R.string.vibevoice_blocked_private_field, android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             String apiKey = VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
                 android.widget.Toast
@@ -1751,6 +1765,7 @@ public class LatinIME extends InputMethodService implements
             }
 
             mVoiceComposingText = ""; // Clear state at start
+            mVoiceSessionText.setLength(0);
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
             VibeVoiceDebugLogger.log("Starting new session");
@@ -1765,7 +1780,7 @@ public class LatinIME extends InputMethodService implements
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId)
                             return;
                         if (!mVoiceComposingText.isEmpty()) {
-                            mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
+                            commitVoiceSegment(mVoiceComposingText);
                             mVoiceComposingText = "";
                         }
                     });
@@ -1782,7 +1797,7 @@ public class LatinIME extends InputMethodService implements
                         }
                         if (isNewSegment) {
                             if (!mVoiceComposingText.isEmpty()) {
-                                mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
+                                commitVoiceSegment(mVoiceComposingText);
                             }
                         }
                         mVoiceComposingText = text;
@@ -1807,7 +1822,7 @@ public class LatinIME extends InputMethodService implements
                         }
                         if (isNewSegment && !text.trim().isEmpty()) {
                              if (!mVoiceComposingText.isEmpty()) {
-                                mInputLogic.mConnection.commitText(mVoiceComposingText + " ", 1);
+                                commitVoiceSegment(mVoiceComposingText);
                             }
                         }
                         if (!mIsStoppingVoice) {
@@ -1816,7 +1831,7 @@ public class LatinIME extends InputMethodService implements
                             // has stopped streaming. Ending the session here would drop everything the
                             // user says afterwards, so commit the segment and keep recording.
                             if (!text.trim().isEmpty()) {
-                                mInputLogic.mConnection.commitText(text + " ", 1);
+                                commitVoiceSegment(text);
                                 mVoiceComposingText = "";
                             }
                             return;
@@ -1934,6 +1949,11 @@ public class LatinIME extends InputMethodService implements
         }
     }
 
+    private void commitVoiceSegment(String segment) {
+        mInputLogic.mConnection.commitText(segment + " ", 1);
+        mVoiceSessionText.append(segment).append(' ');
+    }
+
     private void finishVoiceSession(String text, boolean addNewline) {
         if (mVibeVoiceClient == null)
             return;
@@ -1952,7 +1972,8 @@ public class LatinIME extends InputMethodService implements
             String suffix = (addNewline && isMultiline) ? "\n" : " ";
             VibeVoiceDebugLogger.log("finishVoiceSession: length=" + commitText.length() + ", suffix='" + suffix.trim() + "' multiline=" + isMultiline);
             mInputLogic.mConnection.commitText(commitText + suffix, 1);
-            mClipboardHistoryManager.addTextToHistory(commitText);
+            mVoiceSessionText.append(commitText);
+            mClipboardHistoryManager.addTextToHistory(mVoiceSessionText.toString());
             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
                     .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
         }

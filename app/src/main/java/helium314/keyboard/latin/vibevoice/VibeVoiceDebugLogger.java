@@ -45,7 +45,12 @@ public class VibeVoiceDebugLogger {
     }
 
     private void writeLog(String message) {
-        String timestamp = mDateFormat.format(new Date());
+        // Called from the UI thread, the audio loop and OkHttp's threads at once, and SimpleDateFormat
+        // is not thread-safe.
+        final String timestamp;
+        synchronized (mDateFormat) {
+            timestamp = mDateFormat.format(new Date());
+        }
         String entry = String.format("[%s] %s\n", timestamp, message);
         Log.d(TAG, entry.trim());
         // Off the caller's thread. Every one of these came from the UI thread -- an IME logs from

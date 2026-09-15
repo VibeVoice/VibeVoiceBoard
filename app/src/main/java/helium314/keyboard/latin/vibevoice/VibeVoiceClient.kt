@@ -831,6 +831,12 @@ class VibeVoiceClient(
 
     fun cancel() {
         stopStreaming()
+        // stopStreaming leaves the socket to a 3 s backstop that runs in the scope cancelled below,
+        // so an aborted session never closed its connection at all.
+        closureJob?.cancel()
+        closureJob = null
+        webSocket?.cancel()
+        webSocket = null
         scopeJob.cancel()
     }
 
@@ -951,7 +957,7 @@ class VibeVoiceClient(
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) { // an Error too: a missing crypto class must not take the keyboard down
             Log.e(TAG, "EncryptedSharedPreferences unavailable — API key will be stored in cleartext", e)
             context.getSharedPreferences("vibevoice_prefs", MODE_PRIVATE)
         }

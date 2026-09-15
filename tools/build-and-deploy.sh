@@ -11,6 +11,7 @@ trap 'STATUS=$?; [ "$STATUS" -eq 0 ] || echo "FAILED (exit $STATUS)"' EXIT
 # Defined before it is used below: the vendored platform-tools are found relative to this script,
 # so the script works in any clone rather than only in the author's.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
 if [[ "$OSTYPE" == "darwin"* ]]; then
   echo "macOS detected."
   if [ -d "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home" ]; then
