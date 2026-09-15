@@ -511,11 +511,13 @@ fun WelcomeWizard(
                         }
                     }
 
-                    // Phase A timeout: advances after 6s if user types nothing (resets if typing starts)
-                    LaunchedEffect(step, phase, practiceText.isEmpty()) {
-                        if (step == 2 && phase == TryPhase.A && practiceText.isEmpty()) {
+                    // Phase A timeout: advances after 6s unless the user is typing enough to advance on
+                    // their own. Keyed on fewer than two characters, not on empty: a single stray
+                    // letter cancelled this timeout and never reached the typing rule either.
+                    LaunchedEffect(step, phase, practiceText.length < 2) {
+                        if (step == 2 && phase == TryPhase.A && practiceText.length < 2) {
                             delay(6000)
-                            if (phase == TryPhase.A && practiceText.isEmpty()) {
+                            if (phase == TryPhase.A && practiceText.length < 2) {
                                 phase = if (micGranted) TryPhase.C else TryPhase.B
                             }
                         }

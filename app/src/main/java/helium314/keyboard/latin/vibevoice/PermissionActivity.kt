@@ -1,6 +1,9 @@
 package helium314.keyboard.latin.vibevoice
 
 import android.Manifest
+import android.provider.Settings
+import android.net.Uri
+import android.content.Intent
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.pm.PackageManager
@@ -61,6 +64,20 @@ class PermissionActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        val denied = grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED
+        // Denied without the system dialog having a say any more ("don't ask again", or a second
+        // denial): requesting again answers instantly, so every tap on the mic key came straight back
+        // here with nothing shown. App info is the only place left where it can be turned on.
+        if (denied && !ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.RECORD_AUDIO)) {
+            Toast.makeText(this, R.string.vibevoice_mic_blocked, Toast.LENGTH_LONG).show()
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (_: Exception) {
+            }
+        }
         finish()
     }
 }

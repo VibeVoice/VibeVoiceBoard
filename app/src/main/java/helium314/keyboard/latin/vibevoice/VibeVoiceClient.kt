@@ -74,6 +74,8 @@ class VibeVoiceClient(
 ) {
     @Volatile private var webSocket: WebSocket? = null
     @Volatile private var isStreaming = false
+    // Set by stopStreaming only: tells a dropped connection after the user's stop apart from a failure.
+    @Volatile private var stopRequested = false
     @Volatile private var audioRecord: AudioRecord? = null
     @Volatile private var audioJob: Job? = null
     @Volatile private var totalRead = 0L
@@ -250,6 +252,8 @@ class VibeVoiceClient(
             isStreaming = false
             setLinkDegraded(false)
             cleanupAudioCapture()
+            // stopStreaming returns early once isStreaming is false, so nothing later closes this.
+            abandonSocket("reconnect window exceeded")
             // A code, not a sentence. What the user reads is the keyboard's business, and "Dictation
             // error: Connection lost" framed a tunnel as a fault in the product.
             listener.onError(ERR_LINK_LOST)
@@ -389,7 +393,7 @@ class VibeVoiceClient(
                             val isNewSegment = if (idx > 0) framesAppliedThisConnection > 0
                                 else lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
                             if (isNewSegment && resultText.isNotBlank()) {
-                                VibeVoiceDebugLogger.log("New segment detected onFinal. Prev: '${lastFullText.take(20)}...', New: '${resultText.take(20)}...'")
+                                VibeVoiceDebugLogger.log("New segment detected onFinal. Prev len=${lastFullText.length}, new len=${resultText.length}")
                             }
                             lastFullText = resultText
 
@@ -428,7 +432,7 @@ class VibeVoiceClient(
                                 isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
                             }
                             if (isNewSegment) {
-                                VibeVoiceDebugLogger.log("New segment detected onPartial. Prev: '${lastFullText.take(20)}...', New: '${resultText.take(20)}...'")
+                                VibeVoiceDebugLogger.log("New segment detected onPartial. Prev len=${lastFullText.length}, new len=${resultText.length}")
                             }
                             lastFullText = resultText
 
@@ -447,7 +451,7 @@ class VibeVoiceClient(
                         abandonSocket("server error")
                         listener.onError(errorMsg)
                     } else {
-                        VibeVoiceDebugLogger.log("WS msg no text: $text")
+                        VibeVoiceDebugLogger.log("WS msg without text or error, length=${text.length}")
                     }
                 } catch (e: Exception) {
                     VibeVoiceDebugLogger.log("WS msg parse error: ${e.message}")
@@ -469,7 +473,11 @@ class VibeVoiceClient(
                     if (this@VibeVoiceClient.webSocket == webSocket) {
                         this@VibeVoiceClient.webSocket = null
                     }
-                    listener.onError(t.message ?: "WebSocket Error")
+                    // After a stop the user asked for, a dropped connection is how the session
+                    // ended, not an error: the final has arrived or never will. Reporting it as one
+                    // put "Dictation error" over a transcript that was committed cleanly.
+                    if (stopRequested) listener.onClosed()
+                    else listener.onError(t.message ?: "WebSocket Error")
                 }
             }
 
@@ -802,6 +810,7 @@ class VibeVoiceClient(
 
     fun stopStreaming() {
         if (!isStreaming) return
+        stopRequested = true
         isStreaming = false
         cleanupAudioCapture()
 
@@ -821,11 +830,16 @@ class VibeVoiceClient(
             VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
             delay(3000)
             VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
-            ws?.close(1000, "Done (timeout)")
+            ws?.cancel()
             if (this@VibeVoiceClient.webSocket == ws) {
                 this@VibeVoiceClient.webSocket = null
             }
             closureJob = null
+            // The socket may already be dead -- stopped during a reconnect backoff, with no socket
+            // left to deliver a final or a close -- and then nothing else ends the session: the
+            // keyboard would sit in "finishing" for good. Ending it here is idempotent on the
+            // listener's side, which ignores callbacks for a session it has already finished.
+            listener.onClosed()
         }
     }
 

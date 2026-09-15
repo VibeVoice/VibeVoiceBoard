@@ -360,12 +360,14 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     bugReportStatus = null
                     showBugReportDialog = true
                 },
-                enabled = apiKey != null,
+                // Any key the reporter can send with, a trial's included: closed testers hit problems
+                // before they ever link an account, and those are the reports worth having.
+                enabled = apiKey != null || VibeVoiceClient.getApiKey(context) != null,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.vibevoice_report_bug_title))
             }
-            if (apiKey == null) {
+            if (apiKey == null && VibeVoiceClient.getApiKey(context) == null) {
                 Spacer(modifier = Modifier.size(4.dp))
                 Text(
                     stringResource(R.string.vibevoice_not_linked),

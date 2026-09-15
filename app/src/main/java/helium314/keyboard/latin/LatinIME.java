@@ -1178,6 +1178,10 @@ public class LatinIME extends InputMethodService implements
     void onFinishInputViewInternal(final boolean finishingInput) {
         super.onFinishInputView(finishingInput);
         Log.i(TAG, "onFinishInputView");
+        // The connection is still the field being left. A session carries on into the next field,
+        // and the piece on display would otherwise be committed there by the next segment -- landing
+        // twice, once left behind as composing text here and once in the new field.
+        commitPendingVoiceText();
         cleanupInternalStateForFinishInput();
     }
 
@@ -1583,6 +1587,9 @@ public class LatinIME extends InputMethodService implements
             handleVoiceInput();
             return;
         }
+        // Typing during a session: the piece on display goes in first, so the key lands after it
+        // instead of being overwritten by the next partial's setComposingText.
+        if (mIsRecordingVoice && KeyCode.VOICE_INPUT != event.getKeyCode()) commitPendingVoiceText();
         if (KeyCode.VOICE_INPUT == event.getKeyCode()) {
             handleVoiceInput();
             return;
@@ -1976,6 +1983,13 @@ public class LatinIME extends InputMethodService implements
         return true;
     }
 
+    /** Commits the dictated piece currently shown as composing text, if a session has one. */
+    private void commitPendingVoiceText() {
+        if (mVibeVoiceClient == null || mVoiceComposingText.isEmpty()) return;
+        commitVoiceSegment(mVoiceComposingText);
+        mVoiceComposingText = "";
+    }
+
     private void commitVoiceSegment(String segment) {
         mInputLogic.mConnection.commitText(segment + " ", 1);
         mVoiceSessionText.append(segment).append(' ');
@@ -1986,7 +2000,7 @@ public class LatinIME extends InputMethodService implements
             return;
         String commitText = text;
         if (commitText.trim().isEmpty() && !mVoiceComposingText.isEmpty()) {
-            VibeVoiceDebugLogger.log("[EMPTY_RESULT] final text is empty; falling back to composing text: " + mVoiceComposingText);
+            VibeVoiceDebugLogger.log("[EMPTY_RESULT] final text is empty; falling back to composing text, length=" + mVoiceComposingText.length());
             commitText = mVoiceComposingText;
         }
         if (commitText.trim().isEmpty()) {
@@ -2021,6 +2035,7 @@ public class LatinIME extends InputMethodService implements
 
     public void onTextInput(@Nullable String rawText) {
         if (rawText == null) return;
+        if (mIsRecordingVoice) commitPendingVoiceText();
         // TODO: have the keyboard pass the correct key code when we need it.
         Event event = Event.createSoftwareTextEvent(rawText, KeyCode.MULTIPLE_CODE_POINTS, null);
         InputTransaction completeInputTransaction = mInputLogic.onTextInput(mSettings.getCurrent(),

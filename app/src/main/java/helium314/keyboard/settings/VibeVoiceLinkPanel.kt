@@ -108,7 +108,7 @@ fun VibeVoiceLinkPanel(
                 return@launch
             }
             userCode = code
-            val interval = res.optInt("interval", 5).coerceAtLeast(1)
+            var interval = res.optInt("interval", 5).coerceAtLeast(1)
             // RFC 8628 device codes expire; without this the loop below polls forever whenever
             // pollForToken keeps returning null -- offline, or the user never finishes in the browser.
             val expiresAt = System.currentTimeMillis() + res.optInt("expires_in", 600).coerceAtLeast(30) * 1000L
@@ -138,6 +138,10 @@ fun VibeVoiceLinkPanel(
                     polling = false
                     userCode = null
                     onLinked()
+                } else if (tokenRes.optString("error") == "slow_down") {
+                    // RFC 8628 3.5: keep polling, five seconds slower. Treating it as fatal threw
+                    // away a pairing that was about to succeed.
+                    interval += 5
                 } else if (tokenRes.optString("error") != "authorization_pending") {
                     polling = false
                     userCode = null
