@@ -76,6 +76,9 @@ class VibeVoiceClient(
     @Volatile private var isStreaming = false
     // Set by stopStreaming only: tells a dropped connection after the user's stop apart from a failure.
     @Volatile private var stopRequested = false
+    /** Whether any socket of this session ever finished its handshake, and when the session began. */
+    @Volatile private var everOpened = false
+    @Volatile private var startedAt = 0L
     @Volatile private var audioRecord: AudioRecord? = null
     @Volatile private var audioJob: Job? = null
     @Volatile private var totalRead = 0L
@@ -249,14 +252,7 @@ class VibeVoiceClient(
             }
         } else {
             VibeVoiceDebugLogger.log("Giving up: unsent=$unsent outageMs=$outageMs")
-            isStreaming = false
-            setLinkDegraded(false)
-            cleanupAudioCapture()
-            // stopStreaming returns early once isStreaming is false, so nothing later closes this.
-            abandonSocket("reconnect window exceeded")
-            // A code, not a sentence. What the user reads is the keyboard's business, and "Dictation
-            // error: Connection lost" framed a tunnel as a fault in the product.
-            listener.onError(ERR_LINK_LOST)
+            giveUp("reconnect window exceeded")
         }
     }
 
@@ -290,6 +286,13 @@ class VibeVoiceClient(
             while (isActive && isStreaming) {
                 delay(LINK_CHECK_INTERVAL_MS)
                 if (!isStreaming) break
+                // Nothing ever answered. Not a degraded link but a session that never began, and
+                // waiting out the full reconnect window means half a minute of talking to nobody.
+                if (!everOpened && SystemClock.elapsedRealtime() - startedAt > HANDSHAKE_TIMEOUT_MS) {
+                    VibeVoiceDebugLogger.log("No connection within ${HANDSHAKE_TIMEOUT_MS}ms; giving up")
+                    giveUp("handshake timeout")
+                    break
+                }
                 val ws = webSocket
                 val queued = try { ws?.queueSize() ?: 0L } catch (_: Exception) { 0L }
                 val bad = isReconnecting || (isWsOpen && queued > LINK_QUEUE_STALL_BYTES)
@@ -325,6 +328,7 @@ class VibeVoiceClient(
                 val authJson = JSONObject().put("api_key", apiKey).toString()
                 webSocket.send(authJson)
                 
+                everOpened = true
                 synchronized(preOpenBuffer) {
                     isWsOpen = true
                     
@@ -510,6 +514,8 @@ class VibeVoiceClient(
         if (isStreaming) return
         isStreaming = true
         isLinkDegraded = false
+        everOpened = false
+        startedAt = SystemClock.elapsedRealtime()
         outageStartedAt = 0L
         startLinkWatchdog()
         closureJob?.cancel()
@@ -865,6 +871,20 @@ class VibeVoiceClient(
         scopeJob.cancel()
     }
 
+    /**
+     * Ends a session that cannot be saved. The error code is a code, not a sentence: what the user
+     * reads is the keyboard's business, and "Dictation error: Connection lost" framed a tunnel as a
+     * fault in the product.
+     */
+    private fun giveUp(reason: String) {
+        isStreaming = false
+        setLinkDegraded(false)
+        cleanupAudioCapture()
+        // stopStreaming returns early once isStreaming is false, so nothing later closes the socket.
+        abandonSocket(reason)
+        listener.onError(ERR_LINK_LOST)
+    }
+
     private fun cleanupAudioCapture() {
         // Reached by every path that ends a session, abnormal ones included, which is why the
         // watchdog is torn down here rather than in stopStreaming alone.
@@ -930,6 +950,8 @@ class VibeVoiceClient(
         const val ERR_TRIAL_EXHAUSTED = "trial_exhausted"
         private const val TAG = "VibeVoiceClient"
         private const val LINK_CHECK_INTERVAL_MS = 1000L
+        /** How long a session may go without a single socket reaching the server. */
+        private const val HANDSHAKE_TIMEOUT_MS = 8_000L
         /** Six seconds of audio at 16 kHz, 16-bit mono. Below this it is jitter; above it, a backlog. */
         private const val LINK_QUEUE_STALL_BYTES = 6 * 32000L
         /**

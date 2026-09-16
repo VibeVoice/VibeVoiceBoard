@@ -49,6 +49,7 @@
     <!-- Settings screen title for VibeVoice integration -->
     <string name="vibevoice_integration_title">VibeVoice typing</string>
     <string name="vibevoice_stop_dictation">Stop dictation</string>
+    <string name="vibevoice_no_network">No internet connection. Dictation needs one.</string>
     <string name="vibevoice_copied">Dictation copied to the clipboard</string>
     <string name="vibevoice_overlay_description">Dictation running. Double tap to stop and copy it.</string>
     <string name="vibevoice_mic_blocked">Microphone access is off. Allow it under Permissions to dictate.</string>

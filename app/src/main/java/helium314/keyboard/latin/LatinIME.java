@@ -1784,6 +1784,16 @@ public class LatinIME extends InputMethodService implements
                 return;
             }
 
+            // Dictation is a live stream to a server. Without a network the session would record,
+            // draw its waves and reach nobody, and the user would find that out half a minute later
+            // when the reconnect window ran out -- with everything they said in the meantime gone.
+            if (!hasUsableNetwork()) {
+                android.widget.Toast
+                        .makeText(this, R.string.vibevoice_no_network, android.widget.Toast.LENGTH_LONG).show();
+                VibeVoiceDebugLogger.log("Dictation not started: no usable network");
+                return;
+            }
+
             String apiKey = VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
                 android.widget.Toast
@@ -2042,6 +2052,34 @@ public class LatinIME extends InputMethodService implements
             android.widget.Toast.makeText(this, R.string.vibevoice_copied, android.widget.Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             VibeVoiceDebugLogger.log("Could not copy the dictation: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Whether there is a network that has actually reached the internet.
+     *
+     * NET_CAPABILITY_VALIDATED, not merely connected: a captive portal in a hotel or a train answers
+     * every connection and transcribes nothing, and that is the case this check is for as much as
+     * flight mode is.
+     */
+    private boolean hasUsableNetwork() {
+        try {
+            final android.net.ConnectivityManager cm =
+                    (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            if (cm == null) return true; // cannot tell; let the session try
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                final android.net.Network network = cm.getActiveNetwork();
+                if (network == null) return false;
+                final android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                if (caps == null) return false;
+                return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+            }
+            final android.net.NetworkInfo info = cm.getActiveNetworkInfo();
+            return info != null && info.isConnected();
+        } catch (Exception e) {
+            VibeVoiceDebugLogger.log("Could not read the network state: " + e.getMessage());
+            return true;
         }
     }
 

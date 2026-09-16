@@ -30,6 +30,12 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
         that can never be granted is worse than no switch.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+        Read only, and only to answer one question before a session starts: is there a network that
+        has actually reached the internet. Without it dictation records into a socket that will never
+        open, and the user finds out half a minute later with everything they said gone.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- A dictation session has to survive the keyboard being dismissed, and a process with no
          visible window may not use the microphone from Android 11 on. The two FOREGROUND_SERVICE

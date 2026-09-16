@@ -19,6 +19,8 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
+import helium314.keyboard.event.HapticEvent
+import helium314.keyboard.latin.AudioAndHapticFeedbackManager
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.settings.Defaults
@@ -386,8 +388,14 @@ class VoiceOverlay(context: Context) : View(context) {
                             VibeVoiceDebugLogger.log("Could not move the overlay: ${e.message}")
                         }
                     }
-                    DismissTarget.setArmed(armed)
-                    armedNow = armed
+                    if (armed != armedNow) {
+                        // The same feedback a key gives, and under the same setting: crossing into a
+                        // target is the moment worth feeling, because the mark is under the thumb
+                        // that would otherwise have to watch it.
+                        if (armed != DismissTarget.TARGET_NONE) haptic(HapticEvent.KEY_PRESS)
+                        DismissTarget.setArmed(armed)
+                        armedNow = armed
+                    }
                 }
                 return true
             }
@@ -439,6 +447,7 @@ class VoiceOverlay(context: Context) : View(context) {
      */
     private fun dismiss(toClipboard: Boolean = false) {
         val run = onDismiss
+        haptic(HapticEvent.KEY_LONG_PRESS)
         visibility = GONE
         DismissTarget.conceal()
         stopFling()
@@ -448,6 +457,15 @@ class VoiceOverlay(context: Context) : View(context) {
         flingHandler.post {
             hide(context)
             run?.stop(toClipboard)
+        }
+    }
+
+    /** Key feedback, which the manager withholds unless the user has vibration on. */
+    private fun haptic(event: HapticEvent) {
+        try {
+            AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, event)
+        } catch (e: Exception) {
+            VibeVoiceDebugLogger.log("No haptics for the mark: ${e.message}")
         }
     }
 
