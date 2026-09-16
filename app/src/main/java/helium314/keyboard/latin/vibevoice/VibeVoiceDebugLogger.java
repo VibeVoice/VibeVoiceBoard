@@ -2,6 +2,7 @@ package helium314.keyboard.latin.vibevoice;
 
 import android.content.Context;
 import android.util.Log;
+import helium314.keyboard.latin.BuildConfig;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -42,6 +43,23 @@ public class VibeVoiceDebugLogger {
             return;
         }
         sInstance.writeLog(message);
+    }
+
+    /**
+     * Logs a message with the dictated text it is about -- but only in a debug build.
+     *
+     * A release log is uploaded with every bug report, and what somebody dictated is the last thing
+     * that should travel with one. A debug build is this project's own device, where the same log is
+     * the only way to tell "the words never arrived" from "the words arrived somewhere else".
+     */
+    public static void logText(String message, String text) {
+        if (text == null) {
+            log(message + ": null");
+        } else if (BuildConfig.DEBUG) {
+            log(message + " (len=" + text.length() + "): " + text);
+        } else {
+            log(message + " (len=" + text.length() + ")");
+        }
     }
 
     private void writeLog(String message) {

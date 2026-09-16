@@ -1089,6 +1089,9 @@ public class LatinIME extends InputMethodService implements
             }
         }
 
+        // A field again, and a session may have been talking into nothing while there was none.
+        if (mIsRecordingVoice) flushPendingVoiceText();
+
         mainKeyboardView.setMainDictionaryAvailability(mDictionaryFacilitator.hasAtLeastOneInitializedMainDictionary());
         mainKeyboardView.setKeyPreviewPopupEnabled(currentSettingsValues.mKeyPreviewPopupOn);
         mainKeyboardView.setSlidingKeyInputPreviewEnabled(currentSettingsValues.mSlidingKeyInputPreviewEnabled);
@@ -1634,6 +1637,16 @@ public class LatinIME extends InputMethodService implements
     private String mVoiceCommittedPrefix = "";
     /** Set by a drop on the mark's clipboard target: this session ends in the clipboard, not in a field. */
     private boolean mVoiceFinishToClipboard = false;
+    /**
+     * Dictated text with nowhere to go yet.
+     *
+     * A session outlives the keyboard, and while the keyboard is gone there is no input connection:
+     * a commit then reaches nobody, silently. Segments that finalize in that window are held here
+     * and written out when a field comes back, rather than being counted as delivered and lost --
+     * which is how a whole paragraph could end up in the clipboard history while only its tail
+     * reached the field.
+     */
+    private final StringBuilder mVoicePendingText = new StringBuilder();
 
     public boolean isRecordingVoice() {
         return mIsRecordingVoice;
@@ -1713,6 +1726,7 @@ public class LatinIME extends InputMethodService implements
         mIsStoppingVoice = false;
         mVoiceComposingText = "";
         mVoiceCommittedPrefix = "";
+        mVoicePendingText.setLength(0);
         mVoiceSessionText.setLength(0);
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
@@ -1813,6 +1827,7 @@ public class LatinIME extends InputMethodService implements
 
             mVoiceComposingText = ""; // Clear state at start
             mVoiceCommittedPrefix = "";
+            mVoicePendingText.setLength(0);
             mVoiceSessionText.setLength(0);
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
@@ -1848,6 +1863,8 @@ public class LatinIME extends InputMethodService implements
                             mVoiceCommittedPrefix = "";
                         }
                         final String shown = voiceRemainder(text);
+                        VibeVoiceDebugLogger.logText("onPartial shown (newSegment=" + isNewSegment
+                                + ", connected=" + mInputLogic.mConnection.isConnected() + ")", shown);
                         mVoiceComposingText = shown;
                         VoiceSessionService.showTranscript(text);
                         mInputLogic.mConnection.setComposingText(shown, 1);
@@ -2087,6 +2104,8 @@ public class LatinIME extends InputMethodService implements
     private void commitPendingVoiceText() {
         if (mVibeVoiceClient == null || mVoiceComposingText.isEmpty()) return;
         commitVoiceSegment(mVoiceComposingText);
+        // Held or written, it is off the composing region either way, so the partials that follow
+        // must not repeat it.
         mVoiceCommittedPrefix = mVoiceCommittedPrefix + mVoiceComposingText;
         mVoiceComposingText = "";
     }
@@ -2106,8 +2125,25 @@ public class LatinIME extends InputMethodService implements
     }
 
     private void commitVoiceSegment(String segment) {
-        mInputLogic.mConnection.commitText(segment + " ", 1);
         mVoiceSessionText.append(segment).append(' ');
+        if (!mInputLogic.mConnection.isConnected()) {
+            // commitText is a no-op without a connection, and says nothing about it.
+            mVoicePendingText.append(segment).append(' ');
+            VibeVoiceDebugLogger.logText("Segment held, no input connection", segment);
+            return;
+        }
+        mInputLogic.mConnection.commitText(segment + " ", 1);
+        VibeVoiceDebugLogger.logText("Segment committed", segment);
+    }
+
+    /** Writes out what was dictated while no field was there to take it. */
+    private void flushPendingVoiceText() {
+        if (mVoicePendingText.length() == 0) return;
+        if (!mInputLogic.mConnection.isConnected()) return;
+        final String held = mVoicePendingText.toString();
+        mVoicePendingText.setLength(0);
+        VibeVoiceDebugLogger.logText("Flushing held dictation", held);
+        mInputLogic.mConnection.commitText(held, 1);
     }
 
     private void finishVoiceSession(String text, boolean addNewline) {
@@ -2121,6 +2157,7 @@ public class LatinIME extends InputMethodService implements
         // No field to write into -- the keyboard is gone and nothing has focus, which is where a
         // session ended from the notification used to lose its last words silently.
         final boolean noField = !mInputLogic.mConnection.isConnected();
+        if (!mVoiceFinishToClipboard && !noField) flushPendingVoiceText();
         if (mVoiceFinishToClipboard || (noField && mVoiceSessionText.length() + commitText.length() > 0)) {
             // Dropped on the clipboard target. Everything this session produced goes there, not into
             // whatever field happens to have focus -- there may well be none, which is the reason the
@@ -2140,6 +2177,7 @@ public class LatinIME extends InputMethodService implements
             boolean isMultiline = editorInfo != null &&
                     (editorInfo.inputType & android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
             String suffix = (addNewline && isMultiline) ? "\n" : " ";
+            VibeVoiceDebugLogger.logText("finishVoiceSession commit", commitText);
             VibeVoiceDebugLogger.log("finishVoiceSession: length=" + commitText.length() + ", suffix='" + suffix.trim() + "' multiline=" + isMultiline);
             mInputLogic.mConnection.commitText(commitText + suffix, 1);
             mVoiceSessionText.append(commitText);
@@ -2149,6 +2187,7 @@ public class LatinIME extends InputMethodService implements
         }
         mVoiceComposingText = "";
         mVoiceCommittedPrefix = "";
+        mVoicePendingText.setLength(0);
         mVoiceSessionText.setLength(0);
         mVoiceFinishToClipboard = false;
         mVibeVoiceClient.stopStreaming();
