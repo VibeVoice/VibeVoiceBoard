@@ -12,7 +12,8 @@ import android.view.View
 import android.view.WindowManager
 
 /**
- * The X that a running session is dragged onto to end it.
+ * The two targets a running session is dragged onto to end it: an X that drops what has not been
+ * written anywhere yet, and a clipboard that keeps it.
  *
  * The window is added once, with the mark, and only made visible once a drag begins. Adding a window
  * is a round trip to the window manager, and doing that in the middle of a gesture cost the first
@@ -39,16 +40,16 @@ class DismissTarget(context: Context) : View(context) {
     private var discColor = Color.argb(235, 20, 20, 24)
     private var markColor = Color.rgb(0x9F, 0x00, 0xA1)
 
-    /** True while the mark is inside the catch radius. */
-    private var armed = false
-    private var grow = 0f
+    /** Which target the mark is over: [TARGET_NONE], [TARGET_DISCARD] or [TARGET_CLIPBOARD]. */
+    private var armed = TARGET_NONE
+    private val grow = floatArrayOf(0f, 0f)
 
     fun setColors(disc: Int, mark: Int) {
         discColor = disc
         markColor = mark
     }
 
-    fun arm(value: Boolean) {
+    fun arm(value: Int) {
         if (armed == value) return
         armed = value
         invalidate()
@@ -63,41 +64,71 @@ class DismissTarget(context: Context) : View(context) {
      * metrics sat a navigation bar's height above the X that was drawn. Close enough to look
      * right, far enough that the drop missed.
      */
-    fun centerOnScreen(out: FloatArray) {
+    fun centerOnScreen(target: Int, out: FloatArray) {
         val loc = IntArray(2)
         getLocationOnScreen(loc)
-        out[0] = loc[0] + width / 2f
+        val offset = (if (target == TARGET_CLIPBOARD) SPREAD_DP else -SPREAD_DP) * density
+        out[0] = loc[0] + width / 2f + offset
         out[1] = loc[1] + (height - TARGET_BOTTOM_DP * density)
     }
 
     override fun onDraw(canvas: Canvas) {
         // Eased rather than snapped, so crossing the boundary reads as the target reacting to the
         // mark rather than as a redraw.
-        val target = if (armed) 1f else 0f
-        grow += (target - grow) * 0.35f
-        if (abs(grow - target) > 0.01f) postInvalidateOnAnimation()
+        var again = false
+        for (i in grow.indices) {
+            val target = if (armed == i) 1f else 0f
+            grow[i] += (target - grow[i]) * 0.35f
+            if (abs(grow[i] - target) > 0.01f) again = true
+        }
+        if (again) postInvalidateOnAnimation()
 
-        val cx = width / 2f
         val cy = height - TARGET_BOTTOM_DP * density
-        val radius = (RADIUS_DP + GROW_DP * grow) * density
+        drawTarget(canvas, width / 2f - SPREAD_DP * density, cy, grow[TARGET_DISCARD], cross = true)
+        drawTarget(canvas, width / 2f + SPREAD_DP * density, cy, grow[TARGET_CLIPBOARD], cross = false)
+    }
 
-        // Armed inverts the two: the disc fills with the mark's own colour and the X is cut out of
-        // it. Saying "let go now" by changing what the thing is, not by adding a label.
-        discPaint.color = if (grow > 0.5f) markColor else discColor
-        discPaint.alpha = (200 + 55 * grow).toInt().coerceIn(0, 255)
+    /**
+     * One target: a disc with a glyph. Armed inverts the two -- the disc fills with the mark's own
+     * colour and the glyph is cut out of it. Saying "let go now" by changing what the thing is,
+     * rather than by adding a label.
+     */
+    private fun drawTarget(canvas: Canvas, cx: Float, cy: Float, g: Float, cross: Boolean) {
+        val radius = (RADIUS_DP + GROW_DP * g) * density
+        discPaint.color = if (g > 0.5f) markColor else discColor
+        discPaint.alpha = (200 + 55 * g).toInt().coerceIn(0, 255)
         canvas.drawCircle(cx, cy, radius, discPaint)
 
-        crossPaint.color = if (grow > 0.5f) discColor else markColor
-        crossPaint.strokeWidth = (2.4f + grow) * density
+        crossPaint.color = if (g > 0.5f) discColor else markColor
+        crossPaint.strokeWidth = (2.4f + g) * density
         val arm = radius * 0.34f
-        canvas.drawLine(cx - arm, cy - arm, cx + arm, cy + arm, crossPaint)
-        canvas.drawLine(cx + arm, cy - arm, cx - arm, cy + arm, crossPaint)
+        if (cross) {
+            canvas.drawLine(cx - arm, cy - arm, cx + arm, cy + arm, crossPaint)
+            canvas.drawLine(cx + arm, cy - arm, cx - arm, cy + arm, crossPaint)
+        } else {
+            // A clipboard: the board, and the clip on top of it.
+            val w = arm * 1.5f
+            val h = arm * 1.9f
+            board.set(cx - w / 2f, cy - h / 2f + arm * 0.18f, cx + w / 2f, cy + h / 2f)
+            canvas.drawRoundRect(board, arm * 0.28f, arm * 0.28f, crossPaint)
+            val clipW = w * 0.52f
+            board.set(cx - clipW / 2f, cy - h / 2f - arm * 0.2f, cx + clipW / 2f, cy - h / 2f + arm * 0.36f)
+            canvas.drawRoundRect(board, arm * 0.16f, arm * 0.16f, crossPaint)
+        }
     }
+
+    private val board = android.graphics.RectF()
 
     private fun abs(v: Float) = if (v < 0f) -v else v
 
     companion object {
+        const val TARGET_NONE = -1
+        const val TARGET_DISCARD = 0
+        const val TARGET_CLIPBOARD = 1
+
         private const val RADIUS_DP = 28f
+        /** How far each target sits from the middle. Two discs, a thumb's width apart. */
+        private const val SPREAD_DP = 46f
         private const val GROW_DP = 8f
         /** Must match VoiceOverlay's TARGET_BOTTOM_DP: the hit test is done against this position. */
         private const val TARGET_BOTTOM_DP = 104f
@@ -108,12 +139,12 @@ class DismissTarget(context: Context) : View(context) {
         private fun windowManager(context: Context): WindowManager =
             context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        /** The X's centre in screen coordinates, or false when there is no target. */
+        /** A target's centre in screen coordinates, or false when there is no target window. */
         @JvmStatic
-        fun centerOnScreen(out: FloatArray): Boolean {
+        fun centerOnScreen(target: Int, out: FloatArray): Boolean {
             val view = current ?: return false
             if (view.width == 0 || view.height == 0) return false
-            view.centerOnScreen(out)
+            view.centerOnScreen(target, out)
             return true
         }
 
@@ -126,7 +157,7 @@ class DismissTarget(context: Context) : View(context) {
         @JvmStatic
         fun conceal() {
             current?.let {
-                it.arm(false)
+                it.arm(TARGET_NONE)
                 if (it.visibility != INVISIBLE) it.visibility = INVISIBLE
             }
         }
@@ -164,7 +195,7 @@ class DismissTarget(context: Context) : View(context) {
         }
 
         @JvmStatic
-        fun setArmed(armed: Boolean) {
+        fun setArmed(armed: Int) {
             current?.arm(armed)
         }
 

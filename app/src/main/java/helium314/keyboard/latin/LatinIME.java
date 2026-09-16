@@ -1140,8 +1140,13 @@ public class LatinIME extends InputMethodService implements
                 // through the same path as the space key.
                 if (mSettings.getCurrent().mVoiceOverlayEnabled) {
                     final int sessionId = mVoiceSessionId;
-                    VoiceOverlay.show(this, mVibeVoiceClient, () -> mUiHandler.post(() -> {
-                        if (sessionId == mVoiceSessionId) handleVoiceInput();
+                    VoiceOverlay.show(this, mVibeVoiceClient, (toClipboard) -> mUiHandler.post(() -> {
+                        if (sessionId != mVoiceSessionId) return;
+                        // Dropped on the clipboard rather than the X: there may be no text field to
+                        // put the words in -- that is the whole reason the second target exists --
+                        // so they go to the clipboard instead of into whatever happens to have focus.
+                        mVoiceFinishToClipboard = toClipboard;
+                        handleVoiceInput();
                     }));
                 }
             } else {
@@ -1627,6 +1632,8 @@ public class LatinIME extends InputMethodService implements
      * words again after the ones just committed. This is what the next partial has to drop.
      */
     private String mVoiceCommittedPrefix = "";
+    /** Set by a drop on the mark's clipboard target: this session ends in the clipboard, not in a field. */
+    private boolean mVoiceFinishToClipboard = false;
 
     public boolean isRecordingVoice() {
         return mIsRecordingVoice;
@@ -2008,6 +2015,36 @@ public class LatinIME extends InputMethodService implements
         return true;
     }
 
+    /**
+     * Puts a whole dictation into the clipboard, and into the clipboard history with it.
+     *
+     * The system clipboard rather than the history alone: the history is this keyboard's drawer, and
+     * a user who has just dictated into no field at all is usually about to paste somewhere the
+     * drawer is not open. Writing it needs no focus here, because an IME is one of the few things
+     * Android still lets write to the clipboard without any.
+     */
+    private void copyVoiceSessionToClipboard(final String text) {
+        if (text.isEmpty()) return;
+        mClipboardHistoryManager.addTextToHistory(text);
+        // Not in incognito, and not out of a password field: addTextToHistory refuses both, and the
+        // system clipboard is the more exposed of the two places.
+        final EditorInfo field = getCurrentInputEditorInfo();
+        if (mSettings.getCurrent().mIncognitoModeEnabled
+                || (field != null && InputTypeUtils.isAnyPasswordInputType(field.inputType))) {
+            VibeVoiceDebugLogger.log("Dictation not copied: private field or incognito");
+            return;
+        }
+        try {
+            final android.content.ClipboardManager clipboard =
+                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (clipboard != null)
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("VibeVoice", text));
+            android.widget.Toast.makeText(this, R.string.vibevoice_copied, android.widget.Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            VibeVoiceDebugLogger.log("Could not copy the dictation: " + e.getMessage());
+        }
+    }
+
     /** Commits the dictated piece currently shown as composing text, if a session has one. */
     private void commitPendingVoiceText() {
         if (mVibeVoiceClient == null || mVoiceComposingText.isEmpty()) return;
@@ -2043,7 +2080,17 @@ public class LatinIME extends InputMethodService implements
             VibeVoiceDebugLogger.log("[EMPTY_RESULT] final text is empty; falling back to composing text, length=" + mVoiceComposingText.length());
             commitText = mVoiceComposingText;
         }
-        if (commitText.trim().isEmpty()) {
+        // No field to write into -- the keyboard is gone and nothing has focus, which is where a
+        // session ended from the notification used to lose its last words silently.
+        final boolean noField = !mInputLogic.mConnection.isConnected();
+        if (mVoiceFinishToClipboard || (noField && mVoiceSessionText.length() + commitText.length() > 0)) {
+            // Dropped on the clipboard target. Everything this session produced goes there, not into
+            // whatever field happens to have focus -- there may well be none, which is the reason the
+            // target exists.
+            mVoiceSessionText.append(commitText);
+            final String all = mVoiceSessionText.toString().trim();
+            copyVoiceSessionToClipboard(all);
+        } else if (commitText.trim().isEmpty()) {
             VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession: skipping empty commit");
             mInputLogic.mConnection.commitText("", 1); // clear any composing text, insert nothing
             // The final is empty by protocol whenever every segment was already committed on the way;
@@ -2065,6 +2112,7 @@ public class LatinIME extends InputMethodService implements
         mVoiceComposingText = "";
         mVoiceCommittedPrefix = "";
         mVoiceSessionText.setLength(0);
+        mVoiceFinishToClipboard = false;
         mVibeVoiceClient.stopStreaming();
         mVibeVoiceClient = null;
         mIsStoppingVoice = false;

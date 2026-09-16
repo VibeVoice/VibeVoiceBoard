@@ -42,6 +42,11 @@ import kotlin.math.sin
  * drawing over other apps is a permission the user grants in the system settings, and without it
  * everything still works with the notification alone.
  */
+/** What a drop onto one of the two targets asks for: end the session, keeping the words or not. */
+fun interface StopRequest {
+    fun stop(toClipboard: Boolean)
+}
+
 class VoiceOverlay(context: Context) : View(context) {
 
     private val density = context.resources.displayMetrics.density
@@ -116,12 +121,12 @@ class VoiceOverlay(context: Context) : View(context) {
     }
 
     /** Set by [show]; running it ends the session. Reached by dropping on the target, never by a tap. */
-    private var onDismiss: Runnable? = null
+    private var onDismiss: StopRequest? = null
 
     // Read per session: "Remove animations" in the accessibility settings holds the mark still.
     private var animationsEnabled = true
 
-    private fun start(client: VibeVoiceClient, onDismiss: Runnable) {
+    private fun start(client: VibeVoiceClient, onDismiss: StopRequest) {
         this.levelSource = WeakReference(client)
         this.onDismiss = onDismiss
         animationsEnabled = try {
@@ -298,7 +303,9 @@ class VoiceOverlay(context: Context) : View(context) {
 
     override fun performAccessibilityAction(action: Int, arguments: android.os.Bundle?): Boolean {
         if (action == AccessibilityNodeInfo.ACTION_CLICK && running && onDismiss != null) {
-            dismiss()
+            // A screen reader cannot drag onto a target, so the action that is left keeps the words
+            // rather than dropping them.
+            dismiss(toClipboard = true)
             return true
         }
         return super.performAccessibilityAction(action, arguments)
@@ -344,7 +351,7 @@ class VoiceOverlay(context: Context) : View(context) {
                 startX = params.x
                 startY = params.y
                 dragged = false
-                armedNow = false
+                armedNow = DismissTarget.TARGET_NONE
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -359,8 +366,8 @@ class VoiceOverlay(context: Context) : View(context) {
                     DismissTarget.reveal()
                 }
                 if (dragged) {
-                    val armed = isOverTarget(startX + dx, startY + dy)
-                    if (armed && DismissTarget.centerOnScreen(targetCentre)) {
+                    val armed = targetUnder(startX + dx, startY + dy)
+                    if (armed != DismissTarget.TARGET_NONE && DismissTarget.centerOnScreen(armed, targetCentre)) {
                         // Held on the target once inside its radius. Letting go is the moment that
                         // matters, and asking someone to keep a fingertip steady over a circle
                         // while talking is what made this need two or three attempts.
@@ -388,7 +395,8 @@ class VoiceOverlay(context: Context) : View(context) {
                 // The armed state from the last move, not a fresh hit test: once the mark has
                 // snapped to the target its own position is the target's, and re-testing would be
                 // asking a question already answered.
-                val onTarget = dragged && event.actionMasked == MotionEvent.ACTION_UP && armedNow
+                val onTarget = if (dragged && event.actionMasked == MotionEvent.ACTION_UP) armedNow
+                    else DismissTarget.TARGET_NONE
                 addSample(event)
                 val v = windowVelocity()
                 val vx = v[0]
@@ -396,8 +404,8 @@ class VoiceOverlay(context: Context) : View(context) {
                 // A tap does nothing on purpose. Getting the mark out of the way and ending the
                 // session are both done in a hurry, and a tap that ended it would keep costing
                 // transcripts to a slip of the thumb.
-                if (onTarget) {
-                    dismiss()
+                if (onTarget != DismissTarget.TARGET_NONE) {
+                    dismiss(onTarget == DismissTarget.TARGET_CLIPBOARD)
                 } else if (!dragged) {
                     DismissTarget.conceal()
                     performClick()
@@ -415,7 +423,7 @@ class VoiceOverlay(context: Context) : View(context) {
                     rememberPosition()
                 }
                 dragged = false
-                armedNow = false
+                armedNow = DismissTarget.TARGET_NONE
                 return true
             }
         }
@@ -429,7 +437,7 @@ class VoiceOverlay(context: Context) : View(context) {
      * or so, and hiding at the end of that made a drop feel like it had not registered. Nothing
      * about ending the session needs the mark to still be on screen.
      */
-    private fun dismiss() {
+    private fun dismiss(toClipboard: Boolean = false) {
         val run = onDismiss
         visibility = GONE
         DismissTarget.conceal()
@@ -439,7 +447,7 @@ class VoiceOverlay(context: Context) : View(context) {
         // from in there is asking for trouble.
         flingHandler.post {
             hide(context)
-            run?.run()
+            run?.stop(toClipboard)
         }
     }
 
@@ -525,11 +533,11 @@ class VoiceOverlay(context: Context) : View(context) {
             stopFling()
             return
         }
-        val armed = isOverTarget(x, y)
+        val armed = targetUnder(x, y)
         DismissTarget.setArmed(armed)
-        if (armed) {
-            // Thrown onto the target counts as dropped on it.
-            dismiss()
+        if (armed != DismissTarget.TARGET_NONE) {
+            // Thrown onto a target counts as dropped on it.
+            dismiss(armed == DismissTarget.TARGET_CLIPBOARD)
             return
         }
         flingVx *= FLING_FRICTION
@@ -546,7 +554,7 @@ class VoiceOverlay(context: Context) : View(context) {
     private val targetCentre = FloatArray(2)
     private var lastX = Int.MIN_VALUE
     private var lastY = Int.MIN_VALUE
-    private var armedNow = false
+    private var armedNow = DismissTarget.TARGET_NONE
 
     /**
      * Whether the mark's centre is inside the target's catch radius.
@@ -555,12 +563,23 @@ class VoiceOverlay(context: Context) : View(context) {
      * put the catch zone a navigation bar's height above the X that was on screen: near enough to
      * look like the drop should have worked, far enough that it did not.
      */
-    private fun isOverTarget(left: Float, top: Float): Boolean {
-        if (!DismissTarget.centerOnScreen(targetCentre)) return false
+    private fun targetUnder(left: Float, top: Float): Int {
         val size = width.toFloat()
-        val dx = left + size / 2f - targetCentre[0]
-        val dy = top + size / 2f - targetCentre[1]
-        return dx * dx + dy * dy <= (CATCH_RADIUS_DP * density) * (CATCH_RADIUS_DP * density)
+        var best = DismissTarget.TARGET_NONE
+        var bestDistance = Float.MAX_VALUE
+        for (t in intArrayOf(DismissTarget.TARGET_DISCARD, DismissTarget.TARGET_CLIPBOARD)) {
+            if (!DismissTarget.centerOnScreen(t, targetCentre)) continue
+            val dx = left + size / 2f - targetCentre[0]
+            val dy = top + size / 2f - targetCentre[1]
+            val d = dx * dx + dy * dy
+            // Halved for two targets side by side: at the old radius their catch zones overlapped,
+            // and the mark snapped to whichever was tested first rather than to the nearer one.
+            if (d <= (CATCH_RADIUS_DP * 0.5f * density) * (CATCH_RADIUS_DP * 0.5f * density) && d < bestDistance) {
+                bestDistance = d
+                best = t
+            }
+        }
+        return best
     }
 
     override fun performClick(): Boolean {
@@ -611,7 +630,7 @@ class VoiceOverlay(context: Context) : View(context) {
 
         /** Puts the mark on screen. Does nothing, quietly, when the permission is not granted. */
         @JvmStatic
-        fun show(context: Context, client: VibeVoiceClient, onDismiss: Runnable) {
+        fun show(context: Context, client: VibeVoiceClient, onDismiss: StopRequest) {
             if (current != null) return
             if (!isAllowed(context)) {
                 VibeVoiceDebugLogger.log("Overlay not shown: drawing over other apps is not allowed")
