@@ -911,6 +911,13 @@ public class LatinIME extends InputMethodService implements
     private void onStartInputInternal(final EditorInfo editorInfo, final boolean restarting) {
         super.onStartInput(editorInfo, restarting);
 
+        // Also here, not only in onStartInputView: with a hardware keyboard attached the input view
+        // is never shown, and a session would have carried on into a password field.
+        if (editorInfo != null && (InputTypeUtils.isAnyPasswordInputType(editorInfo.inputType)
+                || (editorInfo.imeOptions & EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0)) {
+            abortVoiceSession("input started on a password or incognito field");
+        }
+
         final RichInputMethodSubtype subtypeForApp = editorInfo == null
                 ? null
                 : mSettings.getSubtypeForApp(editorInfo.packageName);
@@ -1149,6 +1156,7 @@ public class LatinIME extends InputMethodService implements
                         // put the words in -- that is the whole reason the second target exists --
                         // so they go to the clipboard instead of into whatever happens to have focus.
                         mVoiceFinishToClipboard = toClipboard;
+                        mVoiceFinishDiscard = !toClipboard;
                         handleVoiceInput();
                     }));
                 }
@@ -1635,8 +1643,18 @@ public class LatinIME extends InputMethodService implements
      * words again after the ones just committed. This is what the next partial has to drop.
      */
     private String mVoiceCommittedPrefix = "";
+    /**
+     * The current segment exactly as the server last sent it.
+     *
+     * The prefix above is set from this, not built up from the remainders shown: those have had
+     * their leading space stripped, so gluing two of them together produced "helloworld", which
+     * matches no partial the server will ever send, and the whole segment was inserted a second time.
+     */
+    private String mVoiceSegmentFull = "";
     /** Set by a drop on the mark's clipboard target: this session ends in the clipboard, not in a field. */
     private boolean mVoiceFinishToClipboard = false;
+    /** Set by a drop on the X: this session ends and what has not been written anywhere is dropped. */
+    private boolean mVoiceFinishDiscard = false;
     /**
      * Dictated text with nowhere to go yet.
      *
@@ -1726,8 +1744,11 @@ public class LatinIME extends InputMethodService implements
         mIsStoppingVoice = false;
         mVoiceComposingText = "";
         mVoiceCommittedPrefix = "";
+        mVoiceSegmentFull = "";
         mVoicePendingText.setLength(0);
         mVoiceSessionText.setLength(0);
+        mVoiceFinishToClipboard = false;
+        mVoiceFinishDiscard = false;
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
         if (client != null) client.cancel();
@@ -1827,7 +1848,9 @@ public class LatinIME extends InputMethodService implements
 
             mVoiceComposingText = ""; // Clear state at start
             mVoiceCommittedPrefix = "";
+            mVoiceSegmentFull = "";
             mVoicePendingText.setLength(0);
+            mVoiceFinishDiscard = false;
             mVoiceSessionText.setLength(0);
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
@@ -1864,7 +1887,7 @@ public class LatinIME extends InputMethodService implements
                         }
                         final String shown = voiceRemainder(text);
                         VibeVoiceDebugLogger.logText("onPartial shown (newSegment=" + isNewSegment
-                                + ", connected=" + mInputLogic.mConnection.isConnected() + ")", shown);
+                                + ", connected=" + hasInputConnection() + ")", shown);
                         mVoiceComposingText = shown;
                         VoiceSessionService.showTranscript(text);
                         mInputLogic.mConnection.setComposingText(shown, 1);
@@ -2075,9 +2098,9 @@ public class LatinIME extends InputMethodService implements
     /**
      * Whether there is a network that has actually reached the internet.
      *
-     * NET_CAPABILITY_VALIDATED, not merely connected: a captive portal in a hotel or a train answers
-     * every connection and transcribes nothing, and that is the case this check is for as much as
-     * flight mode is.
+     * This answers "is there a network at all", which is the case worth refusing outright: flight
+     * mode, no signal, everything off. A network that is up but useless cannot be told apart from
+     * here, and the session's handshake timeout is what catches that one.
      */
     private boolean hasUsableNetwork() {
         try {
@@ -2089,8 +2112,11 @@ public class LatinIME extends InputMethodService implements
                 if (network == null) return false;
                 final android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
                 if (caps == null) return false;
-                return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                        && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                // INTERNET alone. VALIDATED is the system's own captive-portal probe to Google, and
+                // a VPN, a private DNS or an institutional network that blocks it is not offline --
+                // refusing there would lock out people whose connection works perfectly. A network
+                // that lies is caught by the eight-second handshake timeout instead.
+                return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
             }
             final android.net.NetworkInfo info = cm.getActiveNetworkInfo();
             return info != null && info.isConnected();
@@ -2106,12 +2132,26 @@ public class LatinIME extends InputMethodService implements
         commitVoiceSegment(mVoiceComposingText);
         // Held or written, it is off the composing region either way, so the partials that follow
         // must not repeat it.
-        mVoiceCommittedPrefix = mVoiceCommittedPrefix + mVoiceComposingText;
+        mVoiceCommittedPrefix = mVoiceSegmentFull;
         mVoiceComposingText = "";
+    }
+
+    /**
+     * Whether there is a field to write into right now.
+     *
+     * Asked of the framework rather than of RichInputConnection: that one caches the connection it
+     * was last handed and is not told when input finishes, so it answers "connected" for the rest of
+     * the process once any field has ever been focused. Believing it meant dictation spoken with the
+     * keyboard gone was committed into a dead connection -- dropped by the framework without a word,
+     * and counted as delivered here.
+     */
+    private boolean hasInputConnection() {
+        return getCurrentInputConnection() != null;
     }
 
     /** What is left of a partial once the part already committed within this segment is taken off. */
     private String voiceRemainder(final String text) {
+        mVoiceSegmentFull = text;
         if (mVoiceCommittedPrefix.isEmpty()) return text;
         if (!text.startsWith(mVoiceCommittedPrefix)) {
             // The segment was rewritten rather than extended -- a reconnect replaying audio, or the
@@ -2126,7 +2166,7 @@ public class LatinIME extends InputMethodService implements
 
     private void commitVoiceSegment(String segment) {
         mVoiceSessionText.append(segment).append(' ');
-        if (!mInputLogic.mConnection.isConnected()) {
+        if (!hasInputConnection()) {
             // commitText is a no-op without a connection, and says nothing about it.
             mVoicePendingText.append(segment).append(' ');
             VibeVoiceDebugLogger.logText("Segment held, no input connection", segment);
@@ -2139,7 +2179,7 @@ public class LatinIME extends InputMethodService implements
     /** Writes out what was dictated while no field was there to take it. */
     private void flushPendingVoiceText() {
         if (mVoicePendingText.length() == 0) return;
-        if (!mInputLogic.mConnection.isConnected()) return;
+        if (!hasInputConnection()) return;
         final String held = mVoicePendingText.toString();
         mVoicePendingText.setLength(0);
         VibeVoiceDebugLogger.logText("Flushing held dictation", held);
@@ -2156,9 +2196,14 @@ public class LatinIME extends InputMethodService implements
         }
         // No field to write into -- the keyboard is gone and nothing has focus, which is where a
         // session ended from the notification used to lose its last words silently.
-        final boolean noField = !mInputLogic.mConnection.isConnected();
-        if (!mVoiceFinishToClipboard && !noField) flushPendingVoiceText();
-        if (mVoiceFinishToClipboard || (noField && mVoiceSessionText.length() + commitText.length() > 0)) {
+        final boolean noField = !hasInputConnection();
+        if (!mVoiceFinishToClipboard && !mVoiceFinishDiscard && !noField) flushPendingVoiceText();
+        if (mVoiceFinishDiscard) {
+            // Dropped on the X. What reached a field stays there -- it is already typed -- but
+            // nothing further is written, copied or kept in the history. That is what the target says.
+            VibeVoiceDebugLogger.log("Session discarded on the X; dropping " + (mVoicePendingText.length() + commitText.length()) + " characters");
+            mInputLogic.mConnection.commitText("", 1); // clear the composing region, insert nothing
+        } else if (mVoiceFinishToClipboard || (noField && mVoiceSessionText.length() + commitText.length() > 0)) {
             // Dropped on the clipboard target. Everything this session produced goes there, not into
             // whatever field happens to have focus -- there may well be none, which is the reason the
             // target exists.
@@ -2190,6 +2235,7 @@ public class LatinIME extends InputMethodService implements
         mVoicePendingText.setLength(0);
         mVoiceSessionText.setLength(0);
         mVoiceFinishToClipboard = false;
+        mVoiceFinishDiscard = false;
         mVibeVoiceClient.stopStreaming();
         mVibeVoiceClient = null;
         mIsStoppingVoice = false;
