@@ -918,6 +918,11 @@ public class LatinIME extends InputMethodService implements
             abortVoiceSession("input started on a password or incognito field");
         }
 
+        // A field again. onStartInputView is the usual place for this, but it only runs when the
+        // keyboard is actually shown -- with a hardware keyboard, or when the field is focused
+        // while the floating mark has the session, it never comes.
+        if (mIsRecordingVoice) flushPendingVoiceText();
+
         final RichInputMethodSubtype subtypeForApp = editorInfo == null
                 ? null
                 : mSettings.getSubtypeForApp(editorInfo.packageName);
@@ -1188,6 +1193,11 @@ public class LatinIME extends InputMethodService implements
     }
 
     void onFinishInputInternal() {
+        // Committed before super clears the input state, while the field being left is still there.
+        if (mIsRecordingVoice) {
+            commitPendingVoiceText();
+            VibeVoiceDebugLogger.log("onFinishInput while dictating (" + voiceFieldState() + ")");
+        }
         super.onFinishInput();
         Log.i(TAG, "onFinishInput");
 
@@ -1887,7 +1897,7 @@ public class LatinIME extends InputMethodService implements
                         }
                         final String shown = voiceRemainder(text);
                         VibeVoiceDebugLogger.logText("onPartial shown (newSegment=" + isNewSegment
-                                + ", connected=" + hasInputConnection() + ")", shown);
+                                + ", " + voiceFieldState() + ")", shown);
                         mVoiceComposingText = shown;
                         VoiceSessionService.showTranscript(text);
                         mInputLogic.mConnection.setComposingText(shown, 1);
@@ -2146,7 +2156,21 @@ public class LatinIME extends InputMethodService implements
      * and counted as delivered here.
      */
     private boolean hasInputConnection() {
-        return getCurrentInputConnection() != null;
+        // getCurrentInputConnection() alone is not enough either. It falls back to the connection
+        // the *binding* carries, and the binding outlives the field: once the keyboard has been
+        // bound to an app it stays non-null until the framework unbinds, long after the field that
+        // was being typed into went away. getCurrentInputStarted() is the one that follows the
+        // field -- it is set in onStartInput and cleared in onFinishInput.
+        return getCurrentInputStarted() && getCurrentInputConnection() != null;
+    }
+
+    /** The three signals behind {@link #hasInputConnection}, for a log that can be argued with. */
+    private String voiceFieldState() {
+        return "started=" + getCurrentInputStarted()
+                + " ic=" + (getCurrentInputConnection() != null)
+                + " editor=" + (getCurrentInputEditorInfo() != null)
+                + " viewShown=" + isInputViewShown()
+                + " held=" + mVoicePendingText.length();
     }
 
     /** What is left of a partial once the part already committed within this segment is taken off. */
@@ -2169,11 +2193,13 @@ public class LatinIME extends InputMethodService implements
         if (!hasInputConnection()) {
             // commitText is a no-op without a connection, and says nothing about it.
             mVoicePendingText.append(segment).append(' ');
-            VibeVoiceDebugLogger.logText("Segment held, no input connection", segment);
+            VibeVoiceDebugLogger.logText("Segment held, no field (" + voiceFieldState() + ")", segment);
             return;
         }
+        // Anything held from before goes in first, or the order of the dictation is scrambled.
+        flushPendingVoiceText();
         mInputLogic.mConnection.commitText(segment + " ", 1);
-        VibeVoiceDebugLogger.logText("Segment committed", segment);
+        VibeVoiceDebugLogger.logText("Segment committed (" + voiceFieldState() + ")", segment);
     }
 
     /** Writes out what was dictated while no field was there to take it. */
@@ -2182,7 +2208,7 @@ public class LatinIME extends InputMethodService implements
         if (!hasInputConnection()) return;
         final String held = mVoicePendingText.toString();
         mVoicePendingText.setLength(0);
-        VibeVoiceDebugLogger.logText("Flushing held dictation", held);
+        VibeVoiceDebugLogger.logText("Flushing held dictation (" + voiceFieldState() + ")", held);
         mInputLogic.mConnection.commitText(held, 1);
     }
 
@@ -2197,6 +2223,8 @@ public class LatinIME extends InputMethodService implements
         // No field to write into -- the keyboard is gone and nothing has focus, which is where a
         // session ended from the notification used to lose its last words silently.
         final boolean noField = !hasInputConnection();
+        VibeVoiceDebugLogger.log("finishVoiceSession: " + voiceFieldState() + " toClipboard=" + mVoiceFinishToClipboard
+                + " discard=" + mVoiceFinishDiscard + " sessionChars=" + mVoiceSessionText.length());
         if (!mVoiceFinishToClipboard && !mVoiceFinishDiscard && !noField) flushPendingVoiceText();
         if (mVoiceFinishDiscard) {
             // Dropped on the X. What reached a field stays there -- it is already typed -- but
