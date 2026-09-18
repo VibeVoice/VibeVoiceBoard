@@ -72,6 +72,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import helium314.keyboard.latin.vibevoice.VibeVoiceBugReporter
+import helium314.keyboard.latin.vibevoice.VibeVoiceLogShare
 
 /**
  * A heading that folds its contents away. The screen has grown a tuning block per feature and they
@@ -127,6 +128,7 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
     var bugDescription by rememberSaveable { mutableStateOf("") }
     var isSubmittingBugReport by remember { mutableStateOf(false) }
     var bugReportStatus by remember { mutableStateOf<String?>(null) }
+    var logShareStatus by remember { mutableStateOf<String?>(null) }
 
     val appPrefs = remember(context) { context.prefs() }
     var backgroundDictation by remember {
@@ -375,6 +377,41 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
+            }
+
+            Spacer(modifier = Modifier.size(12.dp))
+            Text(
+                stringResource(R.string.vibevoice_share_log_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            TextButton(
+                onClick = {
+                    val chooser = VibeVoiceLogShare.createShareIntent(context)
+                    if (chooser == null) {
+                        logShareStatus = context.getString(R.string.vibevoice_share_log_empty)
+                    } else {
+                        logShareStatus = null
+                        // The settings screen is an Activity, but the chooser is started from a
+                        // composable's context, which may be a wrapper without a task of its own.
+                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(chooser)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.vibevoice_share_log))
+            }
+            logShareStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            if (BuildConfig.DEBUG) {
+                // A debug build keeps the log on the shared volume, so it can also just be picked up
+                // with a file manager. Saying where saves the hunt.
+                VibeVoiceLogShare.logLocation()?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                }
             }
 
             Spacer(modifier = Modifier.size(24.dp))

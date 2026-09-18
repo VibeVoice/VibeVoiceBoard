@@ -29,7 +29,10 @@ object VibeVoiceBugReporter {
         
         // 1. Read persistent VibeVoice debug log if available
         try {
-            val debugLogFile = File(context.filesDir, "vibevoice_debug.log")
+            // Asked of the logger rather than assumed: a debug build keeps the log on the shared
+            // volume so a file manager can reach it, and a report that read the old path would have
+            // come in with no log at all.
+            val debugLogFile = VibeVoiceDebugLogger.currentFile() ?: File(context.filesDir, "vibevoice_debug.log")
             if (debugLogFile.exists()) {
                 logsBuilder.append("=== VIBEVOICE DEBUG LOG ===\n")
                 val fileLength = debugLogFile.length()

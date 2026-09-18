@@ -28,7 +28,37 @@ public class VibeVoiceDebugLogger {
     private final SimpleDateFormat mDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US);
 
     private VibeVoiceDebugLogger(Context context) {
-        mLogFile = new File(context.getFilesDir(), FILENAME);
+        mLogFile = new File(logDirectory(context), FILENAME);
+    }
+
+    /**
+     * Where the log lives.
+     *
+     * A release build keeps it in private storage, where only the bug reporter can reach it. A debug
+     * build puts it in the app's directory on the shared volume instead -- /sdcard/Android/data/...,
+     * which every file manager opens and no permission guards. That is this project's own device, and
+     * the log being one tap away from a file manager is the difference between reading it and asking
+     * for it.
+     */
+    private static File logDirectory(Context context) {
+        if (BuildConfig.DEBUG) {
+            File external = context.getExternalFilesDir(null);
+            // Null while the volume is unmounted, which happens; private storage still works.
+            if (external != null && (external.isDirectory() || external.mkdirs())) return external;
+        }
+        return context.getFilesDir();
+    }
+
+    /** The log itself, for the bug reporter and for the share button. Null before {@link #init}. */
+    public static File currentFile() {
+        return sInstance == null ? null : sInstance.mLogFile;
+    }
+
+    /** The generation before the last rotation, when there is one. */
+    public static File previousFile() {
+        if (sInstance == null) return null;
+        File previous = new File(sInstance.mLogFile.getParentFile(), sInstance.mLogFile.getName() + ".1");
+        return previous.exists() ? previous : null;
     }
 
     public static synchronized void init(Context context) {

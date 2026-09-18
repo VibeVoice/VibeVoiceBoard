@@ -137,6 +137,9 @@
     <!-- Bug reporting strings -->
     <string name="vibevoice_report_bug_title">Report a Bug</string>
     <string name="vibevoice_report_bug_desc">Submit diagnostic logs and issue description directly to the server</string>
+    <string name="vibevoice_share_log">Share the log as a file</string>
+    <string name="vibevoice_share_log_desc">The same diagnostic log, handed to whatever you pick — mail, a chat, a folder.</string>
+    <string name="vibevoice_share_log_empty">There is nothing logged yet.</string>
     <string name="vibevoice_report_bug_dialog_title">Submit Bug Report</string>
     <string name="vibevoice_report_bug_placeholder">Describe what happened or what error you encountered…</string>
     <string name="vibevoice_report_bug_submitting">Submitting report…</string>

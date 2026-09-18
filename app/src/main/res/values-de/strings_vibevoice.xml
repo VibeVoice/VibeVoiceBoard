@@ -92,6 +92,9 @@ SPDX-License-Identifier: GPL-3.0-only
     <!-- Bug reports -->
     <string name="vibevoice_report_bug_title">Fehler melden</string>
     <string name="vibevoice_report_bug_desc">Sendet Diagnoseprotokolle und deine Beschreibung direkt an den Server</string>
+    <string name="vibevoice_share_log">Protokoll als Datei teilen</string>
+    <string name="vibevoice_share_log_desc">Dasselbe Diagnoseprotokoll, an die App deiner Wahl — Mail, Chat, Ordner.</string>
+    <string name="vibevoice_share_log_empty">Es ist noch nichts protokolliert.</string>
     <string name="vibevoice_report_bug_dialog_title">Fehlerbericht senden</string>
     <string name="vibevoice_report_bug_placeholder">Beschreibe, was passiert ist oder welcher Fehler auftrat…</string>
     <string name="vibevoice_report_bug_submitting">Bericht wird gesendet…</string>

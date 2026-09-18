@@ -165,6 +165,17 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
                 android:resource="@xml/clipboard_provider_path"/>
         </provider>
 
+        <!-- Hands the staged copy of the debug log to whatever the user shares it with. -->
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="@string/log_provider_authority"
+            android:enabled="true"
+            android:grantUriPermissions="true"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/log_provider_path"/>
+        </provider>
+
         <!-- necessary for sending mail attachments, remove when data gathering phase is done (end of 2026 latest) -->
         <provider android:name="helium314.keyboard.settings.screens.gesturedata.GestureFileProvider"
             android:authorities="@string/gesture_data_provider_authority"
