@@ -80,7 +80,9 @@ which commit it runs. Build outputs are named `VibeVoiceKeyboard_<VERSION>-<VERS
 2. Tag it: `git tag v1.0.2 && git push origin v1.0.2`.
 3. Build the Play bundle: `./gradlew --no-configuration-cache bundleNouserlib` (the configuration
    cache does not notice a changed `VERSION`), check it with `aapt2 dump badging` or bundletool.
-4. Put the bundle in Nextcloud. **Uploading to Play is done by hand.**
+4. Put the bundle in Nextcloud, and upload it with `tools/play-upload.py` (see CLAUDE.md).
+   **Only when Florian says to.** "Manual" means the decision is his, not that the clicking is;
+   a release is never a side effect of a build.
 
 A re-upload of the same release needs only a new code: any commit bumps it.
 

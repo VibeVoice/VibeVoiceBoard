@@ -85,6 +85,29 @@ Full build + WebDAV upload + optional ADB install:
 ./tools/build-and-deploy.sh   # needs NEXTCLOUD_CREDENTIALS (or NEXTCLOUD_USER/PASS) in .env
 ```
 
+## Releasing to Play
+
+`tools/play-upload.py` uploads a bundle through the Play Developer API, so a release costs no
+clicking. It is **not** automatic: run it only when Florian asks for a release. "Manual" means the
+decision is his; the typing is ours.
+
+```bash
+tools/.play-venv/bin/python tools/play-upload.py --list-tracks
+tools/.play-venv/bin/python tools/play-upload.py <bundle.aab> --track alpha            # draft
+tools/.play-venv/bin/python tools/play-upload.py <bundle.aab> --track alpha --publish  # goes live
+```
+
+- Credentials: `play-service-account.json` in the repository root, gitignored — the key for
+  `claude@vibevoice-play.iam.gserviceaccount.com` (project `vibevoice-play`, Release manager).
+- Dependencies live in `tools/.play-venv` (gitignored). To recreate it:
+  `python3 -m venv tools/.play-venv && tools/.play-venv/bin/pip install google-auth requests`.
+- Tracks: `alpha` is the closed test the testers are opted into, `internal`, `beta`, `production`.
+- **Play takes `.aab` only.** An APK is rejected at upload; `bundleNouserlib` is the build that
+  produces one.
+- `--notes-file` takes `[{"language": "en-US", "text": "..."}, ...]`; 500 characters per locale.
+- Without `--publish` the release sits as a draft and no tester sees it. With it, the release goes
+  to review and then to the track.
+
 ## On-device debugging
 
 The device is reached over wireless ADB; its IP moves around, so find it with `arp -a` first

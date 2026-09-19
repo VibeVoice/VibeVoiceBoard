@@ -48,3 +48,4 @@ keystore.properties
 play-service-account.json
 *.keystore
 .wt/
+tools/.play-venv/
