@@ -29,6 +29,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.inputmethod.CompletionInfo;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InlineSuggestion;
 import android.view.inputmethod.InlineSuggestionsRequest;
 import android.view.inputmethod.InlineSuggestionsResponse;
@@ -2147,24 +2148,28 @@ public class LatinIME extends InputMethodService implements
     }
 
     /**
-     * Whether there is a field to write into right now.
+     * Whether a commit would actually reach a field -- asked of the app, not of the framework.
      *
-     * Asked of the framework rather than of RichInputConnection: that one caches the connection it
-     * was last handed and is not told when input finishes, so it answers "connected" for the rest of
-     * the process once any field has ever been focused. Believing it meant dictation spoken with the
-     * keyboard gone was committed into a dead connection -- dropped by the framework without a word,
-     * and counted as delivered here.
+     * Every flag that looked like it answered this turned out to answer something else.
+     * RichInputConnection.isConnected() reports the connection it was last handed and is never told
+     * input finished. getCurrentInputConnection() falls back to the one the binding carries, and the
+     * binding outlives the field. getCurrentInputStarted() was the last hope and bug report #10860
+     * ended it: with the app swiped away and the floating mark holding the session, the framework
+     * reported started=true ic=true editor=true for two minutes while every commit went nowhere.
+     *
+     * So this asks the only party that knows. getTextBeforeCursor is a round trip into the app's
+     * process; an app that is no longer there to answer returns null, and that is the whole test.
+     * It costs an IPC, which is why it is asked once per segment and never per partial.
      */
-    private boolean hasInputConnection() {
-        // getCurrentInputConnection() alone is not enough either. It falls back to the connection
-        // the *binding* carries, and the binding outlives the field: once the keyboard has been
-        // bound to an app it stays non-null until the framework unbinds, long after the field that
-        // was being typed into went away. getCurrentInputStarted() is the one that follows the
-        // field -- it is set in onStartInput and cleared in onFinishInput.
-        return getCurrentInputStarted() && getCurrentInputConnection() != null;
+    private boolean canReachField() {
+        if (!getCurrentInputStarted()) return false;
+        final InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return false;
+        // An empty field answers with an empty string, which is an answer. Only silence is a no.
+        return ic.getTextBeforeCursor(1, 0) != null;
     }
 
-    /** The three signals behind {@link #hasInputConnection}, for a log that can be argued with. */
+    /** The flags behind the decision, for a log that can be argued with. Cheap: no round trip. */
     private String voiceFieldState() {
         return "started=" + getCurrentInputStarted()
                 + " ic=" + (getCurrentInputConnection() != null)
@@ -2190,14 +2195,21 @@ public class LatinIME extends InputMethodService implements
 
     private void commitVoiceSegment(String segment) {
         mVoiceSessionText.append(segment).append(' ');
-        if (!hasInputConnection()) {
+        if (!canReachField()) {
             // commitText is a no-op without a connection, and says nothing about it.
             mVoicePendingText.append(segment).append(' ');
             VibeVoiceDebugLogger.logText("Segment held, no field (" + voiceFieldState() + ")", segment);
             return;
         }
         // Anything held from before goes in first, or the order of the dictation is scrambled.
-        flushPendingVoiceText();
+        // Written directly rather than through flushPendingVoiceText, which would ask the app a
+        // second time what this method just established.
+        if (mVoicePendingText.length() > 0) {
+            final String held = mVoicePendingText.toString();
+            mVoicePendingText.setLength(0);
+            VibeVoiceDebugLogger.logText("Flushing held dictation before this segment", held);
+            mInputLogic.mConnection.commitText(held, 1);
+        }
         mInputLogic.mConnection.commitText(segment + " ", 1);
         VibeVoiceDebugLogger.logText("Segment committed (" + voiceFieldState() + ")", segment);
     }
@@ -2205,7 +2217,7 @@ public class LatinIME extends InputMethodService implements
     /** Writes out what was dictated while no field was there to take it. */
     private void flushPendingVoiceText() {
         if (mVoicePendingText.length() == 0) return;
-        if (!hasInputConnection()) return;
+        if (!canReachField()) return;
         final String held = mVoicePendingText.toString();
         mVoicePendingText.setLength(0);
         VibeVoiceDebugLogger.logText("Flushing held dictation (" + voiceFieldState() + ")", held);
@@ -2222,7 +2234,7 @@ public class LatinIME extends InputMethodService implements
         }
         // No field to write into -- the keyboard is gone and nothing has focus, which is where a
         // session ended from the notification used to lose its last words silently.
-        final boolean noField = !hasInputConnection();
+        final boolean noField = !canReachField();
         VibeVoiceDebugLogger.log("finishVoiceSession: " + voiceFieldState() + " toClipboard=" + mVoiceFinishToClipboard
                 + " discard=" + mVoiceFinishDiscard + " sessionChars=" + mVoiceSessionText.length());
         if (!mVoiceFinishToClipboard && !mVoiceFinishDiscard && !noField) flushPendingVoiceText();
