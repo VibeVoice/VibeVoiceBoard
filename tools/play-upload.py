@@ -72,12 +72,23 @@ def main():
     s = session()
     edit = check(s.post(f"{API}/applications/{PACKAGE}/edits"), "Opening an edit")
     edit_id = edit["id"]
+    committed = False
+    try:
+        committed = run(s, edit_id, args)
+    finally:
+        if not committed:
+            # Play allows very few concurrent edits, and an abandoned one blocks the next upload
+            # with "too many pending edits" until somebody clears it by hand in the console. A
+            # dropped connection halfway through an upload is exactly how that happens.
+            s.delete(f"{API}/applications/{PACKAGE}/edits/{edit_id}")
 
+
+def run(s, edit_id, args):
+    """Returns True once the edit has been committed, so the caller knows not to delete it."""
     if args.list_tracks:
         tracks = check(s.get(f"{API}/applications/{PACKAGE}/edits/{edit_id}/tracks"), "Listing tracks")
         print(json.dumps(tracks, indent=2))
-        s.delete(f"{API}/applications/{PACKAGE}/edits/{edit_id}")
-        return
+        return False  # nothing to commit; the caller discards the edit
 
     if not args.bundle:
         sys.exit("Which bundle?")
@@ -117,6 +128,7 @@ def main():
     print(f"{args.track}: versionCode {version_code} is {release['status']}")
     if not args.publish:
         print("Draft. Nothing reaches a tester until it is published.")
+    return True
 
 
 if __name__ == "__main__":

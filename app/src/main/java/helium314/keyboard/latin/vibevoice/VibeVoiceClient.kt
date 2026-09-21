@@ -161,7 +161,8 @@ class VibeVoiceClient(
      *  there is nothing to resend. Length and contents are read under one lock so they agree. */
     private fun readUnconfirmedAudio(confirmedBytes: Long): ByteArray? = synchronized(rollingBufferLock) {
         val size = rollingBuffer.size
-        val length = minOf(totalRead - confirmedBytes, totalRead, size.toLong()).toInt()
+        // Capped by the buffer: anything older than its thirty seconds has been overwritten.
+        val length = minOf(totalRead - confirmedBytes, size.toLong()).toInt()
         if (length <= 0) return@synchronized null
         val result = ByteArray(length)
         val startPos = totalRead - length
@@ -886,6 +887,18 @@ class VibeVoiceClient(
      * fault in the product.
      */
     private fun giveUp(reason: String) {
+        // A session that has already ended cleanly is not a link that was lost. stopRequested can
+        // be set between the check that started a reconnect and this point -- the user presses
+        // space while the socket happens to drop -- and the error reached the user as a toast over
+        // a dictation that had just finished perfectly well.
+        if (stopRequested || !isStreaming) {
+            VibeVoiceDebugLogger.log("Not reporting '$reason': the session had already ended")
+            isStreaming = false
+            setLinkDegraded(false)
+            cleanupAudioCapture()
+            abandonSocket(reason)
+            return
+        }
         isStreaming = false
         setLinkDegraded(false)
         cleanupAudioCapture()

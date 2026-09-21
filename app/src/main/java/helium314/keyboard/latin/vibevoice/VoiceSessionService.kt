@@ -260,21 +260,25 @@ class VoiceSessionService : Service() {
             // destruction: writing into it would hand the new session to an instance whose
             // onDestroy is still queued, and that onDestroy would then null it out again. The next
             // onStartCommand -- on whichever instance the platform gives us -- claims it instead.
-            pendingClient = session
-            pendingOnStop = onStop
+            synchronized(pendingLock) {
+                pendingClient = session
+                pendingOnStop = onStop
+            }
         }
 
         /** Ends the foreground state. The session itself is stopped by its owner, not here. */
         @JvmStatic
         fun detach(context: Context) {
-            pendingClient = null
-            pendingOnStop = null
-            transcript = ""
-            finishing = false
-            val service = instance
-            if (service != null) {
-                service.client = null
-                service.onStopRequested = null
+            synchronized(pendingLock) {
+                pendingClient = null
+                pendingOnStop = null
+                transcript = ""
+                finishing = false
+                val service = instance
+                if (service != null) {
+                    service.client = null
+                    service.onStopRequested = null
+                }
             }
             try {
                 context.applicationContext.stopService(
@@ -309,6 +313,9 @@ class VoiceSessionService : Service() {
 
         private const val MIN_POST_INTERVAL_MS = 400L
 
+        /** Guards the handover: pendingClient, pendingOnStop and the instance's own references. */
+        private val pendingLock = Any()
+
         @Volatile private var pendingClient: VibeVoiceClient? = null
         @Volatile private var pendingOnStop: Runnable? = null
 
@@ -321,12 +328,23 @@ class VoiceSessionService : Service() {
         @Volatile private var transcript: String = ""
         @Volatile private var finishing: Boolean = false
 
+        /**
+         * Hands the waiting session to the service instance that just started.
+         *
+         * Under the lock from end to end, together with detach. Both arrive as messages on the main
+         * looper and can interleave: taking the pending client, then having detach clear the
+         * service, then writing the taken client into it left the service holding a session its
+         * owner had already given up -- a foreground notification saying "finishing" until the
+         * process died.
+         */
         internal fun claimPending(service: VoiceSessionService) {
-            if (pendingClient == null) return
-            service.client = pendingClient
-            service.onStopRequested = pendingOnStop
-            pendingClient = null
-            pendingOnStop = null
+            synchronized(pendingLock) {
+                if (pendingClient == null) return
+                service.client = pendingClient
+                service.onStopRequested = pendingOnStop
+                pendingClient = null
+                pendingOnStop = null
+            }
         }
     }
 }
