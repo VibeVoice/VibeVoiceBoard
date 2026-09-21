@@ -1919,7 +1919,9 @@ public class LatinIME extends InputMethodService implements
                             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(LatinIME.this)
                                     .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
                         }
-                        if (isNewSegment && !text.trim().isEmpty()) {
+                        // Not conditional on the new text: by protocol a final carries empty text,
+                        // and skipping the commit for it threw away the segment on display.
+                        if (isNewSegment) {
                              if (!mVoiceComposingText.isEmpty()) {
                                 commitVoiceSegment(mVoiceComposingText);
                             }
@@ -2140,6 +2142,15 @@ public class LatinIME extends InputMethodService implements
     /** Commits the dictated piece currently shown as composing text, if a session has one. */
     private void commitPendingVoiceText() {
         if (mVibeVoiceClient == null || mVoiceComposingText.isEmpty()) return;
+        if (mVoiceFinishDiscard) {
+            // Dropped on the X, and the session is still winding down -- the socket takes up to
+            // three seconds to close. A key pressed in that window used to write the discarded
+            // words into the field, which is the one outcome the X promises will not happen.
+            VibeVoiceDebugLogger.log("Composing text dropped: the session was discarded");
+            mVoiceComposingText = "";
+            mVoiceCommittedPrefix = mVoiceSegmentFull;
+            return;
+        }
         commitVoiceSegment(mVoiceComposingText);
         // Held or written, it is off the composing region either way, so the partials that follow
         // must not repeat it.
@@ -2157,16 +2168,30 @@ public class LatinIME extends InputMethodService implements
      * ended it: with the app swiped away and the floating mark holding the session, the framework
      * reported started=true ic=true editor=true for two minutes while every commit went nowhere.
      *
-     * So this asks the only party that knows. getTextBeforeCursor is a round trip into the app's
-     * process; an app that is no longer there to answer returns null, and that is the whole test.
+     * So this asks the only party that knows. Reloading the cache is a round trip into the app's
+     * own process; an app that is no longer there to answer fails it, and that is the whole test.
      * It costs an IPC, which is why it is asked once per segment and never per partial.
      */
     private boolean canReachField() {
         if (!getCurrentInputStarted()) return false;
-        final InputConnection ic = getCurrentInputConnection();
-        if (ic == null) return false;
-        // An empty field answers with an empty string, which is an answer. Only silence is a no.
-        return ic.getTextBeforeCursor(1, 0) != null;
+        if (getCurrentInputConnection() == null) return false;
+        try {
+            // Asking is not enough: the commit goes through RichInputConnection, which caches the
+            // connection it was last handed and never refreshes it in commitText. Verifying one
+            // connection and then writing to another is how dictation ended up in the app the user
+            // had left. resetCaches does both halves -- it re-reads getCurrentInputConnection, so
+            // the commit lands where the check looked, and it refills the cache with a round trip
+            // that an app which is gone does not answer, which is the honest test.
+            return mInputLogic.mConnection.resetCachesUponCursorMoveAndReturnSuccess(
+                    mInputLogic.mConnection.getExpectedSelectionStart(),
+                    mInputLogic.mConnection.getExpectedSelectionEnd(),
+                    false /* shouldFinishComposition */);
+        } catch (RuntimeException e) {
+            // A process killed mid-transaction throws DeadObjectException through here. Losing the
+            // field is the normal case for this code; crashing the keyboard over it is not.
+            VibeVoiceDebugLogger.log("Field check failed: " + e);
+            return false;
+        }
     }
 
     /** The flags behind the decision, for a log that can be argued with. Cheap: no round trip. */
@@ -2182,7 +2207,8 @@ public class LatinIME extends InputMethodService implements
     private String voiceRemainder(final String text) {
         mVoiceSegmentFull = text;
         if (mVoiceCommittedPrefix.isEmpty()) return text;
-        if (!text.startsWith(mVoiceCommittedPrefix)) {
+        final int matched = matchedPrefixLength(text, mVoiceCommittedPrefix);
+        if (matched < 0) {
             // The segment was rewritten rather than extended -- a reconnect replaying audio, or the
             // server revising what it heard. Nothing can be dropped safely, so the prefix is given up.
             VibeVoiceDebugLogger.log("Committed prefix no longer matches the segment; keeping the full text");
@@ -2190,7 +2216,28 @@ public class LatinIME extends InputMethodService implements
             return text;
         }
         // The space after a committed piece is added by commitVoiceSegment.
-        return text.substring(mVoiceCommittedPrefix.length()).replaceFirst("^\\s+", "");
+        return text.substring(matched).replaceFirst("^\\s+", "");
+    }
+
+    /**
+     * How far into {@code text} the already committed {@code prefix} reaches, or -1 if it does not.
+     *
+     * Compared letter by letter, ignoring case and anything that is not a letter or digit. A server
+     * that finalises "order number" as "Order number 42." has extended the segment, not rewritten
+     * it; a plain startsWith called that a rewrite and committed the whole thing a second time.
+     */
+    private static int matchedPrefixLength(final String text, final String prefix) {
+        int i = 0, j = 0;
+        while (j < prefix.length()) {
+            final char pc = prefix.charAt(j);
+            if (!Character.isLetterOrDigit(pc)) { j++; continue; }
+            while (i < text.length() && !Character.isLetterOrDigit(text.charAt(i))) i++;
+            if (i >= text.length()) return -1;
+            if (Character.toLowerCase(text.charAt(i)) != Character.toLowerCase(pc)) return -1;
+            i++;
+            j++;
+        }
+        return i;
     }
 
     private void commitVoiceSegment(String segment) {

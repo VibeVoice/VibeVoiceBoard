@@ -347,7 +347,16 @@ class VibeVoiceClient(
                         val flushData = readUnconfirmedAudio(disconnectedAtBytes)
                         if (flushData != null) {
                             VibeVoiceDebugLogger.log("Reconnected: flushing ${flushData.size} bytes of unconfirmed audio")
-                            webSocket.send(flushData.toByteString(0, flushData.size))
+                            // In frames the size the stream normally sends, not one. A 25-second
+                            // outage is 800 KB, past the message limit most WebSocket servers ship
+                            // with (1009, "message too big"), and a single frame that size arrives
+                            // at the recogniser as one shove instead of a stream.
+                            var offset = 0
+                            while (offset < flushData.size) {
+                                val end = minOf(offset + FLUSH_CHUNK_BYTES, flushData.size)
+                                webSocket.send(flushData.toByteString(offset, end - offset))
+                                offset = end
+                            }
                         }
                         isReconnecting = false
                         retryCount = 0
@@ -908,6 +917,8 @@ class VibeVoiceClient(
     companion object {
         private val JSON = "application/json".toMediaType()
         private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
+        /** 100 ms of 16 kHz 16-bit mono -- the size of a frame the live stream sends. */
+        private const val FLUSH_CHUNK_BYTES = 3200
         private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
 
         /**
