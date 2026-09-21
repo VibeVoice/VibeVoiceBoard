@@ -12,10 +12,18 @@ else
     echo "Attempting to pull logs from current ADB device ($PACKAGE)..."
 fi
 
-# Try direct pull first (works on some devices/root)
-"${ADB_CMD[@]}" pull "/data/data/$PACKAGE/files/$FILENAME" "$LOCAL_PATH" 2>/dev/null
+# A debug build writes to the app's directory on the shared volume, so a file manager can reach it.
+# That is where the log is, and it needs no run-as.
+"${ADB_CMD[@]}" pull "/sdcard/Android/data/$PACKAGE/files/$FILENAME" "$LOCAL_PATH" 2>/dev/null
 
-if [ $? -ne 0 ]; then
+# Private storage is the fallback: a release build keeps it there, and so does a debug build when
+# the shared volume was unmounted at startup.
+if [ ! -s "$LOCAL_PATH" ]; then
+    echo "Not on the shared volume. Trying private storage..."
+    "${ADB_CMD[@]}" pull "/data/data/$PACKAGE/files/$FILENAME" "$LOCAL_PATH" 2>/dev/null
+fi
+
+if [ ! -s "$LOCAL_PATH" ]; then
     echo "Direct pull failed. Trying via run-as..."
     # If direct pull fails, try to cat it via run-as and redirect
     "${ADB_CMD[@]}" shell "run-as $PACKAGE cat files/$FILENAME" > "$LOCAL_PATH"

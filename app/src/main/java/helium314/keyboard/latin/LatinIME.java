@@ -1919,9 +1919,14 @@ public class LatinIME extends InputMethodService implements
                             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(LatinIME.this)
                                     .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
                         }
-                        // Not conditional on the new text: by protocol a final carries empty text,
-                        // and skipping the commit for it threw away the segment on display.
-                        if (isNewSegment) {
+                        // The end-of-stream marker carries empty text by protocol. Reaching it while
+                        // stopping is the ordinary end of a session and belongs to finishVoiceSession,
+                        // which knows about the discard target and about the newline a multiline field
+                        // gets. Reaching it any other way -- the server ending the stream itself, a
+                        // quota running out -- has no such owner, and the segment on display was being
+                        // wiped instead of written.
+                        final boolean endOfStreamMarker = text.trim().isEmpty();
+                        if (isNewSegment && !(mIsStoppingVoice && endOfStreamMarker)) {
                              if (!mVoiceComposingText.isEmpty()) {
                                 commitVoiceSegment(mVoiceComposingText);
                             }
@@ -2142,15 +2147,6 @@ public class LatinIME extends InputMethodService implements
     /** Commits the dictated piece currently shown as composing text, if a session has one. */
     private void commitPendingVoiceText() {
         if (mVibeVoiceClient == null || mVoiceComposingText.isEmpty()) return;
-        if (mVoiceFinishDiscard) {
-            // Dropped on the X, and the session is still winding down -- the socket takes up to
-            // three seconds to close. A key pressed in that window used to write the discarded
-            // words into the field, which is the one outcome the X promises will not happen.
-            VibeVoiceDebugLogger.log("Composing text dropped: the session was discarded");
-            mVoiceComposingText = "";
-            mVoiceCommittedPrefix = mVoiceSegmentFull;
-            return;
-        }
         commitVoiceSegment(mVoiceComposingText);
         // Held or written, it is off the composing region either way, so the partials that follow
         // must not repeat it.
@@ -2242,6 +2238,15 @@ public class LatinIME extends InputMethodService implements
 
     private void commitVoiceSegment(String segment) {
         mVoiceSessionText.append(segment).append(' ');
+        if (mVoiceFinishDiscard || mVoiceFinishToClipboard) {
+            // The mark was dropped on a target and the session is winding down -- the socket takes
+            // up to three seconds to close, and a key press or a late final lands in that window.
+            // Neither target writes into the field: the X keeps nothing, the clipboard keeps
+            // everything, and finishVoiceSession does both from mVoiceSessionText. Writing here
+            // would break the one promise the X makes.
+            VibeVoiceDebugLogger.logText("Segment not written, the session is ending on a target", segment);
+            return;
+        }
         if (!canReachField()) {
             // commitText is a no-op without a connection, and says nothing about it.
             mVoicePendingText.append(segment).append(' ');

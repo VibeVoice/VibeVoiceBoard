@@ -3,8 +3,15 @@
 This document outlines the persistent logging mechanism implemented to diagnose intermittent transcription issues in VibeVoiceBoard.
 
 ## Log File Location
-The debug log is stored persistently on the Android device at:
-`/data/data/org.vibevoice.board.debug/files/vibevoice_debug.log`
+A **debug build** writes it to the app's directory on the shared volume, where any file manager
+opens it and no permission guards it:
+`/sdcard/Android/data/org.vibevoice.board.debug/files/vibevoice_debug.log`
+
+A **release build** keeps it in private storage, reachable only through a bug report or `run-as`:
+`/data/data/org.vibevoice.board/files/vibevoice_debug.log`
+
+Either way, **Settings → VibeVoice typing → "Share the log as a file"** hands it to the share sheet,
+and the settings screen prints the path a debug build is using.
 
 ## How to Obtain Logs
 

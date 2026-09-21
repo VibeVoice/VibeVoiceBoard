@@ -141,4 +141,16 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_overlay_guard_message">Ohne dies endet das Diktat, sobald die Tastatur schließt.</string>
     <string name="setup_overlay_guard_keep_off">Auslassen</string>
     <string name="setup_overlay_guard_turn_on">Aktivieren</string>
+    <!-- "VibeVoice typing" is the feature's name, not a description, so it stays as it is. The
+         slogan on the last setup page is the brand's own wording and stays English for the same
+         reason the wordmark does. -->
+    <string name="vibevoice_integration_title">VibeVoice typing</string>
+    <string name="vibevoice_stop_dictation">Diktat beenden</string>
+    <string name="vibevoice_no_network">Keine Internetverbindung. Das Diktat braucht eine.</string>
+    <string name="vibevoice_copied">Diktat in die Zwischenablage kopiert</string>
+    <string name="vibevoice_overlay_description">Diktat läuft. Doppeltippen beendet es und kopiert es.</string>
+    <string name="vibevoice_mic_blocked">Kein Zugriff auf das Mikrofon. Erlaube ihn unter Berechtigungen, um zu diktieren.</string>
+    <string name="vibevoice_blocked_private_field">In Passwortfeldern und privaten Tabs ist das Diktat aus</string>
+    <string name="setup_link_action">Konto verknüpfen</string>
+    <string name="setup_step_progress">Schritt %1$d von %2$d</string>
 </resources>
