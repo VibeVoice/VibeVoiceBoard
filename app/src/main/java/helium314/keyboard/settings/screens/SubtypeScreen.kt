@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import helium314.keyboard.keyboard.internal.KeyboardIconsSet
@@ -42,7 +41,6 @@ import helium314.keyboard.keyboard.internal.keyboard_parser.LocaleKeyboardInfos
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.Constants.Separators
 import helium314.keyboard.latin.common.Constants.Subtype.ExtraValue
-import helium314.keyboard.latin.common.Links
 import helium314.keyboard.latin.common.LocaleUtils.constructLocale
 import helium314.keyboard.latin.common.LocaleUtils.localizedDisplayName
 import helium314.keyboard.latin.settings.Defaults
@@ -64,10 +62,8 @@ import helium314.keyboard.latin.utils.getActivity
 import helium314.keyboard.latin.utils.getDictionaryLocales
 import helium314.keyboard.latin.utils.getSecondaryLocales
 import helium314.keyboard.latin.utils.getStringResourceOrName
-import helium314.keyboard.latin.utils.htmlToAnnotated
 import helium314.keyboard.latin.utils.mainLayoutName
 import helium314.keyboard.latin.utils.prefs
-import helium314.keyboard.latin.utils.withHtmlLink
 import helium314.keyboard.settings.ActionRow
 import helium314.keyboard.latin.utils.DefaultButton
 import helium314.keyboard.latin.utils.DeleteButton
@@ -479,16 +475,10 @@ private fun MainLayoutRow(
             )
         }
         if (showAddLayoutDialog) {
-            val wikiLink = stringResource(R.string.dictionary_link_text).withHtmlLink(Links.LAYOUT_WIKI_URL)
-            val layoutText = stringResource(R.string.message_add_custom_layout, wikiLink).htmlToAnnotated()
-            val discussionLink = stringResource(R.string.discussion_section_link).withHtmlLink(Links.CUSTOM_LAYOUTS)
-            val discussionSectionText = stringResource(R.string.get_layouts_message, discussionLink).htmlToAnnotated()
-            val annotated = layoutText + AnnotatedString("\n") + discussionSectionText
-
             ConfirmationDialog(
                 onDismissRequest = { showAddLayoutDialog = false },
                 title = { Text(stringResource(R.string.button_title_add_custom_layout)) },
-                content = { Text(annotated) },
+                content = { Text(stringResource(R.string.message_add_custom_layout_plain)) },
                 onConfirmed = { showLayoutEditDialog = "new layout" to "" },
                 neutralButtonText = stringResource(R.string.button_load_custom),
                 onNeutral = {
