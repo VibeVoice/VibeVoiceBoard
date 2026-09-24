@@ -926,7 +926,10 @@ public class LatinIME extends InputMethodService implements
         if (mIsRecordingVoice) {
             VibeVoiceDebugLogger.log("onStartInput while dictating, restarting=" + restarting
                     + " (" + voiceFieldState() + ")");
-            flushPendingVoiceText();
+            // Posted, not called: isInputViewShown() is settled by the framework around these
+            // callbacks, and a flush that asks too early refuses itself and leaves the words
+            // waiting for the next segment.
+            mUiHandler.post(() -> { if (mIsRecordingVoice) flushPendingVoiceText(); });
         }
 
         final RichInputMethodSubtype subtypeForApp = editorInfo == null
@@ -1119,7 +1122,10 @@ public class LatinIME extends InputMethodService implements
                 mVoiceTargetPackage = editorInfo.packageName;
                 mVoiceTargetFieldId = editorInfo.fieldId;
             }
-            flushPendingVoiceText();
+            // Posted, not called: isInputViewShown() is settled by the framework around these
+            // callbacks, and a flush that asks too early refuses itself and leaves the words
+            // waiting for the next segment.
+            mUiHandler.post(() -> { if (mIsRecordingVoice) flushPendingVoiceText(); });
         }
 
         mainKeyboardView.setMainDictionaryAvailability(mDictionaryFacilitator.hasAtLeastOneInitializedMainDictionary());
@@ -1717,6 +1723,8 @@ public class LatinIME extends InputMethodService implements
     /** The field the session was started in. Dictation belongs to it, not to whatever has focus. */
     private String mVoiceTargetPackage = null;
     private int mVoiceTargetFieldId = 0;
+    /** Whether the keyboard was on screen when the session began. A hardware keyboard means never. */
+    private boolean mVoiceStartedWithViewShown = false;
     private long mVoiceStartedAt = 0L;
     private volatile boolean mVoiceLinkDegraded = false;
 
@@ -1792,6 +1800,7 @@ public class LatinIME extends InputMethodService implements
         mVoiceFinishDiscard = false;
         mVoiceTargetPackage = null;
         mVoiceTargetFieldId = 0;
+        mVoiceStartedWithViewShown = false;
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
         if (client != null) client.cancel();
@@ -1900,6 +1909,7 @@ public class LatinIME extends InputMethodService implements
             final EditorInfo startEditor = getCurrentInputEditorInfo();
             mVoiceTargetPackage = startEditor == null ? null : startEditor.packageName;
             mVoiceTargetFieldId = startEditor == null ? 0 : startEditor.fieldId;
+            mVoiceStartedWithViewShown = isInputViewShown();
             VibeVoiceDebugLogger.log("Starting new session in " + voiceFieldState());
             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
                     .edit().putBoolean(Settings.PREF_VOICE_KEY_PULSE, false).apply();
@@ -2237,14 +2247,17 @@ public class LatinIME extends InputMethodService implements
     private boolean canReachField() {
         if (!getCurrentInputStarted()) return false;
         if (getCurrentInputConnection() == null) return false;
-        // Reachable is not the same as right. Two fields qualify: the one the session was started
-        // in, and -- with the keyboard actually on screen -- whatever the user has deliberately
-        // focused since, which is how dictation carries from one app into the next. What does not
-        // qualify is an editor that took focus while the keyboard was hidden: the lock screen, a
-        // system window, an app restarting behind a dimmed display. Those answer, take the text,
-        // and it is gone.
-        if (!isVoiceTargetFocused() && !isInputViewShown()) {
-            VibeVoiceDebugLogger.log("Field refused, not the session's field and no keyboard shown: " + voiceFieldState());
+        // Reachable is not the same as right, and the identity of the field is not the test either
+        // -- an app whose window went away and came back can hand out the same package and field id
+        // over a connection that swallows everything. One signal has been correct in every report:
+        // when the keyboard was on screen the text arrived, and when it was not the text was lost,
+        // whatever the editor called itself. So that is the rule. Dictation with the keyboard gone
+        // waits in the hold buffer, which is what it was built for.
+        //
+        // Unless there never was a keyboard on screen: with a hardware keyboard attached the input
+        // view is never shown, and for that session hidden is its normal state.
+        if (mVoiceStartedWithViewShown && !isInputViewShown()) {
+            VibeVoiceDebugLogger.log("Field refused, the keyboard is not on screen: " + voiceFieldState());
             return false;
         }
         try {
