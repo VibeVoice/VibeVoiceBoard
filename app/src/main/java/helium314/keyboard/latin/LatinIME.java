@@ -20,6 +20,7 @@ import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Debug;
+import android.os.PowerManager;
 import android.os.Message;
 import android.os.Process;
 import android.util.PrintWriterPrinter;
@@ -922,7 +923,11 @@ public class LatinIME extends InputMethodService implements
         // A field again. onStartInputView is the usual place for this, but it only runs when the
         // keyboard is actually shown -- with a hardware keyboard, or when the field is focused
         // while the floating mark has the session, it never comes.
-        if (mIsRecordingVoice) flushPendingVoiceText();
+        if (mIsRecordingVoice) {
+            VibeVoiceDebugLogger.log("onStartInput while dictating, restarting=" + restarting
+                    + " (" + voiceFieldState() + ")");
+            flushPendingVoiceText();
+        }
 
         final RichInputMethodSubtype subtypeForApp = editorInfo == null
                 ? null
@@ -1103,7 +1108,19 @@ public class LatinIME extends InputMethodService implements
         }
 
         // A field again, and a session may have been talking into nothing while there was none.
-        if (mIsRecordingVoice) flushPendingVoiceText();
+        if (mIsRecordingVoice) {
+            VibeVoiceDebugLogger.log("onStartInputView while dictating, restarting=" + restarting
+                    + " (" + voiceFieldState() + ")");
+            // The keyboard is on screen on this field, so this is the field the user is looking at
+            // and the one the rest of the dictation belongs to. Adopting it is what lets a session
+            // carry from one app into the next, and it keeps the guard meaningful if the screen
+            // dims again afterwards.
+            if (editorInfo != null) {
+                mVoiceTargetPackage = editorInfo.packageName;
+                mVoiceTargetFieldId = editorInfo.fieldId;
+            }
+            flushPendingVoiceText();
+        }
 
         mainKeyboardView.setMainDictionaryAvailability(mDictionaryFacilitator.hasAtLeastOneInitializedMainDictionary());
         mainKeyboardView.setKeyPreviewPopupEnabled(currentSettingsValues.mKeyPreviewPopupOn);
@@ -1212,6 +1229,9 @@ public class LatinIME extends InputMethodService implements
     void onFinishInputViewInternal(final boolean finishingInput) {
         super.onFinishInputView(finishingInput);
         Log.i(TAG, "onFinishInputView");
+        if (mIsRecordingVoice)
+            VibeVoiceDebugLogger.log("onFinishInputView while dictating, finishingInput=" + finishingInput
+                    + " (" + voiceFieldState() + ")");
         // The connection is still the field being left. A session carries on into the next field,
         // and the piece on display would otherwise be committed there by the next segment -- landing
         // twice, once left behind as composing text here and once in the new field.
@@ -1242,6 +1262,13 @@ public class LatinIME extends InputMethodService implements
             Log.i(TAG, "onUpdateSelection: oss=" + oldSelStart + ", ose=" + oldSelEnd
                     + ", nss=" + newSelStart + ", nse=" + newSelEnd
                     + ", cs=" + composingSpanStart + ", ce=" + composingSpanEnd);
+        }
+        if (mIsRecordingVoice) {
+            // The editor's own account of where the cursor went. A commit that arrived moves it;
+            // one that was dropped does not, and this is where that shows without any inference.
+            VibeVoiceDebugLogger.log("onUpdateSelection while dictating: " + oldSelStart + "/" + oldSelEnd
+                    + " -> " + newSelStart + "/" + newSelEnd
+                    + " composing=" + composingSpanStart + "/" + composingSpanEnd);
         }
 
         // This call happens whether our view is displayed or not, but if it's not then
@@ -1687,6 +1714,9 @@ public class LatinIME extends InputMethodService implements
      *  one -- a null check on mVibeVoiceClient does not catch that, because by the time a stale
      *  callback runs the field may already hold a newly started session. */
     private int mVoiceSessionId = 0;
+    /** The field the session was started in. Dictation belongs to it, not to whatever has focus. */
+    private String mVoiceTargetPackage = null;
+    private int mVoiceTargetFieldId = 0;
     private long mVoiceStartedAt = 0L;
     private volatile boolean mVoiceLinkDegraded = false;
 
@@ -1760,6 +1790,8 @@ public class LatinIME extends InputMethodService implements
         mVoiceSessionText.setLength(0);
         mVoiceFinishToClipboard = false;
         mVoiceFinishDiscard = false;
+        mVoiceTargetPackage = null;
+        mVoiceTargetFieldId = 0;
         final VibeVoiceClient client = mVibeVoiceClient;
         mVibeVoiceClient = null;
         if (client != null) client.cancel();
@@ -1865,7 +1897,10 @@ public class LatinIME extends InputMethodService implements
             mVoiceSessionText.setLength(0);
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
-            VibeVoiceDebugLogger.log("Starting new session");
+            final EditorInfo startEditor = getCurrentInputEditorInfo();
+            mVoiceTargetPackage = startEditor == null ? null : startEditor.packageName;
+            mVoiceTargetFieldId = startEditor == null ? 0 : startEditor.fieldId;
+            VibeVoiceDebugLogger.log("Starting new session in " + voiceFieldState());
             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
                     .edit().putBoolean(Settings.PREF_VOICE_KEY_PULSE, false).apply();
             updateVoiceInputState(true);
@@ -2144,6 +2179,37 @@ public class LatinIME extends InputMethodService implements
         }
     }
 
+    /**
+     * Reads the field back and says whether what was just written is in it. Logging only -- it must
+     * never decide anything, because an app that answers nothing is not proof that nothing arrived,
+     * and acting on that would duplicate text instead of losing it. But when a commit vanishes
+     * again, this is the line that says so instead of leaving it to be inferred.
+     */
+    private void verifyVoiceCommit(final String written) {
+        try {
+            final InputConnection ic = getCurrentInputConnection();
+            if (ic == null) {
+                VibeVoiceDebugLogger.log("Commit unverifiable, no connection: " + voiceFieldState());
+                return;
+            }
+            final String tail = written.trim();
+            if (tail.isEmpty()) return;
+            final int n = Math.min(tail.length(), 32);
+            final String needle = tail.substring(tail.length() - n);
+            final CharSequence read = ic.getTextBeforeCursor(n + 16, 0);
+            if (read == null) {
+                VibeVoiceDebugLogger.log("Commit unverifiable, the field did not answer: " + voiceFieldState());
+            } else if (read.toString().contains(needle)) {
+                VibeVoiceDebugLogger.log("Commit verified in the field (" + voiceFieldState() + ")");
+            } else {
+                VibeVoiceDebugLogger.logText("COMMIT DID NOT STICK (" + voiceFieldState() + "); the field reads",
+                        read.toString());
+            }
+        } catch (RuntimeException e) {
+            VibeVoiceDebugLogger.log("Commit verification threw: " + e);
+        }
+    }
+
     /** Commits the dictated piece currently shown as composing text, if a session has one. */
     private void commitPendingVoiceText() {
         if (mVibeVoiceClient == null || mVoiceComposingText.isEmpty()) return;
@@ -2171,6 +2237,16 @@ public class LatinIME extends InputMethodService implements
     private boolean canReachField() {
         if (!getCurrentInputStarted()) return false;
         if (getCurrentInputConnection() == null) return false;
+        // Reachable is not the same as right. Two fields qualify: the one the session was started
+        // in, and -- with the keyboard actually on screen -- whatever the user has deliberately
+        // focused since, which is how dictation carries from one app into the next. What does not
+        // qualify is an editor that took focus while the keyboard was hidden: the lock screen, a
+        // system window, an app restarting behind a dimmed display. Those answer, take the text,
+        // and it is gone.
+        if (!isVoiceTargetFocused() && !isInputViewShown()) {
+            VibeVoiceDebugLogger.log("Field refused, not the session's field and no keyboard shown: " + voiceFieldState());
+            return false;
+        }
         try {
             // Asking is not enough: the commit goes through RichInputConnection, which caches the
             // connection it was last handed and never refreshes it in commitText. Verifying one
@@ -2192,11 +2268,36 @@ public class LatinIME extends InputMethodService implements
 
     /** The flags behind the decision, for a log that can be argued with. Cheap: no round trip. */
     private String voiceFieldState() {
+        final EditorInfo editor = getCurrentInputEditorInfo();
+        final InputConnection ic = getCurrentInputConnection();
+        String screen = "?";
+        try {
+            final PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+            if (power != null) screen = power.isInteractive() ? "on" : "off";
+        } catch (Exception ignored) { }
         return "started=" + getCurrentInputStarted()
-                + " ic=" + (getCurrentInputConnection() != null)
-                + " editor=" + (getCurrentInputEditorInfo() != null)
+                + " ic=" + (ic == null ? "null" : Integer.toHexString(System.identityHashCode(ic)))
+                + " editor=" + (editor == null ? "null" : editor.packageName + "#" + editor.fieldId)
+                + " target=" + mVoiceTargetPackage + "#" + mVoiceTargetFieldId
+                + " sameField=" + isVoiceTargetFocused()
                 + " viewShown=" + isInputViewShown()
+                + " screen=" + screen
                 + " held=" + mVoicePendingText.length();
+    }
+
+    /**
+     * Whether the field with focus is the one this dictation was started in.
+     *
+     * Bug report of 2026-09-24: the screen dimmed mid-session, input started again on something
+     * that was not the user's field -- the log shows started flipping false and back to true while
+     * the keyboard stayed hidden -- and that something answered a round trip perfectly well. The
+     * segment was committed into it and was never seen again. Reachability is not enough; the text
+     * has to go where it was meant to go.
+     */
+    private boolean isVoiceTargetFocused() {
+        final EditorInfo editor = getCurrentInputEditorInfo();
+        if (editor == null || mVoiceTargetPackage == null) return false;
+        return mVoiceTargetPackage.equals(editor.packageName) && mVoiceTargetFieldId == editor.fieldId;
     }
 
     /** What is left of a partial once the part already committed within this segment is taken off. */
@@ -2264,6 +2365,7 @@ public class LatinIME extends InputMethodService implements
         }
         mInputLogic.mConnection.commitText(segment + " ", 1);
         VibeVoiceDebugLogger.logText("Segment committed (" + voiceFieldState() + ")", segment);
+        verifyVoiceCommit(segment);
     }
 
     /** Writes out what was dictated while no field was there to take it. */
@@ -2274,6 +2376,7 @@ public class LatinIME extends InputMethodService implements
         mVoicePendingText.setLength(0);
         VibeVoiceDebugLogger.logText("Flushing held dictation (" + voiceFieldState() + ")", held);
         mInputLogic.mConnection.commitText(held, 1);
+        verifyVoiceCommit(held);
     }
 
     private void finishVoiceSession(String text, boolean addNewline) {
@@ -2317,6 +2420,7 @@ public class LatinIME extends InputMethodService implements
             VibeVoiceDebugLogger.logText("finishVoiceSession commit", commitText);
             VibeVoiceDebugLogger.log("finishVoiceSession: length=" + commitText.length() + ", suffix='" + suffix.trim() + "' multiline=" + isMultiline);
             mInputLogic.mConnection.commitText(commitText + suffix, 1);
+            verifyVoiceCommit(commitText);
             mVoiceSessionText.append(commitText);
             mClipboardHistoryManager.addTextToHistory(mVoiceSessionText.toString());
             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
