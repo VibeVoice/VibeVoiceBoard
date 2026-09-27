@@ -64,6 +64,13 @@ interface VibeVoiceListener {
      * already looking, and to stop saying so when it clears.
      */
     fun onLinkQualityChanged(degraded: Boolean)
+    /**
+     * The session was stopped and ended without the server's end-of-stream marker, so the last
+     * stretch of speech may never have come back as text. [unansweredMs] is the time between the
+     * last content frame and the stop -- the speech nobody has accounted for. Always delivered
+     * before [onClosed], so the keyboard can say so when it finishes.
+     */
+    fun onTailMissing(unansweredMs: Long)
     fun onClosed()
     fun onCommitComposing()
 }
@@ -79,6 +86,14 @@ class VibeVoiceClient(
     /** Whether any socket of this session ever finished its handshake, and when the session began. */
     @Volatile private var everOpened = false
     @Volatile private var startedAt = 0L
+    /**
+     * What it takes to tell "the server finished" from "the server went quiet". The end-of-stream
+     * marker is the only proof of the first; without it, the stretch between the last content frame
+     * and the stop is speech that was sent and never came back.
+     */
+    @Volatile private var endMarkerReceived = false
+    @Volatile private var lastContentAt = 0L
+    @Volatile private var stoppedAt = 0L
     @Volatile private var audioRecord: AudioRecord? = null
     @Volatile private var audioJob: Job? = null
     @Volatile private var totalRead = 0L
@@ -392,6 +407,7 @@ class VibeVoiceClient(
 
                         VibeVoiceDebugLogger.log("WS msg text len: ${resultText.length}, final: $isFinal, idx: $idx")
                         if (isFinal) {
+                            endMarkerReceived = true
                             // End-of-stream marker. Its text is empty by contract and its idx is how
                             // many content frames were sent, which is the only way to tell a short
                             // transcript apart from a lost frame.
@@ -449,6 +465,7 @@ class VibeVoiceClient(
                                 VibeVoiceDebugLogger.log("New segment detected onPartial. Prev len=${lastFullText.length}, new len=${resultText.length}")
                             }
                             lastFullText = resultText
+                            lastContentAt = SystemClock.elapsedRealtime()
 
                             listener.onPartial(resultText, isNewSegment)
                         }
@@ -526,6 +543,9 @@ class VibeVoiceClient(
         isLinkDegraded = false
         everOpened = false
         startedAt = SystemClock.elapsedRealtime()
+        endMarkerReceived = false
+        lastContentAt = startedAt
+        stoppedAt = 0L
         outageStartedAt = 0L
         startLinkWatchdog()
         closureJob?.cancel()
@@ -827,6 +847,7 @@ class VibeVoiceClient(
     fun stopStreaming() {
         if (!isStreaming) return
         stopRequested = true
+        stoppedAt = SystemClock.elapsedRealtime()
         isStreaming = false
         cleanupAudioCapture()
 
@@ -867,7 +888,19 @@ class VibeVoiceClient(
 
     /** The listener hears that a session ended once, whichever of the socket, the backstop or a stop reports it. */
     private fun notifyClosed() {
-        if (closedNotified.compareAndSet(false, true)) listener.onClosed()
+        if (!closedNotified.compareAndSet(false, true)) return
+        // Every way a session ends passes through here -- the backstop, the socket closing, the
+        // socket failing after the stop. So this is the one place that can see the server never
+        // finished. It used to be seen and dropped: the backstop fired, the socket was closed, and
+        // the keyboard fell back to its composing text without a word, while the last seconds of
+        // speech had gone nowhere on a link that looked healthy from this side.
+        if (stopRequested && !endMarkerReceived) {
+            val unanswered = (stoppedAt - lastContentAt).coerceAtLeast(0L)
+            VibeVoiceDebugLogger.log("[TAIL_MISSING] session ended without the end-of-stream marker; " +
+                    "${unanswered}ms between the last content frame and the stop were never answered")
+            listener.onTailMissing(unanswered)
+        }
+        listener.onClosed()
     }
 
     fun cancel() {

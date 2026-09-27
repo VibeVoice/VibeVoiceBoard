@@ -147,6 +147,8 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_integration_title">VibeVoice typing</string>
     <string name="vibevoice_stop_dictation">Diktat beenden</string>
     <string name="vibevoice_no_network">Keine Internetverbindung. Das Diktat braucht eine.</string>
+    <string name="vibevoice_tail_missing_seconds">Nach dem Beenden kam keine Antwort vom Server. Die letzten %1$d Sekunden fehlen womöglich.</string>
+    <string name="vibevoice_tail_missing">Nach dem Beenden kam keine Antwort vom Server. Die letzten Worte fehlen womöglich.</string>
     <string name="vibevoice_copied">Diktat in die Zwischenablage kopiert</string>
     <string name="vibevoice_overlay_description">Diktat läuft. Doppeltippen beendet es und kopiert es.</string>
     <string name="vibevoice_mic_blocked">Kein Zugriff auf das Mikrofon. Erlaube ihn unter Berechtigungen, um zu diktieren.</string>

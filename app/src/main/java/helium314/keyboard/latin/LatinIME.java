@@ -1725,6 +1725,8 @@ public class LatinIME extends InputMethodService implements
     private int mVoiceTargetFieldId = 0;
     /** Whether the keyboard was on screen when the session began. A hardware keyboard means never. */
     private boolean mVoiceStartedWithViewShown = false;
+    /** Set when the session ended without the server's end marker; how long went unanswered. -1 = no. */
+    private long mVoiceTailMissingMs = -1;
     private long mVoiceStartedAt = 0L;
     private volatile boolean mVoiceLinkDegraded = false;
 
@@ -1904,6 +1906,7 @@ public class LatinIME extends InputMethodService implements
             mVoicePendingText.setLength(0);
             mVoiceFinishDiscard = false;
             mVoiceSessionText.setLength(0);
+            mVoiceTailMissingMs = -1;
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
             final EditorInfo startEditor = getCurrentInputEditorInfo();
@@ -2062,6 +2065,16 @@ public class LatinIME extends InputMethodService implements
                         // the pending final result still arrives. Do NOT finish the session here —
                         // doing so is what used to drop the already-transcribed text on the floor.
                         mIsStoppingVoice = true;
+                    });
+                }
+
+                @Override
+                public void onTailMissing(long unansweredMs) {
+                    // Posted on the same handler as onClosed, which the client always calls right
+                    // after this, so the flag is in place before finishVoiceSession reads it.
+                    mUiHandler.post(() -> {
+                        if (mVibeVoiceClient != null && sessionId == mVoiceSessionId)
+                            mVoiceTailMissingMs = unansweredMs;
                     });
                 }
 
@@ -2439,6 +2452,19 @@ public class LatinIME extends InputMethodService implements
             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
                     .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
         }
+        if (mVoiceTailMissingMs >= 0 && !mVoiceFinishDiscard) {
+            // The server never confirmed the end, so the last stretch may simply not exist as text.
+            // That used to be known here and thrown away: the session ended as if it had finished,
+            // and the user found out by reading the field. Saying it costs one toast; not saying it
+            // costs whatever they said last.
+            final long seconds = Math.round(mVoiceTailMissingMs / 1000.0);
+            final String message = seconds >= 1
+                    ? getString(R.string.vibevoice_tail_missing_seconds, (int) seconds)
+                    : getString(R.string.vibevoice_tail_missing);
+            VibeVoiceDebugLogger.log("Told the user the tail may be missing (" + mVoiceTailMissingMs + "ms unanswered)");
+            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
+        }
+        mVoiceTailMissingMs = -1;
         mVoiceComposingText = "";
         mVoiceCommittedPrefix = "";
         mVoicePendingText.setLength(0);
