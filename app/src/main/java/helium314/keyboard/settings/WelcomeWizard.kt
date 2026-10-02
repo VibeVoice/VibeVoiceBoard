@@ -19,6 +19,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.key
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
@@ -35,6 +38,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -815,7 +819,7 @@ fun WelcomeWizard(
     Box(Modifier.fillMaxSize()) {
         BrandBackground(dark)
         // The waves on hero and closing screens
-        if (step == 0 || step == 5) HeroWaves()
+        if (step == 0 || step == 5) HeroWaves(dark)
         Surface(color = Color.Transparent) {
         CompositionLocalProvider(
             LocalContentColor provides textColor,
@@ -980,11 +984,24 @@ fun WizardHero(
             )
         }
         Spacer(Modifier.height(28.dp))
-        Row(Modifier.clickable { onClick() }.padding(top = 4.dp, start = 4.dp, end = 4.dp)) {
+        // A button, filled in the brand's violet. It used to be the label alone with a click handler
+        // -- type floating under the headline that nobody could tell was the way forward.
+        val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        Button(
+            onClick = onClick,
+            shape = RoundedCornerShape(percent = 50),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Brand.accent(dark),
+                contentColor = Color.White
+            ),
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 14.dp),
+            modifier = Modifier.heightIn(min = 52.dp)
+        ) {
             Text(
                 stringResource(if (closing) R.string.setup_finish_action else R.string.setup_start_action),
                 fontFamily = BrandFont,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium
             )
         }
     }
@@ -1015,14 +1032,18 @@ private fun FloatingMarkPreview(modifier: Modifier) {
 }
 
 @Composable
-private fun HeroWaves() {
+private fun HeroWaves(dark: Boolean) {
+    // Keyed on the theme, so switching it rebuilds the view with the matching colour.
+    val colour = if (dark) HERO_WAVE_COLOUR else HERO_WAVE_COLOUR_LIGHT
+    key(colour) {
     AndroidView(
-        factory = { c -> VoiceWaveView(c).apply { startDemo(HERO_WAVE_COLOUR) } },
+        factory = { c -> VoiceWaveView(c).apply { startDemo(colour) } },
         modifier = Modifier.fillMaxSize(),
         // Leaving the page must stop the frame loop. VoiceWaveView stops itself on detach as well,
         // but relying on that alone is how an animation outlives the thing that started it.
         onRelease = { it.stop() }
     )
+    }
 }
 
 /** Big enough to be the page's subject rather than an icon above a heading. */
@@ -1049,6 +1070,16 @@ private const val HERO_LEADING = 1.12f
  * and the page's whole job is to look like vibevoice.net.
  */
 private const val HERO_WAVE_COLOUR = 0xFF8B5CF6.toInt()
+
+/**
+ * The same violet, three steps lighter (primary-300), for a light page.
+ *
+ * At primary-500 the lines were nearly as dark as the black headline running across them, and a
+ * colleague testing in light mode read them as noise in the text. On a dark page the lines are
+ * light and the text is white, so the contrast comes from elsewhere; on a light page it has to come
+ * from the lines being pale.
+ */
+private const val HERO_WAVE_COLOUR_LIGHT = 0xFFC4B5FD.toInt()
 
 @Preview
 @Composable
