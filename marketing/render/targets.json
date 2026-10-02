@@ -49,5 +49,11 @@
     "width": 512, "height": 250,
     "out": "fastlane/metadata/android/{locale}/images/featureGraphic.png",
     "locales": [ "en-US", "de-DE" ]
+  },
+  "og": {
+    "_comment": "The link preview of vibevoice.net/keyboard (og:image), 1200x630. Rendered at that size from feature.html, not padded from the Play graphic: the ratios differ and padding is what put a black frame around the first one.",
+    "template": "feature.html",
+    "width": 600, "height": 315,
+    "out": "marketing/og/keyboard.png"
   }
 }

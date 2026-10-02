@@ -47,4 +47,10 @@ if f and (not ONLY or ONLY == "feature"):
         emit("RENDER", f["width"], f["height"],
              f"{ROOT}/" + f["out"].format(locale=locale), url(f["template"]))
 
+o = targets.get("og")
+if o and (not ONLY or ONLY == "og"):
+    emit("HEAD", "og")
+    emit("RENDER", o["width"], o["height"], f"{ROOT}/" + o["out"],
+         url(o["template"], w=o["width"], h=o["height"]))
+
 print("\n".join(out))

@@ -8,7 +8,11 @@
   Chrome pass on the ground the screenshots already establish, and having it means the video can
   ship the day it is cut rather than waiting on artwork.
 
-  Authored at 512x250 and rendered at device scale 2. The composition is the landing page's hero
+  Authored at 512x250 and rendered at device scale 2. Any other canvas comes from the query string,
+  ?w=600&h=315 for the 1200x630 link preview: the composition scales with the short side and the
+  blobs are placed in percent, so the ground reaches every edge. The first link preview was this
+  graphic letterboxed into 1200x630 with a black frame, because the two aspect ratios differ (2.05
+  against 1.90) and padding fills with black. Rendering at the target size is what avoids that. The composition is the landing page's hero
   turned on its side: mark on the left, wordmark and slogan on the right, same weight contrast,
   same blobs. Landscape, so the hero's stacked three lines would not fit -- the slogan sits beside
   the name instead of under it.
@@ -18,29 +22,43 @@
   @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_semibold.ttf') format('truetype'); font-weight: 600; }
 
   html, body { margin: 0; padding: 0; }
+  /* --k is 1 at 512x250, the authored size; every length below is a multiple of it. */
+  :root { --w: 512px; --h: 250px; --k: 1; }
   body {
-    width: 512px; height: 250px; overflow: hidden; background: #000;
+    width: var(--w); height: var(--h); overflow: hidden; background: #000;
     font-family: 'Ubuntu Sans', sans-serif; color: #fff;
-    display: flex; align-items: center; gap: 34px;
-    padding: 0 54px; box-sizing: border-box; position: relative;
+    display: flex; align-items: center; gap: calc(34px * var(--k));
+    padding: 0 calc(54px * var(--k)); box-sizing: border-box; position: relative;
   }
   .blob {
     position: absolute; border-radius: 50%;
-    width: 350px; height: 350px;          /* 140vmin of the 250px short side */
+    width: calc(350px * var(--k)); height: calc(350px * var(--k));   /* 140vmin of the short side */
     mix-blend-mode: screen; opacity: 0.34; pointer-events: none;
   }
-  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -80px;  bottom: -150px; }
-  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -60px; bottom:   60px; }
-  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left:  230px; bottom:  -90px; }
+  /* Percent of the canvas, which at 512x250 is exactly the pixel positions they were drawn at. */
+  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -15.625%; bottom: -60%; }
+  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -11.719%; bottom: 24%; }
+  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left: 44.922%;  bottom: -36%; }
 
-  img { width: 118px; position: relative; z-index: 2; filter: drop-shadow(0 0 26px rgba(168,85,247,0.45)); }
+  img { width: calc(118px * var(--k)); position: relative; z-index: 2;
+        filter: drop-shadow(0 0 calc(26px * var(--k)) rgba(168,85,247,0.45)); }
   .words { position: relative; z-index: 2; }
-  .mark { font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: 0.01em; }
+  .mark { font-size: calc(44px * var(--k)); font-weight: 600; line-height: 1; letter-spacing: 0.01em; }
   /* 29px, measured rather than chosen: "START SPEAKING." costs 7.6px of width per px of size, and
      the words column is 512 minus 108 of padding, 118 of mark and 34 of gap = 252px. At 34px it
      wanted 258 and broke onto a third line, which unbalances the whole composition. */
-  .slogan { font-size: 29px; font-weight: 100; line-height: 1.2; margin-top: 10px; white-space: nowrap; }
+  .slogan { font-size: calc(29px * var(--k)); font-weight: 100; line-height: 1.2;
+            margin-top: calc(10px * var(--k)); white-space: nowrap; }
 </style>
+<script>
+  // Before first paint, so Chrome never shoots the authored size by mistake.
+  const q = new URLSearchParams(location.search);
+  const w = +q.get('w') || 512, h = +q.get('h') || 250;
+  const r = document.documentElement.style;
+  r.setProperty('--w', w + 'px'); r.setProperty('--h', h + 'px');
+  // Scaled by the tighter side, so the row that was measured to fit 512 still fits.
+  r.setProperty('--k', Math.min(w / 512, h / 250));
+</script>
 
 <div class="blob purple"></div>
 <div class="blob green"></div>
