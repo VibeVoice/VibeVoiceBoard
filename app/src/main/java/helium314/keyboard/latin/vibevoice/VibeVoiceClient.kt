@@ -1074,7 +1074,11 @@ class VibeVoiceClient(
         closureJob = scope.launch {
             VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
             delay(3000)
-            if (!endMarkerReceived && tryResumeAfterStop("no final within 3 s")) return@launch
+            // With a token, two seconds more before going back for the final: a short tail's final
+            // normally lands within one or two seconds of END_STREAM, and going back early only
+            // costs a reconnect on a slow link -- the server makes it safe either way.
+            if (!endMarkerReceived && resumeToken != null) delay(RESUME_GRACE_WITH_TOKEN_MS)
+            if (!endMarkerReceived && tryResumeAfterStop("no final after stop")) return@launch
             VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
             // A close first, which still lets a final that is on its way arrive; cancelled only if
             // the socket does not finish closing in two more seconds.
@@ -1182,6 +1186,7 @@ class VibeVoiceClient(
         private const val AUTH_REPLY_TIMEOUT_MS = 10_000L
         /** How long a stopped session waits for its final after going back for it. */
         private const val RESUME_AFTER_STOP_TIMEOUT_MS = 15_000L
+        private const val RESUME_GRACE_WITH_TOKEN_MS = 2_000L
 
         /**
          * Where a reconnect resends audio from, as a position in the capture.
