@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+SPDX-License-Identifier: GPL-3.0-only
+The VibeVoice API key is stored in EncryptedSharedPreferences, whose master key lives in the Android
+Keystore and is never part of a backup. Restoring those files onto another device therefore yields
+ciphertext that cannot be decrypted, and it would put a credential into cloud backups for no gain.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="vibevoice_secure_prefs.xml" />
+    <exclude domain="sharedpref" path="vibevoice_prefs.xml" />
+</full-backup-content>

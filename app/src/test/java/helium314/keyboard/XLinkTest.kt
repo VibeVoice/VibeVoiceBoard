@@ -63,7 +63,8 @@ class XLinkTest { // Without the X, SubtypeTests fail with ClassCastException. W
     }
 
     @Test fun otherLinks() {
-        listOf(Links.LICENSE, Links.LAYOUT_WIKI_URL, Links.WIKI_URL, Links.CUSTOM_LAYOUTS, Links.CUSTOM_COLORS).forEach {
+        // the upstream wiki and discussion links were removed from this fork, see Links
+        listOf(Links.LICENSE, Links.PRIVACY_POLICY, Links.GITHUB, Links.DICTIONARY_URL).forEach {
             checkLink(it)
         }
     }

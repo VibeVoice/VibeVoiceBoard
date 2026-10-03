@@ -1,0 +1,53 @@
+05 — Der Beweis für die Interpunktion
+=====================================
+
+WOFÜR
+-----
+Screenshot 4. Das eigentliche Verkaufsargument: nicht *dass* die Tastatur diktiert,
+sondern *wie gut*.
+
+Jeder Android-Nutzer hat eine Spracheingabe probiert und aufgegeben — an fehlenden
+Kommas, an Wortsalat, an „Punkt" mitten im Satz. Deshalb verkauft „kann Diktat" nichts.
+Verkaufen tut ein Absatz, den man ansieht und denkt: das hat niemand nachbearbeitet.
+
+Wichtig: **behaupten wir nichts**. Kein Vergleich mit einem anderen Produkt, keine
+Gegenüberstellung — wir haben keinen Wettbewerber gemessen und dürfen deshalb keine Zahl
+gegen einen stellen. Wir zeigen einfach einen sauberen Absatz. Der Leser zieht den
+Vergleich von allein, und zwar besser als jede Zahl, die wir hinschreiben könnten.
+
+AUFBAU
+------
+* Ein Textfeld mit einem **längeren** diktierten Absatz — fünf bis acht Zeilen, nicht
+  drei. Die Länge ist der Punkt: kurze Sätze bekommt jeder hin.
+* Darin sichtbar: Kommas, mindestens ein Fragezeichen, Punkte am Satzende,
+  Großschreibung am Satzanfang. Bei deutschem Text auch die Nomen groß.
+* Ideal ist das Probierfeld im Einrichtungs-Assistenten (kommt mit diesem Build) — dann
+  gehört auch die obere Bildhälfte uns und sieht nach VibeVoice aus.
+  Bis dahin tut es eine Notiz-App mit dunklem Theme.
+* Die Tastatur darf, muss aber nicht im Bild sein. Wenn ja: mit laufenden Wellen.
+
+Ein Vorschlag für den Text, der alles Nötige erzwingt:
+
+  „Kannst du mir kurz sagen, wann der Termin am Donnerstag anfängt? Ich müsste vorher
+  noch tanken, und wenn es eng wird, komme ich lieber direkt vom Büro. Ansonsten bringe
+  ich die Unterlagen mit, die wir letzte Woche besprochen haben."
+
+Sprich ihn ganz normal, ohne Satzzeichen zu diktieren. Genau darum geht es.
+
+NICHT IM BILD
+-------------
+* Kein Text, der nach Werbetext klingt. Der Absatz muss wie eine echte Nachricht wirken.
+* Keine Korrektur von Hand. Wenn ein Fehler drin ist, neu diktieren — nicht nachtippen.
+
+AUFNAHME
+--------
+1. Feld öffnen, Diktat starten.
+2. Den Absatz in einem Zug sprechen, in normalem Tempo.
+3. Diktat beenden, damit der Text final steht (Teilergebnisse werden noch korrigiert).
+4. Screenshot.
+
+DANACH
+------
+Ich setze eine Textzeile darüber, die die Interpunktion benennt, ohne sie zu behaupten —
+etwa „Kommas, Punkte und Fragezeichen kommen von selbst". Die Wortfehlerrate von 9,31 %
+kommt in die Beschreibung, nicht ins Bild.

@@ -1,0 +1,224 @@
+// SPDX-License-Identifier: GPL-3.0-only
+package helium314.keyboard.settings
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.currentCoroutineContext
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Color
+import helium314.keyboard.latin.BuildConfig
+import helium314.keyboard.latin.R
+import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
+
+/**
+ * Linking a VibeVoice account, as one piece.
+ *
+ * Used by the settings screen and by the setup wizard. It is a single implementation on purpose:
+ * the device authorization grant has more failure modes than it looks -- a code that expires while
+ * the user is elsewhere, a device with no browser to send them to, a poll that has to respect the
+ * server's interval, and a response body that is not the JSON it claimed to be -- and a second copy
+ * of that is a second copy to get wrong, and to drift.
+ *
+ * Renders nothing once an account is linked. What "linked" looks like is the caller's business: the
+ * settings screen shows quota and an unlink button, the wizard shows a tick and moves on.
+ *
+ * [onLinked] fires once, when a key arrives.
+ *
+ * [trigger] is a slot rather than a button, because the two callers do not agree on what a button
+ * looks like and only one of them is wrong about it. The settings screen is a Material screen and
+ * wants a Material button; the setup wizard is the brand's, built from translucent cards with
+ * hairline edges, and a filled `colorScheme.primary` button in the middle of that reads as
+ * something pasted in from another app -- which is also the user's wallpaper accent, not ours.
+ * The flow above the button is what had to stay single; its chrome never did.
+ *
+ * Similarly, in-progress and error states are styled via [cardModifier], [codeColor], [textColor],
+ * [textDimColor], [progressColor], and [errorColor]. In the settings screen these use Material defaults
+ * with no enclosing card; in the wizard, [cardModifier] cards the active/error state (while the idle
+ * trigger remains uncarded, as it is already an ActionRow card) and applies the brand palette.
+ */
+@Composable
+fun VibeVoiceLinkPanel(
+    modifier: Modifier = Modifier,
+    cardModifier: Modifier = Modifier,
+    codeColor: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = Color.Unspecified,
+    textDimColor: Color = Color.Unspecified,
+    progressColor: Color = MaterialTheme.colorScheme.primary,
+    errorColor: Color = MaterialTheme.colorScheme.error,
+    trigger: @Composable (enabled: Boolean, loading: Boolean, onClick: () -> Unit) -> Unit = { enabled, loading, onClick ->
+        Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+            if (loading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+            else Text(stringResource(R.string.vibevoice_link_account))
+        }
+    },
+    onLinked: () -> Unit
+) {
+    val context = LocalContext.current
+    val prefs = remember(context) { VibeVoiceClient.vibeVoicePrefs(context) }
+    val scope = rememberCoroutineScope()
+
+    // Saveable, and resumed below: approving the code means leaving for the browser, which is exactly
+    // when the system is most likely to destroy this activity. With plain remember the approved code
+    // was never exchanged for a key and the user came back to a fresh "Link account" button.
+    var userCode by rememberSaveable { mutableStateOf<String?>(null) }
+    var deviceCode by rememberSaveable { mutableStateOf<String?>(null) }
+    var interval by rememberSaveable { mutableIntStateOf(5) }
+    var expiresAt by rememberSaveable { mutableLongStateOf(0L) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    suspend fun poll(code: String) {
+        while (currentCoroutineContext().isActive) {
+            delay(interval * 1000L)
+            if (System.currentTimeMillis() > expiresAt) {
+                userCode = null
+                deviceCode = null
+                errorMessage = context.getString(R.string.vibevoice_linking_failed, "expired_token")
+                return
+            }
+            val tokenRes = VibeVoiceClient.pollForToken(code) ?: continue
+            if (tokenRes.has("api_key")) {
+                prefs.edit().putString(VIBEVOICE_API_KEY_PREF, tokenRes.getString("api_key")).apply()
+                userCode = null
+                deviceCode = null
+                onLinked()
+                return
+            } else if (tokenRes.optString("error") == "slow_down") {
+                // RFC 8628 3.5: keep polling, five seconds slower. Treating it as fatal threw
+                // away a pairing that was about to succeed.
+                interval += 5
+            } else if (tokenRes.optString("error") != "authorization_pending") {
+                userCode = null
+                deviceCode = null
+                errorMessage = context.getString(R.string.vibevoice_linking_failed, tokenRes.optString("error"))
+                return
+            }
+        }
+    }
+
+    // Back from a recreation with a code still outstanding: carry on where the old composition stopped.
+    LaunchedEffect(Unit) {
+        val code = deviceCode ?: return@LaunchedEffect
+        if (userCode != null) poll(code)
+    }
+
+    fun startLinking() {
+        isLoading = true
+        errorMessage = null
+        scope.launch {
+            val res = VibeVoiceClient.requestDeviceCode(
+                "VibeVoice Keyboard Android", BuildConfig.VERSION_NAME, VibeVoiceClient.installId(context)
+            )
+            isLoading = false
+            if (res == null) {
+                errorMessage = context.getString(R.string.vibevoice_failed_request_device_code)
+                return@launch
+            }
+            // A body without these keys -- an error payload, an API change, a captive portal
+            // answering 200 with HTML -- used to throw JSONException out of the coroutine and take
+            // the whole activity down with it.
+            val code = res.optString("user_code").takeIf { it.isNotBlank() }
+            val uri = res.optString("verification_uri").takeIf { it.isNotBlank() }
+            val newDeviceCode = res.optString("device_code").takeIf { it.isNotBlank() }
+            if (code == null || uri == null || newDeviceCode == null) {
+                errorMessage = context.getString(R.string.vibevoice_failed_request_device_code)
+                return@launch
+            }
+            userCode = code
+            interval = res.optInt("interval", 5).coerceAtLeast(1)
+            // RFC 8628 device codes expire; without this the loop polls forever whenever
+            // pollForToken keeps returning null -- offline, or the user never finishes in the browser.
+            expiresAt = System.currentTimeMillis() + res.optInt("expires_in", 600).coerceAtLeast(30) * 1000L
+
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$uri?code=$code")))
+            } catch (_: android.content.ActivityNotFoundException) {
+                // Nothing can approve the code without a browser, so polling for ten minutes would
+                // only hide the message behind a spinner.
+                errorMessage = context.getString(R.string.vibevoice_no_browser)
+                userCode = null
+                return@launch
+            }
+            deviceCode = newDeviceCode
+            poll(newDeviceCode)
+        }
+    }
+
+    if (VibeVoiceClient.isLinked(context) && userCode == null && !isLoading) return
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (userCode != null) {
+            Column(modifier = cardModifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.vibevoice_waiting_for_approval),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = textColor
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    stringResource(R.string.vibevoice_enter_code_in_browser),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textDimColor
+                )
+                Text(
+                    userCode ?: "",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = codeColor
+                )
+                Spacer(modifier = Modifier.size(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = progressColor
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(
+                        stringResource(R.string.vibevoice_polling_for_token),
+                        color = textColor
+                    )
+                }
+            }
+        } else {
+            trigger(!isLoading, isLoading) { startLinking() }
+            if (errorMessage != null) {
+                Spacer(modifier = Modifier.size(8.dp))
+                Box(modifier = cardModifier.fillMaxWidth()) {
+                    Text(
+                        errorMessage!!,
+                        color = errorColor,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,46 @@
+04 — Die Bühne für das Widget: ein Screenshot ohne Textfeld
+===========================================================
+
+WOFÜR
+-----
+Screenshot 3. Das Feature, das keine andere Tastatur hat: das Diktat läuft weiter, wenn
+die Tastatur weg ist.
+
+Die Aussage steht und fällt damit, dass im Bild **kein Textfeld** ist. Ein Widget über
+einem Chat beweist nichts — da könnte auch die Tastatur offen sein. Ein Widget über einem
+Artikel, einer Karte oder einer Galerie beweist alles: diese App hat mit Text nichts zu
+tun, und die Aufnahme läuft trotzdem.
+
+AUFBAU
+------
+* Irgendeine App, in der man nichts schreiben kann. Gute Kandidaten:
+  - ein Browser mit einem geöffneten Artikel,
+  - Google Maps mit einer Route,
+  - die Galerie mit einem Foto,
+  - ein Podcast- oder Musikplayer.
+* Kein Eingabefeld im sichtbaren Bereich, keine Suchleiste mit Cursor.
+* **Ohne** Widget. Das setze ich aus Bild 03 darauf.
+
+Wenn eine Suchleiste unvermeidbar ist (Maps hat immer eine), ist das in Ordnung, solange
+sie nicht fokussiert ist und kein Cursor blinkt.
+
+NICHT IM BILD
+-------------
+* Keine offene Tastatur.
+* Nichts Privates: keine Heimatadresse in Maps, keine privaten Fotos in der Galerie,
+  kein Browsertab mit persönlichem Inhalt.
+* Kein Play-Store-Eintrag einer anderen App.
+
+AUFNAHME
+--------
+Einfach ein normaler Screenshot. Keine Session nötig, kein Diktat — das Widget kommt aus
+Bild 03.
+
+Zwei bis drei Varianten mit verschiedenen Apps schicken, dann kann ich die nehmen, auf
+der der Schein am besten sitzt.
+
+DANACH
+------
+Ich montiere das freigestellte Widget aus 03 darauf, in eine Ecke oder auf die untere
+Hälfte, dorthin wo es im echten Betrieb auch liegen würde. Dazu eine Textzeile: „Läuft
+weiter, wenn du die App wechselst."

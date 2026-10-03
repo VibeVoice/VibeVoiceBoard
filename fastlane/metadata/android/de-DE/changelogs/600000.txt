@@ -1,0 +1,5 @@
+Erste Veröffentlichung.
+
+Eine vollwertige Android-Tastatur mit eingebautem Diktat: Tippe auf die Marke in der Werkzeugleiste oder halte die Leertaste, und was du sagst, steht in dem Feld, in dem du sowieso schon warst – Satzzeichen und Großschreibung inklusive. Das Diktat läuft weiter, wenn die Tastatur zugeht, du kannst einen Gedanken also in einer App anfangen und in einer anderen beenden.
+
+Alles andere an der Tastatur funktioniert offline und ohne Konto.

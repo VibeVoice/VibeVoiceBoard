@@ -41,16 +41,13 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.keyboard.KeyboardTheme
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.ColorType
-import helium314.keyboard.latin.common.Links
 import helium314.keyboard.latin.common.decodeBase36
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.getActivity
 import helium314.keyboard.latin.utils.getStringResourceOrName
-import helium314.keyboard.latin.utils.htmlToAnnotated
 import helium314.keyboard.latin.utils.prefs
-import helium314.keyboard.latin.utils.withHtmlLink
 import helium314.keyboard.latin.utils.DeleteButton
 import helium314.keyboard.latin.utils.EditButton
 import helium314.keyboard.settings.Setting
@@ -140,11 +137,7 @@ fun ColorThemePickerDialog(
         ConfirmationDialog(
             onDismissRequest = { showLoadDialog = false },
             title = { Text(stringResource(R.string.load)) },
-            content = {
-                val link = stringResource(R.string.discussion_section_link).withHtmlLink(Links.CUSTOM_COLORS)
-                val text = stringResource(R.string.get_colors_message, link)
-                Text(text.htmlToAnnotated())
-            },
+            content = { Text(stringResource(R.string.message_load_colors)) },
             onConfirmed = {
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
                     .addCategory(Intent.CATEGORY_OPENABLE)
