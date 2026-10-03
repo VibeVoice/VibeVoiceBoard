@@ -182,6 +182,13 @@ class VibeVoiceClient(
     @Volatile private var streamOriginPos = -1L
     @Volatile private var ackedPos = -1L
     @Volatile private var lastPiecePos = -1L
+    /**
+     * Set once a stopped session has gone back to the server to collect its final, after the socket
+     * died before the end marker arrived. One attempt; callbacks from the socket it replaced are
+     * ignored from then on.
+     */
+    @Volatile private var resumingAfterStop = false
+    @Volatile private var resumeAfterStopTried = false
     /** The first piece of a stream that resent audio from a guessed offset may repeat a few words. */
     @Volatile private var trimOverlapNext = false
 
@@ -238,6 +245,44 @@ class VibeVoiceClient(
             .url("wss://vibevoice.net/stream")
             .build()
         webSocket = sharedHttpClient.newWebSocket(request, createWebSocketListener())
+    }
+
+    /**
+     * The user stopped, and the end-of-stream marker never came: the socket died, or the backstop
+     * ran out on a link that had quietly gone. If the server gave this session a resume token, go
+     * back for the final instead of ending without it.
+     *
+     * What the server answers decides the rest (see onAuthenticated). `replay_only`: it had our
+     * END_STREAM and finished the session, so it replays the tail and the final and closes, and we
+     * send nothing. Resumed without that: END_STREAM never arrived, so the in-flight audio and
+     * END_STREAM go again. Not resumed: the session is gone; resend from the last ack and end it.
+     * Returns false when there is nothing to go back for, and the caller ends the session as before.
+     */
+    private fun tryResumeAfterStop(reason: String): Boolean {
+        if (!stopRequested || endMarkerReceived || resumeAfterStopTried) return false
+        if (resumeToken == null) return false
+        resumeAfterStopTried = true
+        resumingAfterStop = true
+        VibeVoiceDebugLogger.log("Stopped without a final ($reason); resuming to collect it")
+        val old = webSocket
+        synchronized(preOpenBuffer) {
+            isWsOpen = false
+            isReconnecting = true
+            awaitingAuthReply = false
+        }
+        // Replaced first, so the old socket's own close is recognised as stale and ignored.
+        connectWebSocket()
+        try { old?.cancel() } catch (_: Exception) { }
+        closureJob = scope.launch {
+            delay(RESUME_AFTER_STOP_TIMEOUT_MS)
+            if (!endMarkerReceived) {
+                VibeVoiceDebugLogger.log("No final within ${RESUME_AFTER_STOP_TIMEOUT_MS}ms of resuming; ending without it")
+                try { webSocket?.cancel() } catch (_: Exception) { }
+                webSocket = null
+                notifyClosed()
+            }
+        }
+        return true
     }
 
     private fun triggerReconnect() {
@@ -383,6 +428,20 @@ class VibeVoiceClient(
         authReplyTimeoutJob = null
         val resumed = json.optBoolean("resumed", false)
         val receivedMs = json.optLong("received_ms", -1L)
+        if (resumed && json.optBoolean("replay_only", false)) {
+            // The server had our END_STREAM and finished the session; it replays the tail and the
+            // final and then closes. It reads nothing more, so nothing is sent: no audio, no
+            // END_STREAM.
+            synchronized(preOpenBuffer) {
+                awaitingAuthReply = false
+                isReconnecting = false
+                pendingEndStream = false
+                preOpenBuffer.clear()
+                preOpenBufferSizeBytes = 0
+            }
+            VibeVoiceDebugLogger.log("Resumed replay-only after idx $lastAppliedIdx; collecting the tail")
+            return
+        }
         synchronized(preOpenBuffer) {
             awaitingAuthReply = false
             val plan = resendPlan(resumed, receivedMs, streamOriginPos, ackedPos, lastPiecePos)
@@ -424,6 +483,9 @@ class VibeVoiceClient(
             isWsOpen = true
             isReconnecting = false
             retryCount = 0
+            // A session the user already stopped ends once its audio is back on the server:
+            // END_STREAM either never arrived (resumed) or went to a session that no longer exists.
+            if (stopRequested) pendingEndStream = true
             sendDeferredEndStream(webSocket)
         }
     }
@@ -616,6 +678,10 @@ class VibeVoiceClient(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 VibeVoiceDebugLogger.log("WS Failure: ${t.message}")
+                if (resumingAfterStop && webSocket != this@VibeVoiceClient.webSocket) {
+                    VibeVoiceDebugLogger.log("Ignoring the failure of the socket a resume replaced")
+                    return
+                }
                 if (isStreaming) {
                     // The decision whether another attempt is worth making lives in one place now,
                     // and it is about how much audio is still recoverable rather than about a count.
@@ -630,8 +696,9 @@ class VibeVoiceClient(
                     }
                     // After a stop the user asked for, a dropped connection is how the session
                     // ended, not an error: the final has arrived or never will. Reporting it as one
-                    // put "Dictation error" over a transcript that was committed cleanly.
-                    if (stopRequested) notifyClosed()
+                    // put "Dictation error" over a transcript that was committed cleanly. Unless the
+                    // final had not arrived yet and the server can still hand it over.
+                    if (stopRequested) { if (!tryResumeAfterStop("socket failed after stop")) notifyClosed() }
                     else listener.onError(t.message ?: "WebSocket Error")
                 }
             }
@@ -643,6 +710,10 @@ class VibeVoiceClient(
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 VibeVoiceDebugLogger.log("WS Closed: $code / $reason")
+                if (resumingAfterStop && webSocket != this@VibeVoiceClient.webSocket) {
+                    VibeVoiceDebugLogger.log("Ignoring the close of the socket a resume replaced")
+                    return
+                }
                 if (isStreaming && code != 1000) {
                     VibeVoiceDebugLogger.log("Unexpected WS close mid-session. Reconnecting...")
                     triggerReconnect()
@@ -654,6 +725,7 @@ class VibeVoiceClient(
                     if (this@VibeVoiceClient.webSocket == webSocket) {
                         this@VibeVoiceClient.webSocket = null
                     }
+                    if (code != 1000 && tryResumeAfterStop("socket closed with $code after stop")) return
                     notifyClosed()
                 }
             }
@@ -689,6 +761,8 @@ class VibeVoiceClient(
         ackedPos = -1L
         lastPiecePos = -1L
         trimOverlapNext = false
+        resumingAfterStop = false
+        resumeAfterStopTried = false
 
         synchronized(preOpenBuffer) {
             preOpenBuffer.clear()
@@ -1000,6 +1074,7 @@ class VibeVoiceClient(
         closureJob = scope.launch {
             VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
             delay(3000)
+            if (!endMarkerReceived && tryResumeAfterStop("no final within 3 s")) return@launch
             VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
             // A close first, which still lets a final that is on its way arrive; cancelled only if
             // the socket does not finish closing in two more seconds.
@@ -1105,6 +1180,8 @@ class VibeVoiceClient(
         private const val FALLBACK_MARGIN_BYTES = 1000 * BYTES_PER_MS
         private const val MAX_OVERLAP_WORDS = 12
         private const val AUTH_REPLY_TIMEOUT_MS = 10_000L
+        /** How long a stopped session waits for its final after going back for it. */
+        private const val RESUME_AFTER_STOP_TIMEOUT_MS = 15_000L
 
         /**
          * Where a reconnect resends audio from, as a position in the capture.
