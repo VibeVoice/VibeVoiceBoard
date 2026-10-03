@@ -34,7 +34,7 @@ class StreamResumeTest {
     @Test fun notResumedResendsFromAck() {
         val plan = resendPlan(false, -1, ms(100), ackedPos = ms(100) + ms(24_820), lastPiecePos = ms(30_000))
         assertFalse(plan.sameSession)
-        assertFalse(plan.trimOverlap)
+        assertTrue(plan.trimOverlap) // held-back text keeps ack_ms at the start of a delivered segment
         assertEquals(ms(100) + ms(24_820), plan.from)
     }
 

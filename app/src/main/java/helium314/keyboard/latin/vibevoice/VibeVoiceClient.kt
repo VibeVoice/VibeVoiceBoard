@@ -396,7 +396,11 @@ class VibeVoiceClient(
                 ackedPos = -1L
                 lastPiecePos = -1L
             }
-            val data = readUnconfirmedAudio(anchor)
+            var data = readUnconfirmedAudio(anchor)
+            // Whole samples only. The server reads each frame as int16 and drops a frame of odd
+            // length outright, which would shift its clock by that frame; every offset here is a
+            // sample boundary, so an odd length can only mean the oldest byte is half a sample.
+            if (data != null && data.size % 2 != 0) data = data.copyOfRange(1, data.size).takeIf { it.isNotEmpty() }
             val actualStart = totalRead - (data?.size ?: 0)
             if (actualStart > anchor) {
                 VibeVoiceDebugLogger.log("[RESEND_SHORT] ${(actualStart - anchor) / BYTES_PER_MS}ms before the resend point had already left the 30 s buffer")
@@ -1119,8 +1123,10 @@ class VibeVoiceClient(
             return when {
                 resumed && receivedMs >= 0 && streamOriginPos >= 0 ->
                     ResendPlan(streamOriginPos + receivedMs * BYTES_PER_MS, true, false, "resumed, server holds ${receivedMs}ms")
+                // Trimmed too: while a segment's tail is held back on the server, ack_ms stays at the
+                // segment's start although its head was already delivered, so its words can repeat.
                 ackedPos >= 0 ->
-                    ResendPlan(maxOf(ackedPos, origin), false, false, "not resumed, from the last ack")
+                    ResendPlan(maxOf(ackedPos, origin), false, true, "not resumed, from the last ack")
                 lastPiecePos >= 0 ->
                     ResendPlan(maxOf(lastPiecePos - FALLBACK_MARGIN_BYTES, origin), false, true,
                         "not resumed, no ack from this server, from the last piece less ${FALLBACK_MARGIN_BYTES / BYTES_PER_MS}ms")
