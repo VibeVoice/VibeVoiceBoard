@@ -1,3 +1,5 @@
+<img src="fastlane/metadata/android/en-US/images/icon.png" alt="" width="64" height="64">
+
 # VibeVoiceBoard
 
 VibeVoiceBoard is a customizable Android keyboard with built-in cloud speech-to-text. It is a fork of
