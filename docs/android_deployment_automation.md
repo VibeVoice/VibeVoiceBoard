@@ -34,7 +34,7 @@ To compile the application and upload it to Nextcloud, you can run the automated
 ./gradlew assembleDebug -q
 
 # 2. Deploy to Local Nextcloud Sync Folder
-DEST_DIR="/home/schneider/nextcloud/Documents/Shared Documents/VibeVoiceBoard"
+DEST_DIR="/home/schneider/nextcloud/Releases/VibeVoice Board"
 mkdir -p "$DEST_DIR"
 cp app/build/outputs/apk/debug/VibeVoiceKeyboard_<version>-<versionCode>-debug.apk "$DEST_DIR/"
 ```
@@ -64,7 +64,7 @@ fi
 An automated script is available at `tools/build-and-deploy.sh`. It automatically:
 1. Runs the Gradle build.
 2. Locates the built APK dynamically.
-3. Copies the APK to `/home/schneider/nextcloud/Documents/Shared Documents/VibeVoiceBoard`.
+3. Copies the APK to `/home/schneider/nextcloud/Releases/VibeVoice Board`.
 4. Installs the APK over wireless ADB if the phone is connected.
 
 To run it:
