@@ -46,7 +46,7 @@ fi
 
 # Derive WebDAV base from authenticated user
 NC_USER="${NEXTCLOUD_USER:-${NEXTCLOUD_CREDENTIALS%%:*}}"
-NC_WEBDAV_BASE="https://cloud.infraviored.com/remote.php/dav/files/${NC_USER}/Documents/Geteilte%20Dokumente/VibeVoiceBoard"
+NC_WEBDAV_BASE="https://cloud.infraviored.com/remote.php/dav/files/${NC_USER}/Releases/VibeVoice%20Board"
 
 # 2. Compile Android APK
 echo "Compiling Android debug APK using JAVA_HOME=$JAVA_HOME..."

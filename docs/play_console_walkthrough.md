@@ -7,7 +7,7 @@ Für ein **persönliches Konto nach dem 13.11.2023**: geschlossener Test mit **1
 > tatsächlich beigetreten sind. Alles andere — Bilder, Texte, Seiten — kann parallel entstehen.
 
 Der ausführliche Auftrag an den VibeVoice-Agenten liegt in Nextcloud unter
-*Geteilte Dokumente / VibeVoiceBoard / HANDOFF_VibeVoice_Agent.md*. Dieses Dokument ist die
+*Releases / VibeVoice Board / HANDOFF_VibeVoice_Agent.md*. Dieses Dokument ist die
 Play-Console-Seite davon.
 
 ---
