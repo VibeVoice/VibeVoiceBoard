@@ -188,3 +188,7 @@ that coupling has been a repeated source of bugs.
 - New user-facing strings go in `app/src/main/res/values/strings.xml` only. The upstream locale
   files are managed by Weblate and must not be hand-edited; the fork's own translations live in
   `values-<locale>/strings_vibevoice.xml` (German today), and the product is English first.
+- The app icon (`drawable/ic_launcher_foreground.xml`, `ic_launcher_monochrome.xml`, the
+  `mipmap-*dpi` PNGs and the Play hi-res icon in `fastlane/.../images/icon.png`) is produced outside
+  this repository by the maintainer, centred on the mark's enclosing circle. Do not re-centre or
+  redraw it here; ask for updated files. `art/launcher_icon/` is HeliBoard's icon, not ours.
