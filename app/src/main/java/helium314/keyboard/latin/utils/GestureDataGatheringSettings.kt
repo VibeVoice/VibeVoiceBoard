@@ -34,6 +34,8 @@ import kotlin.random.Random
 // will be removed once the project is finished
 
 object GestureDataGatheringSettings {
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
     private const val PREF_WORD_EXCLUSIONS = "gesture_data_word_exclusions"
     private const val PREF_APP_EXCLUSIONS = "gesture_data_app_exclusions"
     private const val PREF_APP_EXCLUSIONS_INCLUDE_BY_DEFAULT = "gesture_data_app_exclusions_ignore_by_default"
@@ -54,12 +56,7 @@ object GestureDataGatheringSettings {
     fun isBackgroundGatheringEnabled(prefs: SharedPreferences): Boolean {
         if (!prefs.getBoolean(PREF_BACKGROUND_GATHERING_ENABLED, false)) return false
         val disabledBefore = prefs.getLong(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS, 0L)
-        if (disabledBefore > SystemClock.elapsedRealtime() + 5 * 60 * 1000L) {
-            // elapsedRealtime decreased -> phone was rebooted -> reset
-            prefs.edit { remove(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS) }
-            return true
-        }
-        return SystemClock.elapsedRealtime() > disabledBefore
+        return System.currentTimeMillis() > disabledBefore
     }
 
     fun setBackgroundGatheringEnabled(prefs: SharedPreferences, enabled: Boolean) = prefs.edit {
@@ -69,7 +66,7 @@ object GestureDataGatheringSettings {
 
     fun tempDisableBackgroundGathering(prefs: SharedPreferences) {
         // disable for 5 min
-        prefs.edit { putLong(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS, SystemClock.elapsedRealtime() + 5 * 60 * 1000L) }
+        prefs.edit { putLong(PREF_BACKGROUND_DISABLED_BEFORE_TIME_MILLIS, System.currentTimeMillis() + 5 * 60 * 1000L) }
     }
 
     fun String.filterBackgroundGatheringToolbarKeys(prefs: SharedPreferences) = split(Separators.ENTRY).filter {
@@ -87,8 +84,9 @@ object GestureDataGatheringSettings {
     fun setWordExclusions(context: Context, list: Collection<String>) {
         excludedWords = null
         val json = Json.encodeToString(list)
+        val appCtx = context.applicationContext
         context.prefs().edit { putString(PREF_WORD_EXCLUSIONS, json) }
-        GlobalScope.launch { GestureDataDao.getInstance(context)?.deleteBackgroundWords(list) }
+        scope.launch { GestureDataDao.getInstance(appCtx)?.deleteBackgroundWords(list) }
     }
 
     fun getWordExclusions(context: Context): Set<String> {

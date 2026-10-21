@@ -1,0 +1,1508 @@
+package helium314.keyboard.latin.vibevoice
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Context.MODE_PRIVATE
+import android.content.SharedPreferences
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.os.Build
+import android.os.SystemClock
+import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString.Companion.toByteString
+import org.json.JSONObject
+
+/**
+ * What `POST /api/trial/key` can answer. The three failures are not interchangeable: 409 means show
+ * the account step, 429 means try again later, and anything else is a fault. Collapsing any two
+ * either invites somebody to register when it should have retried, or shows an error when it should
+ * have invited. See P-058 R4 in the VibeVoice repository.
+ *
+ * Top level rather than inside the companion: `VibeVoiceClient.TrialResult` is how every caller
+ * wants to write it, and a class nested in a companion is `VibeVoiceClient.Companion.TrialResult`.
+ */
+sealed class TrialResult {
+    data class Granted(val key: String, val minutesGranted: Double) : TrialResult()
+    object AlreadyUsed : TrialResult()
+    object RateLimited : TrialResult()
+    object Failed : TrialResult()
+}
+
+interface VibeVoiceListener {
+    fun onPartial(text: String, isNewSegment: Boolean)
+    fun onFinal(text: String, isNewSegment: Boolean)
+    fun onError(error: String)
+    /**
+     * The capture side failed but the session is being wound down gracefully, so the audio that
+     * was already sent still gets transcribed. [code] is one of the `WARN_` constants.
+     * Unlike [onError] this must not tear the session down — wait for the final result.
+     */
+    fun onWarning(code: String)
+    /**
+     * The link became too poor to stream into, or recovered.
+     *
+     * Not an error and not a warning: the session is still running and still recording into the
+     * rolling buffer. The keyboard uses it to say so on the space bar, which is where the user is
+     * already looking, and to stop saying so when it clears.
+     */
+    fun onLinkQualityChanged(degraded: Boolean)
+    /**
+     * The session was stopped and ended without the server's end-of-stream marker, so the last
+     * stretch of speech may never have come back as text. [unansweredMs] is the time between the
+     * last content frame and the stop -- the speech nobody has accounted for. Always delivered
+     * before [onClosed], so the keyboard can say so when it finishes.
+     */
+    fun onTailMissing(unansweredMs: Long)
+    fun onClosed()
+    fun onCommitComposing()
+}
+
+class VibeVoiceClient(
+    private val apiKey: String,
+    private val listener: VibeVoiceListener
+) {
+    @Volatile private var webSocket: WebSocket? = null
+    @Volatile private var isStreaming = false
+    // Set by stopStreaming only: tells a dropped connection after the user's stop apart from a failure.
+    @Volatile private var stopRequested = false
+    /** Whether any socket of this session ever finished its handshake, and when the session began. */
+    @Volatile private var everOpened = false
+    @Volatile private var startedAt = 0L
+    /**
+     * What it takes to tell "the server finished" from "the server went quiet". The end-of-stream
+     * marker is the only proof of the first; without it, the stretch between the last content frame
+     * and the stop is speech that was sent and never came back.
+     */
+    @Volatile private var endMarkerReceived = false
+    @Volatile private var lastContentAt = 0L
+    @Volatile private var stoppedAt = 0L
+    @Volatile private var audioRecord: AudioRecord? = null
+    @Volatile private var audioJob: Job? = null
+    @Volatile private var totalRead = 0L
+    @Volatile private var lastFullText = ""
+    /**
+     * RMS of the most recent audio buffer, 0..1. Written by the capture coroutine roughly every
+     * 100 ms and read once per frame by [VoiceWaveView] — never delivered through a callback or a
+     * Handler, because the only consumer is an animation that paints itself and would gain nothing
+     * from being woken on the UI thread thirty times a second.
+     */
+    @Volatile var currentLevel = 0f
+        private set
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
+    @Volatile private var closureJob: Job? = null
+
+    private val rollingBuffer = ByteArray(30 * 32000) // 30 seconds of audio at 16kHz 16-bit mono
+    // writeToRollingBuffer runs on the audio coroutine, readUnconfirmedAudio on the OkHttp callback
+    // thread during a reconnect. Without this lock the writer wraps around and overwrites the oldest
+    // bytes while the reader is still copying them, corrupting exactly the unconfirmed audio the
+    // reconnect exists to preserve. @Volatile on totalRead does not protect the array itself.
+    private val rollingBufferLock = Any()
+    // How much audio had been handed to the socket when it dropped. Everything after this point
+    // never reached the server and is what a reconnect has to resend.
+    //
+    // This used to resend everything since `audioConfirmedBytes`, which was derived from a `dur`
+    // field in the result frames -- except the server has never sent that field, on any branch, so
+    // the value stayed at 0 and every reconnect resent the whole 30-second buffer. The two flushes
+    // in the bug report logs are 15.4 s and 26 s of already-transcribed audio, which the server
+    // then transcribes a second time. If the server ever starts acknowledging processed seconds,
+    // that is the better signal and belongs here.
+    @Volatile private var disconnectedAtBytes = 0L
+    // Index of the last content frame applied, and how many have been applied on this connection.
+    // Both reset on reconnect: a reconnect is a new server-side session and its frame numbering
+    // starts at 1 again, so carrying them over would make us discard every frame of the new one.
+    @Volatile private var lastAppliedIdx = 0
+    @Volatile private var framesAppliedThisConnection = 0
+    @Volatile private var isReconnecting = false
+    @Volatile private var retryCount = 0
+
+    /**
+     * When the current outage began, or 0 when there is none.
+     *
+     * Owned by the outage and nothing else. It used to be cleared by [setLinkDegraded], which made
+     * the thirty-second window collapse to a single retry: during a backoff the socket is closed,
+     * so the watchdog saw a healthy link, cleared the flag and zeroed this -- and the next attempt
+     * measured the outage from zero, got the device's uptime, and gave up. The rule this replaced
+     * was three retries; the bug made it one.
+     */
+    @Volatile private var outageStartedAt = 0L
+    private var watchdogJob: Job? = null
+
+    /**
+     * Whether the link is currently too poor to be streaming into.
+     *
+     * Read by the keyboard to change what the space bar says. Deliberately not an error: a tunnel
+     * is a normal thing to drive through, and the session survives it as long as the unsent audio
+     * still fits in the rolling buffer.
+     */
+    @Volatile var isLinkDegraded = false
+        private set
+    @Volatile private var isWsOpen = false
+    @Volatile private var pendingEndStream = false
+    /**
+     * Stream resume, codebase_docs/43-stream-resume-and-ack.md in the server repository.
+     *
+     * The server hands out a token in its auth reply when asked (`resumable`). After a dropped
+     * connection the next socket presents it, and the server takes the old session over instead of
+     * starting a new one: it finishes what the dead socket was still transcribing, replays every
+     * piece the keyboard never received, and says how much audio it holds (`received_ms`) so only
+     * what was in flight is sent again. Without this, a Wi-Fi to mobile handover lost everything the
+     * old socket had not yet returned as text -- 2026-10-03 12:42, nine seconds of speech that the
+     * server transcribed correctly, forty seconds later, into a socket nobody was listening to.
+     */
+    @Volatile private var resumeToken: String? = null
+    /** A reconnect sends no audio until the server has answered, because the answer says where from. */
+    @Volatile private var awaitingAuthReply = false
+    @Volatile private var authReplyTimeoutJob: Job? = null
+    /**
+     * Positions in the capture, in bytes since the session's first sample. [streamOriginPos] is
+     * where the server's clock reads 0 -- the first byte the current server session received.
+     * [ackedPos] is the server's `ack_ms` mapped onto the capture: everything spoken before it has
+     * arrived as text. [lastPiecePos] is where the capture stood when the last piece arrived, the
+     * best guess there is against a server that sends no `ack_ms`. -1 means not known.
+     */
+    @Volatile private var streamOriginPos = -1L
+    @Volatile private var ackedPos = -1L
+    @Volatile private var lastPiecePos = -1L
+    /**
+     * Set once a stopped session has gone back to the server to collect its final, after the socket
+     * died before the end marker arrived. One attempt; callbacks from the socket it replaced are
+     * ignored from then on.
+     */
+    @Volatile private var resumingAfterStop = false
+    @Volatile private var resumeAfterStopTried = false
+    /** The first piece of a stream that resent audio from a guessed offset may repeat a few words. */
+    @Volatile private var trimOverlapNext = false
+
+    private val preOpenBuffer = ArrayDeque<okio.ByteString>()
+    private var preOpenBufferSizeBytes = 0
+    private val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
+
+    /** Appends [length] bytes and advances [totalRead]; the two must happen atomically, because the
+     *  reader derives its start offset from totalRead. */
+    private fun writeToRollingBuffer(data: ByteArray, offset: Int, length: Int) = synchronized(rollingBufferLock) {
+        val size = rollingBuffer.size
+        for (i in 0 until length) {
+            val idx = ((totalRead + i) % size).toInt()
+            rollingBuffer[idx] = data[offset + i]
+        }
+        totalRead += length
+    }
+
+    /** Everything captured since [confirmedBytes], clamped to what the buffer still holds, or null if
+     *  there is nothing to resend. Length and contents are read under one lock so they agree. */
+    private fun readUnconfirmedAudio(confirmedBytes: Long): ByteArray? = synchronized(rollingBufferLock) {
+        val size = rollingBuffer.size
+        // Capped by the buffer: anything older than its thirty seconds has been overwritten.
+        val length = minOf(totalRead - confirmedBytes, size.toLong()).toInt()
+        if (length <= 0) return@synchronized null
+        val result = ByteArray(length)
+        val startPos = totalRead - length
+        for (i in 0 until length) {
+            var index = ((startPos + i) % size).toInt()
+            if (index < 0) index += size
+            result[i] = rollingBuffer[index]
+        }
+        result
+    }
+
+    /**
+     * True when the system is deliberately feeding us silence because another app won the
+     * concurrent-capture arbitration. Re-initializing the recorder cannot beat that — the policy
+     * is re-applied to the new client — so this distinguishes "give up cleanly" from "the
+     * recorder itself wedged and a restart may help".
+     */
+    private fun isSilencedByPolicy(record: AudioRecord): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return try {
+            record.activeRecordingConfiguration?.isClientSilenced == true
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not read active recording configuration", e)
+            false
+        }
+    }
+
+    private fun connectWebSocket() {
+        val request = Request.Builder()
+            .url("wss://vibevoice.net/stream")
+            .build()
+        webSocket = sharedHttpClient.newWebSocket(request, createWebSocketListener())
+    }
+
+    /**
+     * The user stopped, and the end-of-stream marker never came: the socket died, or the backstop
+     * ran out on a link that had quietly gone. If the server gave this session a resume token, go
+     * back for the final instead of ending without it.
+     *
+     * What the server answers decides the rest (see onAuthenticated). `replay_only`: it had our
+     * END_STREAM and finished the session, so it replays the tail and the final and closes, and we
+     * send nothing. Resumed without that: END_STREAM never arrived, so the in-flight audio and
+     * END_STREAM go again. Not resumed: the session is gone; resend from the last ack and end it.
+     * Returns false when there is nothing to go back for, and the caller ends the session as before.
+     */
+    private fun tryResumeAfterStop(reason: String): Boolean {
+        if (!stopRequested || endMarkerReceived || resumeAfterStopTried) return false
+        if (resumeToken == null) return false
+        resumeAfterStopTried = true
+        resumingAfterStop = true
+        VibeVoiceDebugLogger.log("Stopped without a final ($reason); resuming to collect it")
+        val old = webSocket
+        synchronized(preOpenBuffer) {
+            isWsOpen = false
+            isReconnecting = true
+            awaitingAuthReply = false
+        }
+        // Replaced first, so the old socket's own close is recognised as stale and ignored.
+        connectWebSocket()
+        try { old?.cancel() } catch (_: Exception) { }
+        closureJob = scope.launch {
+            delay(RESUME_AFTER_STOP_TIMEOUT_MS)
+            if (!endMarkerReceived) {
+                VibeVoiceDebugLogger.log("No final within ${RESUME_AFTER_STOP_TIMEOUT_MS}ms of resuming; ending without it")
+                try { webSocket?.cancel() } catch (_: Exception) { }
+                webSocket = null
+                notifyClosed()
+            }
+        }
+        return true
+    }
+
+    private fun triggerReconnect() {
+        if (!isStreaming) return
+        isReconnecting = true
+        // A socket that died while waiting for its auth reply leaves nothing to wait for.
+        awaitingAuthReply = false
+        authReplyTimeoutJob?.cancel()
+        authReplyTimeoutJob = null
+        if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
+        // What OkHttp took from us and never put on the wire has not been received, however much
+        // the socket appeared to accept. Resuming from totalRead declared all of it delivered, and
+        // on the forced-reconnect path that is thirty seconds of speech by construction -- the
+        // reconnect would succeed and the words would simply be gone. The overshoot in the other
+        // direction is the auth frame, about three milliseconds of audio, which is the right way to
+        // be wrong.
+        val queuedNow = try { webSocket?.queueSize() ?: 0L } catch (_: Exception) { 0L }
+        synchronized(preOpenBuffer) {
+            if (isWsOpen) disconnectedAtBytes = (totalRead - queuedNow).coerceAtLeast(0L)
+            isWsOpen = false
+        }
+        
+        listener.onCommitComposing()
+        
+        val delayMs = when (retryCount) {
+            0 -> 500L
+            1 -> 1000L
+            2 -> 2000L
+            else -> 3000L
+        }
+        retryCount++
+
+        // Keep trying while the audio nobody has received still fits in the buffer.
+        //
+        // Three attempts over three and a half seconds was the old rule, and it threw away tolerance
+        // we had already paid for: the rolling buffer holds thirty seconds, so anything shorter than
+        // that is recoverable without losing a word. Three and a half seconds is not a tunnel, a
+        // lift, or a train between stations, which are exactly the situations this is for.
+        //
+        // Two bounds, because either alone can run away. The buffer bound stops mattering once
+        // capture has been torn down and totalRead stops growing; the clock bound stops a permanent
+        // outage from retrying for ever.
+        val unsent = totalRead - disconnectedAtBytes
+        val outageMs = SystemClock.elapsedRealtime() - outageStartedAt
+        if (unsent < rollingBuffer.size && outageMs < RECONNECT_WINDOW_MS) {
+            // No ceiling to print any more: the decision is about recoverable audio and elapsed
+            // outage, not about a count. "attempt 9/3" in the log people read to diagnose exactly
+            // these outages would have been worse than no number at all.
+            VibeVoiceDebugLogger.log("Reconnecting in ${delayMs}ms (attempt $retryCount, unsent=$unsent, outageMs=$outageMs)")
+            scope.launch {
+                delay(delayMs)
+                // The session can end inside that delay -- the user stops it, or the microphone is
+                // taken away. Reconnecting then opens a socket nobody asked for, and the backstop
+                // timer that would have closed it was armed on the previous one.
+                if (!isStreaming) {
+                    VibeVoiceDebugLogger.log("Reconnect cancelled: session no longer streaming")
+                    return@launch
+                }
+                connectWebSocket()
+            }
+        } else {
+            VibeVoiceDebugLogger.log("Giving up: unsent=$unsent outageMs=$outageMs")
+            giveUp("reconnect window exceeded")
+        }
+    }
+
+    /**
+     * Watches the link while a session runs, once a second.
+     *
+     * ONE SYMPTOM, NOT TWO
+     *
+     * `queueSize()` is what OkHttp has accepted from us and not yet put on the wire. It grows when
+     * the radio cannot keep up with 32 kB/s, which is the honest definition of "too poor to stream
+     * into" and the earliest thing visible from here. Six seconds' worth is the threshold: below
+     * that it is ordinary jitter, above it the backlog is not coming back on its own.
+     *
+     * There was a second rule here, on how long the server had been silent, and it was built on a
+     * claim I never checked. `docs/vibevoice_integration_guide.md` §5 lists exactly two frames the
+     * server ever sends -- a content frame and an end-of-stream marker -- and §"Resend on Reconnect"
+     * says outright "if the server ever does acknowledge processed seconds". There is no heartbeat.
+     * Silence therefore proves nothing: a user who taps dictate and thinks for ten seconds before
+     * speaking produces no frames at all, and the space bar would have told them their connection
+     * was broken. The socket that is up but answering nobody is caught by the ten-second ping
+     * instead, which is what a ping is for.
+     *
+     * A reconnect counts as degraded on its own. The flag used to be gated on `isWsOpen`, so it
+     * switched off for the whole backoff -- the timer came back and counted cheerfully upward
+     * during the one stretch when nothing could possibly be reaching the server, which is precisely
+     * the display this exists to prevent.
+     */
+    private fun startLinkWatchdog() {
+        watchdogJob?.cancel()
+        watchdogJob = scope.launch {
+            while (isActive && isStreaming) {
+                delay(LINK_CHECK_INTERVAL_MS)
+                if (!isStreaming) break
+                // Nothing ever answered. Not a degraded link but a session that never began, and
+                // waiting out the full reconnect window means half a minute of talking to nobody.
+                if (!everOpened && SystemClock.elapsedRealtime() - startedAt > HANDSHAKE_TIMEOUT_MS) {
+                    VibeVoiceDebugLogger.log("No connection within ${HANDSHAKE_TIMEOUT_MS}ms; giving up")
+                    giveUp("handshake timeout")
+                    break
+                }
+                val ws = webSocket
+                val queued = try { ws?.queueSize() ?: 0L } catch (_: Exception) { 0L }
+                val bad = isReconnecting || (isWsOpen && queued > LINK_QUEUE_STALL_BYTES)
+                if (bad && outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
+                if (bad != isLinkDegraded) {
+                    VibeVoiceDebugLogger.log("Link ${if (bad) "degraded" else "recovered"}: queued=$queued reconnecting=$isReconnecting")
+                    setLinkDegraded(bad)
+                }
+                // Recovered means open, drained and not mid-reconnect. Only then is the outage over
+                // and only then may the clock be reset, because that clock is what decides whether
+                // another attempt is still worth making.
+                if (!bad) outageStartedAt = 0L
+                // A backlog bigger than the rolling buffer can never be made good by waiting: the
+                // audio behind it has already been overwritten. Cut the socket and let the normal
+                // reconnect path resend what is still held.
+                if (isLinkDegraded && queued > rollingBuffer.size) {
+                    VibeVoiceDebugLogger.log("Send queue past the buffer; forcing a reconnect")
+                    try { ws?.cancel() } catch (_: Exception) { }
+                }
+            }
+        }
+    }
+
+    private fun setLinkDegraded(degraded: Boolean) {
+        isLinkDegraded = degraded
+        listener.onLinkQualityChanged(degraded)
+    }
+
+    /**
+     * The server's answer to an auth frame. On the first socket it only carries the resume token.
+     * On a reconnect it decides where the resend starts, and only then does audio flow again.
+     */
+    private fun onAuthenticated(webSocket: WebSocket, json: JSONObject) {
+        json.optString("resume").takeIf { it.isNotEmpty() }?.let { resumeToken = it }
+        if (!awaitingAuthReply) {
+            VibeVoiceDebugLogger.log("Authenticated; resume ${if (resumeToken != null) "available" else "not offered by this server"}")
+            return
+        }
+        authReplyTimeoutJob?.cancel()
+        authReplyTimeoutJob = null
+        val resumed = json.optBoolean("resumed", false)
+        val receivedMs = json.optLong("received_ms", -1L)
+        if (resumed && json.optBoolean("replay_only", false)) {
+            // The server had our END_STREAM and finished the session; it replays the tail and the
+            // final and then closes. It reads nothing more, so nothing is sent: no audio, no
+            // END_STREAM.
+            synchronized(preOpenBuffer) {
+                awaitingAuthReply = false
+                isReconnecting = false
+                pendingEndStream = false
+                preOpenBuffer.clear()
+                preOpenBufferSizeBytes = 0
+            }
+            VibeVoiceDebugLogger.log("Resumed replay-only after idx $lastAppliedIdx; collecting the tail")
+            return
+        }
+        synchronized(preOpenBuffer) {
+            awaitingAuthReply = false
+            val plan = resendPlan(resumed, receivedMs, streamOriginPos, ackedPos, lastPiecePos)
+            val anchor = plan.from
+            VibeVoiceDebugLogger.log("Reconnect: ${plan.why}; resend from ${anchor / BYTES_PER_MS}ms, " +
+                    "${(totalRead - anchor).coerceAtLeast(0) / BYTES_PER_MS}ms of audio")
+            if (!plan.sameSession) {
+                trimOverlapNext = plan.trimOverlap
+                lastAppliedIdx = 0
+                framesAppliedThisConnection = 0
+                ackedPos = -1L
+                lastPiecePos = -1L
+            }
+            var data = readUnconfirmedAudio(anchor)
+            // Whole samples only. The server reads each frame as int16 and drops a frame of odd
+            // length outright, which would shift its clock by that frame; every offset here is a
+            // sample boundary, so an odd length can only mean the oldest byte is half a sample.
+            if (data != null && data.size % 2 != 0) data = data.copyOfRange(1, data.size).takeIf { it.isNotEmpty() }
+            val actualStart = totalRead - (data?.size ?: 0)
+            if (actualStart > anchor) {
+                VibeVoiceDebugLogger.log("[RESEND_SHORT] ${(actualStart - anchor) / BYTES_PER_MS}ms before the resend point had already left the 30 s buffer")
+            }
+            if (!plan.sameSession) streamOriginPos = actualStart
+            if (data != null) {
+                VibeVoiceDebugLogger.log("Reconnected: resending ${data.size} bytes")
+                // In frames the size the stream normally sends, not one. A 25-second outage is
+                // 800 KB, past the message limit most WebSocket servers ship with (1009, "message
+                // too big"), and one frame that size reaches the recogniser as a shove, not a stream.
+                var offset = 0
+                while (offset < data.size) {
+                    val end = minOf(offset + FLUSH_CHUNK_BYTES, data.size)
+                    webSocket.send(data.toByteString(offset, end - offset))
+                    offset = end
+                }
+            }
+            // Everything queued meanwhile is inside the resend.
+            preOpenBuffer.clear()
+            preOpenBufferSizeBytes = 0
+            isWsOpen = true
+            isReconnecting = false
+            retryCount = 0
+            // A session the user already stopped ends once its audio is back on the server:
+            // END_STREAM either never arrived (resumed) or went to a session that no longer exists.
+            if (stopRequested) pendingEndStream = true
+            sendDeferredEndStream(webSocket)
+        }
+    }
+
+    /** Where a reconnect resends from, and whether the server session continues. See [resendPlan]. */
+    internal data class ResendPlan(val from: Long, val sameSession: Boolean, val trimOverlap: Boolean, val why: String)
+
+    /** stopStreaming() ran before audio could flow, so END_STREAM had to wait for it. */
+    private fun sendDeferredEndStream(webSocket: WebSocket) {
+        if (pendingEndStream) {
+            pendingEndStream = false
+            VibeVoiceDebugLogger.log("Sending deferred END_STREAM after auth")
+            webSocket.send("END_STREAM")
+        }
+    }
+
+    /**
+     * A reconnect that is never answered would hold audio back for good. The server may take up to
+     * five seconds to release an old session it still thinks is alive, so the limit is above that.
+     */
+    private fun armAuthReplyTimeout(webSocket: WebSocket) {
+        authReplyTimeoutJob?.cancel()
+        authReplyTimeoutJob = scope.launch {
+            delay(AUTH_REPLY_TIMEOUT_MS)
+            if (awaitingAuthReply && this@VibeVoiceClient.webSocket == webSocket) {
+                VibeVoiceDebugLogger.log("No auth reply within ${AUTH_REPLY_TIMEOUT_MS}ms after reconnecting; dropping the socket")
+                webSocket.cancel()
+            }
+        }
+    }
+
+    /**
+     * Drops the words at the start of [next] that repeat the end of [previous]. Only used after a
+     * resend from a guessed offset, where the margin re-transcribes the last second or so.
+     */
+    private fun trimLeadingOverlap(previous: String, next: String): String {
+        val trimmed = Companion.trimLeadingOverlap(previous, next)
+        if (trimmed != next) VibeVoiceDebugLogger.log("Trimmed words repeated across the resend")
+        return trimmed
+    }
+
+    private fun createWebSocketListener(): WebSocketListener {
+        return object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                val reconnecting = isReconnecting
+                VibeVoiceDebugLogger.log("WS Open (reconnect=$reconnecting)")
+                // `resumable` is a key the server ignores unless it supports resume; the server in
+                // production reads `api_key` and nothing else.
+                val auth = JSONObject().put("api_key", apiKey).put("resumable", true)
+                val token = resumeToken
+                if (reconnecting && token != null) {
+                    auth.put("resume", token).put("last_idx", lastAppliedIdx)
+                    VibeVoiceDebugLogger.log("Asking to resume after idx $lastAppliedIdx")
+                }
+                webSocket.send(auth.toString())
+
+                everOpened = true
+                synchronized(preOpenBuffer) {
+                    if (reconnecting) {
+                        // Nothing goes out yet. Where the resend starts depends on the answer:
+                        // the server's received_ms if it resumed, its last ack_ms if it did not.
+                        // Live audio keeps going into the rolling buffer meanwhile, and goLive
+                        // sends it from there.
+                        awaitingAuthReply = true
+                        armAuthReplyTimeout(webSocket)
+                    } else {
+                        // The server's clock starts at the first byte it receives, which is the
+                        // oldest frame still queued.
+                        streamOriginPos = totalRead - preOpenBufferSizeBytes
+                        isWsOpen = true
+                        for (bytes in preOpenBuffer) {
+                            webSocket.send(bytes)
+                        }
+                        preOpenBuffer.clear()
+                        preOpenBufferSizeBytes = 0
+                        sendDeferredEndStream(webSocket)
+                    }
+                }
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val json = JSONObject(text)
+                    if (json.optString("status") == "authenticated") {
+                        onAuthenticated(webSocket, json)
+                        return
+                    }
+                    if (json.has("text")) {
+                        val resultText = json.getString("text")
+                        val isFinal = json.optBoolean("is_final", false)
+                        // Content frames count from 1, densely, and never repeat; the pieces do not
+                        // overlap, so a client applies each index exactly once and concatenates.
+                        // Servers before 2026-09-02 omit the field, hence the fallback further down.
+                        val idx = json.optInt("idx", 0)
+
+                        VibeVoiceDebugLogger.log("WS msg text len: ${resultText.length}, final: $isFinal, idx: $idx")
+                        if (isFinal) {
+                            endMarkerReceived = true
+                            // End-of-stream marker. Its text is empty by contract and its idx is how
+                            // many content frames were sent, which is the only way to tell a short
+                            // transcript apart from a lost frame.
+                            if (idx > 0 && idx != framesAppliedThisConnection) {
+                                VibeVoiceDebugLogger.log(
+                                    "[FRAME_GAP] server reports $idx content frames, applied $framesAppliedThisConnection"
+                                )
+                            }
+                            if (resultText.isBlank()) {
+                                VibeVoiceDebugLogger.log("[EMPTY_RESULT] onFinal received empty text")
+                            }
+
+                            val isNewSegment = if (idx > 0) framesAppliedThisConnection > 0
+                                else lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
+                            if (isNewSegment && resultText.isNotBlank()) {
+                                VibeVoiceDebugLogger.log("New segment detected onFinal. Prev len=${lastFullText.length}, new len=${resultText.length}")
+                            }
+                            lastFullText = resultText
+
+                            listener.onFinal(resultText, isNewSegment)
+
+                            if (!isStreaming) {
+                                VibeVoiceDebugLogger.log("Closing WS immediately after final result marker")
+                                closureJob?.cancel()
+                                closureJob = null
+                                webSocket.close(1000, "Done after Final")
+                                if (this@VibeVoiceClient.webSocket == webSocket) {
+                                    this@VibeVoiceClient.webSocket = null
+                                }
+                            }
+                        } else {
+                            val isNewSegment: Boolean
+                            if (idx > 0) {
+                                // A frame we have already applied. Cannot happen on a healthy
+                                // connection, but applying one twice is what pastes the user's
+                                // words in twice, so refuse it rather than trust the wire.
+                                if (idx <= lastAppliedIdx) {
+                                    VibeVoiceDebugLogger.log("Ignoring already applied frame idx=$idx (last=$lastAppliedIdx)")
+                                    return
+                                }
+                                if (idx > lastAppliedIdx + 1) {
+                                    VibeVoiceDebugLogger.log("[FRAME_GAP] jumped from idx=$lastAppliedIdx to idx=$idx")
+                                }
+                                // Every piece after the first opens a new segment: the pieces do not
+                                // overlap, so the one being displayed has to be committed first.
+                                isNewSegment = framesAppliedThisConnection > 0
+                                lastAppliedIdx = idx
+                                framesAppliedThisConnection++
+                            } else {
+                                // Server without idx: infer it from the text, as before. A piece that
+                                // does not continue the previous one starts a new segment.
+                                isNewSegment = lastFullText.isNotEmpty() && !resultText.startsWith(lastFullText)
+                            }
+                            if (isNewSegment) {
+                                VibeVoiceDebugLogger.log("New segment detected onPartial. Prev len=${lastFullText.length}, new len=${resultText.length}")
+                            }
+                            val previousPiece = lastFullText
+                            lastFullText = resultText
+                            lastContentAt = SystemClock.elapsedRealtime()
+                            lastPiecePos = totalRead
+                            val ackMs = json.optLong("ack_ms", -1L)
+                            if (ackMs >= 0 && streamOriginPos >= 0) ackedPos = streamOriginPos + ackMs * BYTES_PER_MS
+
+                            var shown = resultText
+                            if (trimOverlapNext) {
+                                trimOverlapNext = false
+                                shown = trimLeadingOverlap(previousPiece, resultText)
+                                if (shown.isBlank()) return
+                            }
+                            listener.onPartial(shown, isNewSegment)
+                        }
+                    } else if (json.has("error")) {
+                        val errorMsg = json.optString("error", "Unknown server error")
+                        VibeVoiceDebugLogger.log("WS server error: $errorMsg")
+                        // An error frame is the server refusing the session, not a hiccup: a bad key
+                        // or an exhausted quota will refuse the next three attempts too. Tearing the
+                        // session down here matters because the close that follows would otherwise
+                        // find isStreaming still true and start reconnecting into the same refusal,
+                        // with the microphone running throughout.
+                        isStreaming = false
+                        cleanupAudioCapture()
+                        abandonSocket("server error")
+                        listener.onError(errorMsg)
+                    } else {
+                        VibeVoiceDebugLogger.log("WS msg without text or error, length=${text.length}")
+                    }
+                } catch (e: Exception) {
+                    VibeVoiceDebugLogger.log("WS msg parse error: ${e.message}")
+                    Log.e(TAG, "WS msg parse error", e)
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                VibeVoiceDebugLogger.log("WS Failure: ${t.message}")
+                if (resumingAfterStop && webSocket != this@VibeVoiceClient.webSocket) {
+                    VibeVoiceDebugLogger.log("Ignoring the failure of the socket a resume replaced")
+                    return
+                }
+                if (isStreaming) {
+                    // The decision whether another attempt is worth making lives in one place now,
+                    // and it is about how much audio is still recoverable rather than about a count.
+                    triggerReconnect()
+                } else {
+                    isStreaming = false
+                    cleanupAudioCapture()
+                    closureJob?.cancel()
+                    closureJob = null
+                    if (this@VibeVoiceClient.webSocket == webSocket) {
+                        this@VibeVoiceClient.webSocket = null
+                    }
+                    // After a stop the user asked for, a dropped connection is how the session
+                    // ended, not an error: the final has arrived or never will. Reporting it as one
+                    // put "Dictation error" over a transcript that was committed cleanly. Unless the
+                    // final had not arrived yet and the server can still hand it over.
+                    if (stopRequested) { if (!tryResumeAfterStop("socket failed after stop")) notifyClosed() }
+                    else listener.onError(t.message ?: "WebSocket Error")
+                }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                VibeVoiceDebugLogger.log("WS Closing: $code / $reason")
+                webSocket.close(1000, "Acknowledge Close")
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                VibeVoiceDebugLogger.log("WS Closed: $code / $reason")
+                if (resumingAfterStop && webSocket != this@VibeVoiceClient.webSocket) {
+                    VibeVoiceDebugLogger.log("Ignoring the close of the socket a resume replaced")
+                    return
+                }
+                if (isStreaming && code != 1000) {
+                    VibeVoiceDebugLogger.log("Unexpected WS close mid-session. Reconnecting...")
+                    triggerReconnect()
+                } else {
+                    isStreaming = false
+                    cleanupAudioCapture()
+                    closureJob?.cancel()
+                    closureJob = null
+                    if (this@VibeVoiceClient.webSocket == webSocket) {
+                        this@VibeVoiceClient.webSocket = null
+                    }
+                    if (code != 1000 && tryResumeAfterStop("socket closed with $code after stop")) return
+                    notifyClosed()
+                }
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun startStreaming() {
+        if (isStreaming) return
+        isStreaming = true
+        isLinkDegraded = false
+        everOpened = false
+        startedAt = SystemClock.elapsedRealtime()
+        endMarkerReceived = false
+        lastContentAt = startedAt
+        stoppedAt = 0L
+        outageStartedAt = 0L
+        startLinkWatchdog()
+        closureJob?.cancel()
+        closureJob = null
+        isReconnecting = false
+        retryCount = 0
+        disconnectedAtBytes = 0L
+        lastAppliedIdx = 0
+        framesAppliedThisConnection = 0
+        isWsOpen = false
+        pendingEndStream = false
+        resumeToken = null
+        awaitingAuthReply = false
+        authReplyTimeoutJob?.cancel()
+        authReplyTimeoutJob = null
+        streamOriginPos = -1L
+        ackedPos = -1L
+        lastPiecePos = -1L
+        trimOverlapNext = false
+        resumingAfterStop = false
+        resumeAfterStopTried = false
+
+        synchronized(preOpenBuffer) {
+            preOpenBuffer.clear()
+            preOpenBufferSizeBytes = 0
+        }
+
+        connectWebSocket()
+
+        val sampleRate = 16000
+        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+        val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+        if (minBuf == AudioRecord.ERROR || minBuf == AudioRecord.ERROR_BAD_VALUE) {
+            VibeVoiceDebugLogger.log("AudioRecord.getMinBufferSize failed: $minBuf")
+            listener.onError("AudioRecord init failed")
+            isStreaming = false
+            abandonSocket("mic unavailable")
+            return
+        }
+        val bufferSize = minBuf * 4
+
+        fun initAudioRecord(): Boolean {
+            try {
+                audioRecord?.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing old AudioRecord", e)
+            }
+            try {
+                val record = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    // VOICE_RECOGNITION is not privacy-sensitive by default, and Android's
+                    // concurrent-capture policy always hands the audio to the privacy-sensitive
+                    // client — so any app recording from VOICE_COMMUNICATION (which is
+                    // privacy-sensitive by default, e.g. a messenger's own voice input) wins and
+                    // we are silently fed zeroed buffers. Marking our capture privacy-sensitive
+                    // too moves the tie-break to "most recently started wins", which we win
+                    // because the user just triggered us.
+                    AudioRecord.Builder()
+                        .setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+                        .setAudioFormat(
+                            AudioFormat.Builder()
+                                .setEncoding(audioFormat)
+                                .setSampleRate(sampleRate)
+                                .setChannelMask(channelConfig)
+                                .build()
+                        )
+                        .setBufferSizeInBytes(bufferSize)
+                        .setPrivacySensitive(true)
+                        .build()
+                } else {
+                    AudioRecord(
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                        sampleRate,
+                        channelConfig,
+                        audioFormat,
+                        bufferSize
+                    )
+                }
+                audioRecord = record
+
+                if (record.state != AudioRecord.STATE_INITIALIZED) {
+                    VibeVoiceDebugLogger.log("AudioRecord init failed: state=${record.state}")
+                    return false
+                }
+                record.startRecording()
+                if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                    VibeVoiceDebugLogger.log("AudioRecord start failed: recordingState=${record.recordingState}")
+                    return false
+                }
+                VibeVoiceDebugLogger.log("AudioRecord successfully initialized and started")
+                return true
+            } catch (e: Exception) {
+                VibeVoiceDebugLogger.log("Exception initializing AudioRecord: ${e.message}")
+                return false
+            }
+        }
+
+        if (!initAudioRecord()) {
+            cleanupAudioCapture()
+            listener.onError("Microphone unavailable")
+            isStreaming = false
+            // The socket was opened before the microphone was, so it is still there, still
+            // completing its handshake and still about to authenticate for a session that no longer
+            // exists. Without this it stays open until the server tires of it, and its late
+            // callbacks land on an aborted session.
+            abandonSocket("mic unavailable")
+            return
+        }
+
+        currentLevel = 0f
+        totalRead = 0L // Reset for new session
+        lastFullText = ""
+        audioJob = scope.launch {
+            val buffer = ByteArray(bufferSize)
+            var consecutiveZeroBytes = 0L
+            val zeroLimitBytes = 16000 * 2 * 2 // 2 seconds of silence
+            var recoveryAttempts = 0
+            val maxRecoveryAttempts = 3
+            var lastLogTime = 0L
+            var totalReadsInSession = 0
+            var sumOfSquares = 0L
+            var totalSamples = 0L
+
+            while (isActive && isStreaming) {
+                val currentRecord = audioRecord
+                if (currentRecord == null) {
+                    delay(50)
+                    continue
+                }
+
+                val startTime = System.nanoTime()
+                val read = try {
+                    currentRecord.read(buffer, 0, buffer.size)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception reading from AudioRecord", e)
+                    -1
+                }
+                val durationMs = (System.nanoTime() - startTime) / 1_000_000
+
+                if (read > 0) {
+                    totalReadsInSession++
+                    
+                    val numSamples = read / 2
+                    var bufferSquares = 0L
+                    for (i in 0 until numSamples) {
+                        val b1 = buffer[2 * i].toInt() and 0xFF
+                        val b2 = buffer[2 * i + 1].toInt() and 0xFF
+                        val sample = ((b2 shl 8) or b1).toShort()
+                        val sampleVal = sample.toLong()
+                        bufferSquares += sampleVal * sampleVal
+                    }
+                    sumOfSquares += bufferSquares
+                    totalSamples += numSamples
+                    if (numSamples > 0) {
+                        // Measured over the tail of the buffer, not all of it. A read carries
+                        // 160-250 ms of audio, so averaging the whole thing centres the estimate
+                        // more than a tenth of a second in the past and the waves visibly trail the
+                        // voice. The last quarter is the freshest part we have; the animation reads
+                        // this thirty times a second and would happily take more.
+                        val tailStart = (numSamples * 3) / 4
+                        var tailSquares = 0L
+                        for (i in tailStart until numSamples) {
+                            val b1 = buffer[2 * i].toInt() and 0xFF
+                            val b2 = buffer[2 * i + 1].toInt() and 0xFF
+                            val sample = ((b2 shl 8) or b1).toShort().toLong()
+                            tailSquares += sample * sample
+                        }
+                        val tailCount = numSamples - tailStart
+                        val rms = if (tailCount > 0)
+                            Math.sqrt(tailSquares.toDouble() / tailCount) / 32768.0
+                        else Math.sqrt(bufferSquares.toDouble() / numSamples) / 32768.0
+                        // Raw RMS of speech sits around 0.02..0.06 and peaks near 0.17 -- the session
+                        // totals in the bug report logs bear that out -- so feeding it straight to the
+                        // animation moved the waves by a couple of percent and read as no reaction at
+                        // all. The square root against a 0.15 full scale spreads that range over most
+                        // of 0..1, which is where the web pipeline's FFT average already lands.
+                        currentLevel = Math.sqrt(rms / LEVEL_FULL_SCALE)
+                            .coerceIn(0.0, 1.0).toFloat()
+                    }
+                    
+                    var isAllZeros = true
+                    for (i in 0 until read) {
+                        if (buffer[i] != 0.toByte()) {
+                            isAllZeros = false
+                            break
+                        }
+                    }
+
+                    if (isAllZeros) {
+                        consecutiveZeroBytes += read
+                    } else {
+                        consecutiveZeroBytes = 0L
+                        recoveryAttempts = 0 // Reset attempts on successful read
+                    }
+
+                    val expectedMs = read / 32
+                    val isRapidRead = isAllZeros && expectedMs > 20 && durationMs < expectedMs / 10
+                    val isSilencedTooLong = consecutiveZeroBytes >= zeroLimitBytes
+
+                    if (isRapidRead) {
+                        delay((expectedMs - durationMs).coerceAtLeast(10L))
+                    }
+
+                    if (totalReadsInSession > 5 && isSilencedTooLong) {
+                        if (isSilencedByPolicy(currentRecord)) {
+                            // Another app holds the mic. Restarting is pointless, and killing the
+                            // session outright throws away everything the server transcribed
+                            // before the mic went quiet — so wind down through the normal stop
+                            // path and let the final result be committed.
+                            VibeVoiceDebugLogger.log(
+                                "Microphone silenced by system capture policy (another app is recording). Ending session gracefully."
+                            )
+                            listener.onWarning(WARN_MIC_BUSY)
+                            stopStreaming()
+                            break
+                        }
+
+                        VibeVoiceDebugLogger.log("Dead microphone detected (2s of consecutive zeros). Attempting recovery...")
+
+                        if (recoveryAttempts < maxRecoveryAttempts) {
+                            recoveryAttempts++
+                            VibeVoiceDebugLogger.log("Re-initializing AudioRecord (attempt $recoveryAttempts/$maxRecoveryAttempts)")
+
+                            try {
+                                currentRecord.stop()
+                            } catch (_: Exception) {}
+
+                            delay(300)
+
+                            if (initAudioRecord()) {
+                                consecutiveZeroBytes = 0L
+                                totalReadsInSession = 0
+                                continue
+                            }
+                        } else {
+                            VibeVoiceDebugLogger.log("Max recovery attempts reached. Ending session gracefully.")
+                            listener.onWarning(WARN_MIC_UNAVAILABLE)
+                            stopStreaming()
+                            break
+                        }
+                    }
+
+                    val bytesToSend = buffer.toByteString(0, read)
+                    // Written and sent under one lock. A reconnect reads the buffer up to totalRead
+                    // and then opens the gate; a chunk written between the two used to be sent once
+                    // inside that read and once more on its own.
+                    synchronized(preOpenBuffer) {
+                        writeToRollingBuffer(buffer, 0, read) // also advances totalRead
+                        if (isWsOpen) {
+                            webSocket?.send(bytesToSend)
+                        } else {
+                            preOpenBuffer.addLast(bytesToSend)
+                            preOpenBufferSizeBytes += bytesToSend.size
+                            while (preOpenBufferSizeBytes > maxPreOpenBufferBytes && preOpenBuffer.isNotEmpty()) {
+                                preOpenBufferSizeBytes -= preOpenBuffer.removeFirst().size
+                            }
+                        }
+                    }
+                    val now = System.currentTimeMillis()
+                    if (now - lastLogTime >= 5000) {
+                         Log.d(TAG, "Total bytes read: $totalRead")
+                         VibeVoiceDebugLogger.log("Audio KB read: ${totalRead / 1024}")
+                         lastLogTime = now
+                    }
+                } else if (read == 0) {
+                    delay(10)
+                } else {
+                    Log.e(TAG, "AudioRecord read error: $read")
+                    
+                    if (recoveryAttempts < maxRecoveryAttempts) {
+                        recoveryAttempts++
+                        VibeVoiceDebugLogger.log("Re-initializing AudioRecord on read error $read (attempt $recoveryAttempts/$maxRecoveryAttempts)")
+                        try {
+                            currentRecord.stop()
+                        } catch (_: Exception) {}
+                        delay(300)
+                        if (initAudioRecord()) {
+                            consecutiveZeroBytes = 0L
+                            totalReadsInSession = 0
+                            continue
+                        }
+                    } else {
+                        // Same reasoning as above: the audio already streamed is still worth a
+                        // transcript, so stop gracefully instead of discarding the session.
+                        VibeVoiceDebugLogger.log("AudioRecord read error: $read — ending session gracefully")
+                        listener.onWarning(WARN_MIC_UNAVAILABLE)
+                        stopStreaming()
+                        break
+                    }
+                }
+            }
+            val overallRms = if (totalSamples > 0) Math.sqrt(sumOfSquares.toDouble() / totalSamples) / 32768.0 else 0.0
+            VibeVoiceDebugLogger.log("Session complete. Final total bytes: $totalRead, Overall RMS: ${String.format(java.util.Locale.US, "%.6f", overallRms)}")
+            Log.d(TAG, "Exit recording loop. Final total bytes: $totalRead, Overall RMS: $overallRms")
+        }
+    }
+
+    /**
+     * Drops the socket without the graceful END_STREAM handshake, for the paths where there is no
+     * session left to be graceful about. Safe to call when there is no socket.
+     */
+    private fun abandonSocket(reason: String) {
+        val ws = webSocket ?: return
+        webSocket = null
+        isWsOpen = false
+        pendingEndStream = false
+        VibeVoiceDebugLogger.log("Abandoning socket: $reason")
+        ws.cancel()
+    }
+
+    fun stopStreaming() {
+        if (!isStreaming) return
+        stopRequested = true
+        stoppedAt = SystemClock.elapsedRealtime()
+        isStreaming = false
+        cleanupAudioCapture()
+
+        val ws = webSocket
+        // Sending END_STREAM before the handshake finishes queues it ahead of the auth frame that
+        // onOpen sends, and the server answers "invalid_auth_format" and drops the session. This
+        // happens whenever a session is stopped within the first few hundred milliseconds.
+        synchronized(preOpenBuffer) {
+            if (isWsOpen) {
+                ws?.send("END_STREAM")
+            } else {
+                VibeVoiceDebugLogger.log("Socket not open yet — deferring END_STREAM until after auth")
+                pendingEndStream = true
+            }
+        }
+        closureJob = scope.launch {
+            VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
+            delay(3000)
+            // With a token, two seconds more before going back for the final: a short tail's final
+            // normally lands within one or two seconds of END_STREAM, and going back early only
+            // costs a reconnect on a slow link -- the server makes it safe either way.
+            if (!endMarkerReceived && resumeToken != null) delay(RESUME_GRACE_WITH_TOKEN_MS)
+            if (!endMarkerReceived && tryResumeAfterStop("no final after stop")) return@launch
+            VibeVoiceDebugLogger.log("3.0s backstop timer expired. Closing WS.")
+            // A close first, which still lets a final that is on its way arrive; cancelled only if
+            // the socket does not finish closing in two more seconds.
+            ws?.close(1000, "Done (timeout)")
+            delay(2000)
+            ws?.cancel()
+            if (this@VibeVoiceClient.webSocket == ws) {
+                this@VibeVoiceClient.webSocket = null
+            }
+            closureJob = null
+            // The socket may already be dead -- stopped during a reconnect backoff, with no socket
+            // left to deliver a final or a close -- and then nothing else ends the session: the
+            // keyboard would sit in "finishing" for good. Ending it here is idempotent on the
+            // listener's side, which ignores callbacks for a session it has already finished.
+            notifyClosed()
+        }
+    }
+
+    private val closedNotified = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** The listener hears that a session ended once, whichever of the socket, the backstop or a stop reports it. */
+    private fun notifyClosed() {
+        if (!closedNotified.compareAndSet(false, true)) return
+        // Every way a session ends passes through here -- the backstop, the socket closing, the
+        // socket failing after the stop. So this is the one place that can see the server never
+        // finished. It used to be seen and dropped: the backstop fired, the socket was closed, and
+        // the keyboard fell back to its composing text without a word, while the last seconds of
+        // speech had gone nowhere on a link that looked healthy from this side.
+        if (stopRequested && !endMarkerReceived) {
+            val unanswered = (stoppedAt - lastContentAt).coerceAtLeast(0L)
+            VibeVoiceDebugLogger.log("[TAIL_MISSING] session ended without the end-of-stream marker; " +
+                    "${unanswered}ms between the last content frame and the stop were never answered")
+            listener.onTailMissing(unanswered)
+        }
+        listener.onClosed()
+    }
+
+    fun cancel() {
+        stopStreaming()
+        // stopStreaming leaves the socket to a 3 s backstop that runs in the scope cancelled below,
+        // so an aborted session never closed its connection at all.
+        closureJob?.cancel()
+        closureJob = null
+        webSocket?.cancel()
+        webSocket = null
+        scopeJob.cancel()
+    }
+
+    /**
+     * Ends a session that cannot be saved. The error code is a code, not a sentence: what the user
+     * reads is the keyboard's business, and "Dictation error: Connection lost" framed a tunnel as a
+     * fault in the product.
+     */
+    private fun giveUp(reason: String) {
+        // A session that has already ended cleanly is not a link that was lost. stopRequested can
+        // be set between the check that started a reconnect and this point -- the user presses
+        // space while the socket happens to drop -- and the error reached the user as a toast over
+        // a dictation that had just finished perfectly well.
+        if (stopRequested || !isStreaming) {
+            VibeVoiceDebugLogger.log("Not reporting '$reason': the session had already ended")
+            isStreaming = false
+            setLinkDegraded(false)
+            cleanupAudioCapture()
+            abandonSocket(reason)
+            return
+        }
+        isStreaming = false
+        setLinkDegraded(false)
+        cleanupAudioCapture()
+        // stopStreaming returns early once isStreaming is false, so nothing later closes the socket.
+        abandonSocket(reason)
+        listener.onError(ERR_LINK_LOST)
+    }
+
+    private fun cleanupAudioCapture() {
+        // Reached by every path that ends a session, abnormal ones included, which is why the
+        // watchdog is torn down here rather than in stopStreaming alone.
+        watchdogJob?.cancel()
+        watchdogJob = null
+        outageStartedAt = 0L
+        if (isLinkDegraded) setLinkDegraded(false)
+        audioJob?.cancel()
+        audioJob = null
+        try {
+            audioRecord?.stop()
+        } catch (_: Exception) {
+        }
+        try {
+            audioRecord?.release()
+        } catch (_: Exception) {
+        }
+        audioRecord = null
+    }
+
+    companion object {
+        private val JSON = "application/json".toMediaType()
+        private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
+        /** 100 ms of 16 kHz 16-bit mono -- the size of a frame the live stream sends. */
+        private const val FLUSH_CHUNK_BYTES = 3200
+        /** 16 kHz, 16-bit, mono. */
+        internal const val BYTES_PER_MS = 32L
+        /** How far before the last piece a guessed resend starts: one second. */
+        private const val FALLBACK_MARGIN_BYTES = 1000 * BYTES_PER_MS
+        private const val MAX_OVERLAP_WORDS = 12
+        private const val AUTH_REPLY_TIMEOUT_MS = 10_000L
+        /** How long a stopped session waits for its final after going back for it. */
+        private const val RESUME_AFTER_STOP_TIMEOUT_MS = 15_000L
+        private const val RESUME_GRACE_WITH_TOKEN_MS = 2_000L
+
+        /**
+         * Where a reconnect resends audio from, as a position in the capture.
+         *
+         * Resumed: the same server session, its clock and idx sequence continue, and the server
+         * holds everything up to [receivedMs]; only the audio in flight when the connection died
+         * goes again. Otherwise the server starts a new session, and what the old one never
+         * returned as text is sent again: exactly from its last `ack_ms` ([ackedPos]); as a guess
+         * from the last piece less a second against a server that sends no `ack_ms`; or from the
+         * stream's start when nothing came back at all -- the 2026-10-03 12:42 case.
+         */
+        internal fun resendPlan(
+            resumed: Boolean, receivedMs: Long, streamOriginPos: Long, ackedPos: Long, lastPiecePos: Long
+        ): ResendPlan {
+            val origin = maxOf(streamOriginPos, 0L)
+            return when {
+                resumed && receivedMs >= 0 && streamOriginPos >= 0 ->
+                    ResendPlan(streamOriginPos + receivedMs * BYTES_PER_MS, true, false, "resumed, server holds ${receivedMs}ms")
+                // Trimmed too: while a segment's tail is held back on the server, ack_ms stays at the
+                // segment's start although its head was already delivered, so its words can repeat.
+                ackedPos >= 0 ->
+                    ResendPlan(maxOf(ackedPos, origin), false, true, "not resumed, from the last ack")
+                lastPiecePos >= 0 ->
+                    ResendPlan(maxOf(lastPiecePos - FALLBACK_MARGIN_BYTES, origin), false, true,
+                        "not resumed, no ack from this server, from the last piece less ${FALLBACK_MARGIN_BYTES / BYTES_PER_MS}ms")
+                else ->
+                    ResendPlan(origin, false, false, "not resumed and nothing delivered yet, from the stream's start")
+            }
+        }
+
+        /**
+         * Drops the words at the start of [next] that repeat the end of [previous]: after a resend
+         * from a guessed offset, the margin re-transcribes the last second or so. Compared ignoring
+         * case and punctuation, longest overlap first.
+         */
+        internal fun trimLeadingOverlap(previous: String, next: String): String {
+            fun norm(w: String) = w.lowercase().filter { it.isLetterOrDigit() }
+            val prev = previous.split(Regex("\\s+")).filter { it.isNotBlank() }
+            val words = next.split(Regex("\\s+")).filter { it.isNotBlank() }
+            for (k in minOf(MAX_OVERLAP_WORDS, prev.size, words.size) downTo 1) {
+                val tail = prev.takeLast(k).map(::norm)
+                if (tail.all { it.isEmpty() }) continue
+                if (tail == words.take(k).map(::norm)) return words.drop(k).joinToString(" ")
+            }
+            return next
+        }
+        private const val VIBEVOICE_API_KEY_PREF = "vibevoice_api_key"
+
+        /**
+         * The trial key, deliberately NOT in [VIBEVOICE_API_KEY_PREF].
+         *
+         * `getApiKey() != null` is what four call sites read as "this user has an account": the
+         * link panel hides itself, the wizard skips its account step, the settings screen shows a
+         * quota. A trial key stored there would silently answer yes to all of them, and the one
+         * screen whose entire job is to turn a trial into an account would never appear.
+         *
+         * So the two live apart, and [getApiKey] falls back from one to the other. Streaming, bug
+         * reports and every other consumer of a key keep working on a trial without knowing it is
+         * one; only [isLinked] can tell the difference, and only the places that must.
+         */
+        private const val VIBEVOICE_TRIAL_KEY_PREF = "vibevoice_trial_key"
+
+        /**
+         * The install this device presents to `POST /api/trial/key`, generated once.
+         *
+         * A random UUID and nothing derived from the device: P-058 requires an id that does not
+         * identify the phone across apps, and the server cannot check that, so the client is the
+         * whole of the contract. 36 characters, inside the server's 32..128 window.
+         */
+        private const val VIBEVOICE_INSTALL_ID_PREF = "vibevoice_install_id"
+
+        /**
+         * Set once the server has refused a session for a spent trial.
+         *
+         * Without it every tap on the microphone opens a socket, sends the auth frame and is
+         * refused -- a round trip and a second of dead air to learn something already known.
+         */
+        private const val VIBEVOICE_TRIAL_SPENT_PREF = "vibevoice_trial_spent"
+
+        /**
+         * The stream's refusal when the free minutes are gone.
+         *
+         * Distinct from an invalid key on purpose, and the distinction is the whole point: one is
+         * an invitation to link an account, the other is a fault. See P-058 R4.
+         */
+        const val ERR_TRIAL_EXHAUSTED = "trial_exhausted"
+        private const val TAG = "VibeVoiceClient"
+        private const val LINK_CHECK_INTERVAL_MS = 1000L
+        /** How long a session may go without a single socket reaching the server. */
+        private const val HANDSHAKE_TIMEOUT_MS = 8_000L
+        /** Six seconds of audio at 16 kHz, 16-bit mono. Below this it is jitter; above it, a backlog. */
+        private const val LINK_QUEUE_STALL_BYTES = 6 * 32000L
+        /**
+         * How long an outage may last before the session ends.
+         *
+         * Matched to the rolling buffer: thirty seconds of audio is what a reconnect can resend, so
+         * waiting longer would mean coming back with a gap in the middle of a sentence.
+         */
+        private const val RECONNECT_WINDOW_MS = 30_000L
+        /** RMS that counts as a full-scale level for the waves; see where currentLevel is written. */
+        private const val LEVEL_FULL_SCALE = 0.15
+
+        /**
+         * The link stayed down long enough that the audio behind it could not be recovered.
+         *
+         * A code rather than a message: what the user reads belongs to the keyboard, and it should
+         * not read like a fault in the product. Driving into a tunnel is not a bug.
+         */
+        const val ERR_LINK_LOST = "link_lost"
+
+        /** Another app won the concurrent-capture arbitration and the system is feeding us silence. */
+        const val WARN_MIC_BUSY = "mic_busy"
+        /** The recorder stopped delivering usable audio and restarting it did not help. */
+        const val WARN_MIC_UNAVAILABLE = "mic_unavailable"
+
+        // Ten seconds, not thirty. The ping is the backstop that notices a socket which is dead but
+        // has not been told so, and at thirty it took up to a minute -- long enough to lose a whole
+        // dictation into a link that had already gone. The watchdog usually gets there first now,
+        // but the two answer different questions and both are cheap.
+        @JvmField val sharedHttpClient = OkHttpClient.Builder()
+            .pingInterval(10, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        @Volatile private var cachedPrefs: SharedPreferences? = null
+
+        @JvmStatic
+        fun vibeVoicePrefs(context: Context): SharedPreferences =
+            cachedPrefs ?: synchronized(VibeVoiceClient::class.java) {
+                cachedPrefs ?: createVibeVoicePrefs(context.applicationContext).also { cachedPrefs = it }
+            }
+
+        private fun createVibeVoicePrefs(context: Context): SharedPreferences = try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                "vibevoice_secure_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Throwable) { // an Error too: a missing crypto class must not take the keyboard down
+            Log.e(TAG, "EncryptedSharedPreferences unavailable — API key will be stored in cleartext", e)
+            context.getSharedPreferences("vibevoice_prefs", MODE_PRIVATE)
+        }
+
+        /**
+         * A key to transcribe with: the account's if there is one, otherwise the trial's.
+         *
+         * Callers that need to know which they got should ask [isLinked]. Callers that only need
+         * to send audio -- which is nearly all of them -- must not, and do not.
+         */
+        @JvmStatic
+        fun getApiKey(context: Context): String? =
+            vibeVoicePrefs(context).getString(VIBEVOICE_API_KEY_PREF, null)
+                ?: vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null)
+
+        /** Whether an account has been linked. A trial key is not an account. */
+        @JvmStatic
+        fun isLinked(context: Context): Boolean =
+            vibeVoicePrefs(context).getString(VIBEVOICE_API_KEY_PREF, null) != null
+
+        @JvmStatic
+        fun hasTrialKey(context: Context): Boolean =
+            vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null) != null
+
+        /** Whether the server has already refused a session because the trial is spent. */
+        @JvmStatic
+        fun isTrialSpent(context: Context): Boolean =
+            vibeVoicePrefs(context).getBoolean(VIBEVOICE_TRIAL_SPENT_PREF, false)
+
+        @JvmStatic
+        fun markTrialSpent(context: Context) {
+            vibeVoicePrefs(context).edit().putBoolean(VIBEVOICE_TRIAL_SPENT_PREF, true).apply()
+        }
+
+        /**
+         * This install's id, generated on first use and never regenerated.
+         *
+         * Reinstalling produces a new one and therefore a new trial. That is the accepted abuse
+         * ceiling -- ten minutes per reinstall -- and P-058 says so out loud rather than reaching
+         * for attestation to close it.
+         */
+        @JvmStatic
+        fun installId(context: Context): String {
+            val prefs = vibeVoicePrefs(context)
+            prefs.getString(VIBEVOICE_INSTALL_ID_PREF, null)?.let { return it }
+            return synchronized(VibeVoiceClient::class.java) {
+                prefs.getString(VIBEVOICE_INSTALL_ID_PREF, null) ?: java.util.UUID.randomUUID().toString()
+                    .also { prefs.edit().putString(VIBEVOICE_INSTALL_ID_PREF, it).apply() }
+            }
+        }
+
+        /**
+         * Asks for this install's free minutes and stores the key it gets.
+         *
+         * Returns without asking if an account is already linked -- a linked device spending a
+         * trial would burn it for nothing -- or if one has already been stored.
+         */
+        suspend fun requestTrialKey(context: Context): TrialResult = withContext(Dispatchers.IO) {
+            val prefs = vibeVoicePrefs(context)
+            if (isLinked(context)) return@withContext TrialResult.AlreadyUsed
+            prefs.getString(VIBEVOICE_TRIAL_KEY_PREF, null)?.let {
+                return@withContext TrialResult.Granted(it, 0.0)
+            }
+            val body = JSONObject().put("install_id", installId(context)).toString().toRequestBody(JSON)
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/trial/key")
+                .post(body)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    when (response.code) {
+                        409 -> return@use TrialResult.AlreadyUsed
+                        429 -> return@use TrialResult.RateLimited
+                    }
+                    if (!response.isSuccessful) return@use TrialResult.Failed
+                    val json = response.body?.string()?.let { JSONObject(it) } ?: return@use TrialResult.Failed
+                    val key = json.optString("api_key").takeIf { it.isNotBlank() }
+                        ?: return@use TrialResult.Failed
+                    prefs.edit().putString(VIBEVOICE_TRIAL_KEY_PREF, key).apply()
+                    VibeVoiceDebugLogger.log("Trial key granted")
+                    TrialResult.Granted(key, json.optDouble("minutes_granted", 0.0))
+                }
+            } catch (e: Exception) {
+                VibeVoiceDebugLogger.log("Trial key request failed: ${e.message}")
+                TrialResult.Failed
+            }
+        }
+
+        /**
+         * How much of the trial is left. Null when there is no trial key, when the key is not a
+         * trial (the server answers 404 for that), or when the request failed.
+         */
+        suspend fun trialStatus(context: Context): JSONObject? = withContext(Dispatchers.IO) {
+            val key = vibeVoicePrefs(context).getString(VIBEVOICE_TRIAL_KEY_PREF, null) ?: return@withContext null
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/trial/status")
+                .header("X-API-Key", key)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) response.body?.string()?.let { JSONObject(it) } else null
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        /**
+         * [installId] is optional on the wire and carried here always: the server stores it on the
+         * device-code row and burns this install's trial when the token is collected, so unlinking
+         * and relinking cannot hand the free minutes back (P-058 R7). An older server ignores it.
+         */
+        suspend fun requestDeviceCode(
+            deviceName: String,
+            clientVersion: String,
+            installId: String? = null
+        ): JSONObject? = withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("device_name", deviceName)
+                .put("client_version", clientVersion)
+                .apply { if (installId != null) put("install_id", installId) }
+                .toString().toRequestBody(JSON)
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/oauth/device/code")
+                .post(body)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { JSONObject(it) }
+                    } else null
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        suspend fun pollForToken(deviceCode: String): JSONObject? = withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("device_code", deviceCode)
+                .toString().toRequestBody(JSON)
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/oauth/device/token")
+                .post(body)
+                .build()
+            try {
+                // RFC 8628: authorization_pending is signalled via HTTP 400 + JSON body, not a network error
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    response.body?.string()?.let { JSONObject(it) }
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        suspend fun fetchQuota(apiKey: String): JSONObject? = withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("https://vibevoice.net/api/me/usage")
+                .header("X-API-Key", apiKey)
+                .build()
+            try {
+                sharedHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { JSONObject(it) }
+                    } else {
+                        Log.e(TAG, "Quota fetch failed: HTTP ${response.code}")
+                        null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Quota fetch failed with exception", e)
+                null
+            }
+        }
+    }
+}

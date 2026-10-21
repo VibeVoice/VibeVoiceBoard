@@ -1,0 +1,46 @@
+03 — Das schwebende Widget vor schwarzem Bildschirm (Rohmaterial)
+=================================================================
+
+WOFÜR
+-----
+Das ist **kein fertiges Store-Bild**. Es ist die Rohaufnahme, aus der ich das Widget
+freistelle, um es auf Bild 04 zu montieren.
+
+Warum schwarz: Der Schein um die Marke ist additiv. Vor Schwarz kann ich ihn sauber
+ablösen und über jeden beliebigen Hintergrund legen. Vor einem hellen oder bunten Grund
+geht das nicht — dann klebt der Hintergrund im Schein.
+
+AUFBAU
+------
+* Ein komplett schwarzer Bildschirm. Reines Schwarz, kein dunkles Grau, kein Verlauf.
+  Was funktioniert: eine leere Notiz mit schwarzem Theme, eine schwarze Bilddatei im
+  Vollbild, eine dunkle Webseite ohne Inhalt.
+* Das Widget mittig, mit deutlichem Abstand zu allen vier Rändern. Der Schein reicht
+  weiter, als es aussieht — mindestens die halbe Widget-Breite Luft ringsum.
+* Die Session läuft, das Widget pulsiert. Wieder gilt: **während du sprichst** auslösen,
+  sonst steht die Wellenform flach.
+
+NICHT IM BILD
+-------------
+* Kein X am unteren Rand. Das erscheint nur beim Ziehen und würde mit ins Bild geraten,
+  wenn du das Widget gerade bewegst. Also: erst platzieren, loslassen, dann auslösen.
+* Keine Statusleiste über dem Widget. Wenn sie sichtbar bleibt, ist das egal — ich
+  schneide nur das Widget aus.
+
+AUFNAHME
+--------
+1. Hintergrunddiktat und Widget in den Einstellungen einschalten.
+2. Diktat in irgendeiner App starten.
+3. Tastatur schließen — das Widget erscheint.
+4. Zur schwarzen Fläche wechseln.
+5. Widget in die Mitte ziehen, Finger heben.
+6. Sprechen und dabei auslösen. Drei, vier Versuche, damit die Wellenform gut steht.
+
+Wenn möglich zusätzlich **eine kurze Bildschirmaufnahme** von zehn Sekunden mitschicken,
+in der das Widget pulsiert. Dann kann ich den besten Einzelframe selbst herausziehen
+statt auf einen glücklichen Auslöser zu hoffen.
+
+DANACH
+------
+Ich stelle die Marke frei: die Scheibe als harter Kreis, der Schein additiv abgelöst. Das
+Ergebnis ist ein PNG mit Transparenz, das ich auf Bild 04 setze.

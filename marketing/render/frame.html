@@ -1,0 +1,189 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>captioned frame</title>
+<!--
+  One captioned screenshot, rendered whole. Every marketing image with a phone in it comes from this
+  file: the Play screenshots, the cards in the tester email, the ones on the website.
+
+  WHY ONE TEMPLATE AND NOT ONE PER CHANNEL
+
+  There used to be two, split by where the image was going: a portrait one for the store and a
+  landscape one for email. That put the same caption logic, the same blob ground and the same device
+  treatment in two files that then drifted apart -- the store composition centred its caption above
+  the phone while the email one set it beside, so the two sets stopped looking like siblings. The
+  channel is not what differs. The frame is. So the layout flips on aspect ratio and everything else
+  is shared:
+
+      wider than tall  ->  caption left, phone right
+      taller than wide ->  caption above, phone below
+
+  A new format is a line in targets.json, not a copy of this file.
+
+  WHY THE PHONE IS NOT BIGGER IN PORTRAIT
+
+  It cannot be, and the arithmetic is worth writing down so nobody tries again. The capture is
+  1440x3120, which is 9:19.5. The portrait canvas is 9:16, the tallest ratio Play accepts. A phone
+  that tall inside a canvas that shape occupies width = (its height / the canvas height) x 0.82, so
+  even with no caption at all it never passes 82%, and with a caption band it settles near 66%.
+  Making it wider means cropping the phone, and cropping the phone is what cost the WhatsApp shot
+  its header the first time round. 66% it is.
+
+  WHY THE WHOLE CAPTURE
+
+  Recognition is the argument. A messaging screenshot without the contact at the top could be any
+  app, and a home screen without its dock and page dots stops reading as a home screen -- which is
+  the entire point of that one, since it says no app is open. `crop`, `zoom` and `focusx` exist for a
+  capture that genuinely needs them; nothing currently uses them.
+
+  USAGE: build.sh passes everything through the query string. Opened directly it shows placeholder
+  text and an empty device -- enough to check the layout, not enough to check an image.
+-->
+<style>
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_thin.ttf') format('truetype'); font-weight: 100; }
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_regular.ttf') format('truetype'); font-weight: 400; }
+  @font-face { font-family: 'Ubuntu Sans'; src: url('../../app/src/main/res/font/ubuntu_sans_semibold.ttf') format('truetype'); font-weight: 600; }
+
+  /* Border-box throughout. The stage carries padding and a percentage height at the same time, and
+     under content-box those add up: the phone was sized against a stage 80px taller than the frame
+     and ran off the top and bottom edges. */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 100vw; height: 100vh; overflow: hidden;
+    /* --bg-color from the site's dark theme. The blobs are calibrated against black. */
+    background: #000;
+    font-family: 'Ubuntu Sans', sans-serif;
+    color: #fff;
+    position: relative;
+    display: flex;
+  }
+
+  /* The three drifting blobs of AnimatedPageBackground.css, held still: same colours, same 70%
+     stop, same screen blend. Sized in vmin and placed in per-cent so one set of numbers works in
+     both orientations.
+
+     0.30, not the app's 0.165. In the app they sit behind text that has to stay readable; here they
+     are the only thing separating a marketing image from a black rectangle, and at the size these
+     are viewed 0.165 disappears entirely. */
+  .blob {
+    position: absolute; border-radius: 50%;
+    width: 140vmin; height: 140vmin;
+    mix-blend-mode: screen; opacity: 0.30;
+    pointer-events: none;
+  }
+  .purple { background: radial-gradient(ellipse, #a855f7 0%, transparent 70%); left: -46vmin; top: -18%; }
+  .green  { background: radial-gradient(ellipse, #22c55e 0%, transparent 70%); right: -42vmin; top:  38%; }
+  .blue   { background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%); left:  18vmin; top:  66%; }
+
+  .caption { position: relative; z-index: 2; }
+  h1 { margin: 0; line-height: 1.18; font-weight: 100; text-wrap: balance; }
+  /* The lead sits on its own line. Inline, the weight change lands mid-sentence and the phrase
+     meant to hit first gets swallowed by the wrap. */
+  h1 b { font-weight: 600; display: block; }
+  .note { margin: 20px 0 0; font-weight: 400; color: rgba(255,255,255,0.5); }
+
+  .stage { position: relative; z-index: 2; display: flex; justify-content: center; }
+  /* An outline and a radius rather than a drawn device frame: a real frame dates the image to
+     whatever handset it copies, and at the sizes these are viewed the outline is all that reads. */
+  .device {
+    flex: 0 0 auto; height: 100%;
+    border-radius: 26px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 24px 70px rgba(0,0,0,0.65);
+  }
+  .device img { display: block; height: auto; max-width: none; }
+
+  /* ---- taller than wide: caption above, phone below ---- */
+  body { flex-direction: column; }
+  .caption { flex: 0 0 auto; padding: 56px 46px 28px; text-align: center; }
+  h1 { font-size: 56px; }
+  .note { font-size: 22px; margin-top: 24px; }
+  .stage { flex: 1 1 auto; min-height: 0; align-items: flex-start; padding-bottom: 42px; }
+
+  /* ---- wider than tall: caption left, phone right ---- */
+  @media (min-aspect-ratio: 1/1) {
+    body { flex-direction: row; align-items: center; }
+    .caption { flex: 1 1 auto; padding: 0 28px 0 56px; text-align: left; }
+    h1 { font-size: 34px; }
+    .note { font-size: 15px; }
+    .stage { flex: 0 0 auto; height: 100%; align-items: center; padding: 40px 52px 40px 0; }
+  }
+
+  /* No caption is a deliberate state, not a missing parameter: the hero carries its own words.
+     The phone takes the room the caption would have used instead of leaving a hole. */
+  body.bare .caption { display: none; }
+  body.bare .stage { padding: 96px 0 60px; }
+</style>
+
+<div class="blob purple"></div>
+<div class="blob green"></div>
+<div class="blob blue"></div>
+
+<div class="caption">
+  <h1><b id="lead">Speak.</b> <span id="rest">The punctuation writes itself.</span></h1>
+  <p class="note" id="note" hidden></p>
+</div>
+
+<div class="stage"><div class="device"><img id="shot" alt=""></div></div>
+
+<script>
+  const q = new URLSearchParams(location.search);
+  const shot   = q.get('shot');
+  const lead   = q.get('lead') || '';
+  const rest   = q.get('rest') || '';
+  const note   = q.get('note') || '';
+  const crop   = parseFloat(q.get('crop')   || '0');
+  const zoom   = parseFloat(q.get('zoom')   || '1');
+  const focusx = parseFloat(q.get('focusx') || '0.5');
+
+  if (!lead && !rest) {
+    document.body.classList.add('bare');
+  } else {
+    document.getElementById('lead').textContent = lead;
+    document.getElementById('rest').textContent = rest;
+    if (note) {
+      const el = document.getElementById('note');
+      el.textContent = note;
+      el.hidden = false;
+    }
+  }
+
+  // The device box takes its width from the capture's own proportions, so the same stylesheet fits
+  // a phone, a tablet or a crop without a second set of numbers. The image is then laid out at
+  // `zoom` times that width and pulled left and up; both offsets are clamped, so the window can
+  // never run off the image and leave a black band -- which is also why zoom=1 needs no special
+  // case, the horizontal clamp collapses to zero on its own.
+  // Sizing is re-run whenever the stage changes height, rather than measured once.
+  //
+  // Measuring once is what kept going wrong. On `load` the caption was still in the fallback face and
+  // wrapped to more lines, so the stage was shorter than it would end up and the device kept a width
+  // computed against that -- a phone narrower than the border drawn around it, with dead space
+  // underneath. Awaiting document.fonts.ready did not fix it either: it resolves before the reflow
+  // it causes has settled. An observer needs no guess about when the page has stopped moving.
+  //
+  // The width is assigned, not left to `aspect-ratio`: the device is a flex item, and flex sizing
+  // settles its width from content before an aspect ratio gets a say.
+  const img = document.getElementById('shot');
+  if (shot) {
+    const dev = img.parentElement;
+    const fit = () => {
+      if (!img.naturalWidth) return;
+      const devH = dev.clientHeight;
+      if (!devH) return;
+      const devW = devH * img.naturalWidth / (img.naturalHeight * (1 - crop));
+      // Guard the observer against itself: in landscape the stage takes its width from the device.
+      if (Math.abs(parseFloat(dev.style.width) - devW) < 0.5) return;
+      dev.style.width = `${devW}px`;
+
+      const w = devW * zoom;
+      const h = w * img.naturalHeight / img.naturalWidth;
+      img.style.width = `${w}px`;
+      const clamp = (v, lo) => Math.min(0, Math.max(lo, v));
+      img.style.marginLeft = `${clamp(-(focusx * w - devW / 2), -(w - devW))}px`;
+      img.style.marginTop  = `${clamp(-(crop * h), -(h - devH))}px`;
+    };
+    img.addEventListener('load', fit);
+    new ResizeObserver(fit).observe(dev.parentElement);
+    img.src = shot;
+  }
+</script>

@@ -1,0 +1,40 @@
+07 — Der neue erste Bildschirm des Assistenten
+==============================================
+
+WOFÜR
+-----
+Screenshot 5 im Store, und gleichzeitig die Kontrolle, ob der Umbau am Gerät so aussieht
+wie gedacht.
+
+Es ist das Markenbild: Logo groß, Slogan, driftende Farbblobs, Schallwellen dahinter —
+dasselbe Bild wie oben auf vibevoice.net. Wer die Landingpage gesehen hat, erkennt die
+App wieder; wer die App zuerst sieht, erkennt später die Seite.
+
+AUFBAU
+------
+* Der Assistent, Seite 1 (die mit dem Logo).
+* Vollbild, nichts angetippt.
+* Die Blobs bewegen sich langsam — kein bestimmter Zeitpunkt ist der richtige. Wenn dir
+  eine Farbverteilung besonders gefällt, dann die.
+
+NICHT IM BILD
+-------------
+* Keine Systemdialoge darüber.
+* Keine Benachrichtigung im oberen Rand.
+
+AUFNAHME
+--------
+Der Assistent läuft nur beim ersten Start. Um ihn wieder zu sehen: App-Daten löschen
+(Einstellungen → Apps → VibeVoiceBoard → Speicher → Daten löschen) und die App neu
+öffnen. Achtung, das entfernt auch die Kontoverknüpfung — danach neu verknüpfen.
+
+Kommt sowieso beim nächsten Testdurchlauf vorbei, also am besten dann gleich mitnehmen.
+
+DANACH
+------
+Geht ohne Textzeile in den Store — dieses Bild spricht für sich, und der Slogan steht
+schon drauf.
+
+Wenn dir am Gerät etwas nicht gefällt (Logo zu groß, Blobs zu kräftig, Wellen zu
+unruhig), schick den Screenshot mit einem Satz dazu. Die Werte sind Konstanten, das ist
+in Minuten geändert.

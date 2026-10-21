@@ -112,6 +112,8 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
         // TODO: Use {@link InputAttributes} instead of these variables.
         lateinit var editorInfo: EditorInfo
         lateinit var subtype: RichInputMethodSubtype
+        val isSubtypeInitialized: Boolean
+            get() = ::subtype.isInitialized
         var settingsValues: SettingsValues? = null
         // When the device is still locked, features like showing the IME setting app need to be locked down.
         var deviceLocked = Settings.getValues().mIsLocked
@@ -167,6 +169,9 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
         }
 
         fun build(): KeyboardLayoutSet {
+            if (!params.isSubtypeInitialized) {
+                throw IllegalStateException("KeyboardLayoutSet subtype is not specified")
+            }
             params.script = params.subtype.locale.script()
             return KeyboardLayoutSet(mContext, params)
         }
@@ -223,7 +228,7 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
         // will stay in the cache. So we forcibly keep some references in an array to prevent
         // them from disappearing from sKeyboardCache.
         private val forcibleKeyboardCache = arrayOfNulls<Keyboard>(FORCIBLE_CACHE_SIZE)
-        private val keyboardCache = HashMap<KeyboardId, SoftReference<Keyboard>>()
+        private val keyboardCache = java.util.concurrent.ConcurrentHashMap<KeyboardId, SoftReference<Keyboard>>()
         private val uniqueKeysCache = UniqueKeysCache.newInstance()
 
         fun onSystemLocaleChanged() {

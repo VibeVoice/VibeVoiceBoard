@@ -111,6 +111,33 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_FLOATING_POS_X_PREFIX = "floating_pos_x";
     public static final String PREF_FLOATING_POS_Y_PREFIX = "floating_pos_y";
     public static final String PREF_FONT_SCALE = "font_scale";
+    // Voice wave background, tunable from the VibeVoice settings screen
+    public static final String PREF_VOICE_BACKGROUND = "vibevoice_background_dictation";
+    public static final String PREF_VOICE_KEY_PULSE = "vibevoice_voice_key_pulse";
+    public static final String PREF_HAS_DICTATED = "vibevoice_has_dictated";
+    public static final String PREF_BG_HINT_SHOWN = "vibevoice_background_hint_shown";
+    public static final String PREF_OVERLAY_ENABLED = "vibevoice_overlay_enabled";
+    public static final String PREF_OVERLAY_ICON = "vibevoice_overlay_icon";
+    public static final String PREF_OVERLAY_PADDING = "vibevoice_overlay_padding";
+    public static final String PREF_OVERLAY_BARS = "vibevoice_overlay_bars";
+    public static final String PREF_OVERLAY_BAR_WIDTH = "vibevoice_overlay_bar_width";
+    public static final String PREF_OVERLAY_BAR_COUNT = "vibevoice_overlay_bar_count";
+    public static final String PREF_OVERLAY_REST = "vibevoice_overlay_rest";
+    public static final String PREF_GLOW_SIZE = "vibevoice_glow_size";
+    public static final String PREF_GLOW_GAIN = "vibevoice_glow_gain";
+    public static final String PREF_OVERLAY_GLOW_SIZE = "vibevoice_overlay_glow_size";
+    public static final String PREF_OVERLAY_GLOW_GAIN = "vibevoice_overlay_glow_gain";
+    public static final String PREF_OVERLAY_X = "vibevoice_overlay_x";
+    public static final String PREF_OVERLAY_Y = "vibevoice_overlay_y";
+    public static final String PREF_WAVE_AMPLITUDE = "vibevoice_wave_amplitude";
+    public static final String PREF_WAVE_REACTION = "vibevoice_wave_reaction";
+    public static final String PREF_WAVE_CYCLES = "vibevoice_wave_cycles";
+    public static final String PREF_WAVE_SPEED = "vibevoice_wave_speed";
+    public static final String PREF_WAVE_SPREAD = "vibevoice_wave_spread";
+    public static final String PREF_WAVE_JITTER = "vibevoice_wave_jitter";
+    public static final String PREF_WAVE_COUNT = "vibevoice_wave_count";
+    public static final String PREF_WAVE_ATTACK = "vibevoice_wave_attack";
+    public static final String PREF_WAVE_DAMPING = "vibevoice_wave_damping";
     public static final String PREF_HINT_FONT_SCALE = "hint_font_scale";
     public static final String PREF_EMOJI_FONT_SCALE = "emoji_font_scale";
     public static final String PREF_EMOJI_KEY_FIT = "emoji_key_fit";
@@ -190,7 +217,6 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_ABC_AFTER_SYMBOL_SPACE = "abc_after_symbol_space";
     public static final String PREF_ABC_AFTER_NUMPAD_SPACE = "abc_after_numpad_space";
     public static final String PREF_REMOVE_REDUNDANT_POPUPS = "remove_redundant_popups";
-    public static final String PREF_SPACE_BAR_TEXT = "space_bar_text";
     public static final String PREF_TIMESTAMP_FORMAT = "timestamp_format";
     public static final String PREF_TOOLBAR_MODE = "toolbar_mode";
     public static final String PREF_TOOLBAR_HIDING_GLOBAL = "toolbar_hiding_global";
@@ -223,7 +249,8 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     private static boolean reloadOnChanged(String key) {
         return switch (key) {
             case PREF_LAST_SHOWN_EMOJI_CATEGORY_PAGE_ID, PREF_LAST_SHOWN_EMOJI_CATEGORY_ID, PREF_RECENT_EMOJIS,
-                 PREF_DONT_SHOW_MISSING_DICTIONARY_DIALOG, PREF_SELECTED_SUBTYPE -> false;
+                 PREF_DONT_SHOW_MISSING_DICTIONARY_DIALOG, PREF_SELECTED_SUBTYPE, PREF_VOICE_KEY_PULSE,
+                 PREF_HAS_DICTATED -> false;
             default -> !key.startsWith(PREF_SAVED_APP_SUBTYPE_PREFIX) && !key.startsWith("floating_pos");
         };
     }

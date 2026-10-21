@@ -260,7 +260,7 @@ private val LocalBreakIterator = ThreadLocal<BreakIterator>().apply {
     set(BreakIterator.getCharacterInstance(Locale.ROOT))
 }
 
-private val localBreakIterator: BreakIterator = LocalBreakIterator.get() ?: initBreakIterator()
+private val localBreakIterator: BreakIterator get() = LocalBreakIterator.get() ?: initBreakIterator()
 
 private fun initBreakIterator() = BreakIterator.getCharacterInstance(Locale.ROOT).also {
     LocalBreakIterator.set(it)
@@ -270,7 +270,7 @@ val String.isSingleGrapheme: Boolean get() {
     if (isEmpty()) return false
     if (length == 1) return true
 
-    runCatching {
+    try {
         val iterator = localBreakIterator
         iterator.setText(this)
         iterator.next()
@@ -279,9 +279,10 @@ val String.isSingleGrapheme: Boolean get() {
         return if (isSingleRegionalIndicator) true // standalone regional indicator (🇦–🇿): one code point
         else if ('\uD83C' !in this) true // does not contain skin tone
         else singleEmojiRegex.matches(this) // single grapheme only if it's a single emoji
+    } catch (e: IllegalArgumentException) {
+        // got IllegalArgumentException: Invalid index on iterator.next()
+        return false
     }
-    // got IllegalArgumentException: Invalid index on iterator.next()
-    return false
 }
 
 val String.lastGrapheme: String get() {
