@@ -1089,7 +1089,14 @@ class VibeVoiceClient(
                 val sentAt = endStreamSentAt
                 if (sentAt == 0L) {
                     delay(200)
-                    if (SystemClock.elapsedRealtime() - stoppedAt > RECONNECT_WINDOW_MS) break
+                    val sinceStop = SystemClock.elapsedRealtime() - stoppedAt
+                    // Only a socket that is still connecting can carry the deferred END_STREAM. Stopped
+                    // during a reconnect backoff, the pending attempt is cancelled and nothing will
+                    // ever send it: waiting would hold the keyboard in "finishing" for the whole
+                    // window. Then three seconds as before, and the resume below goes back for it.
+                    val connecting = webSocket != null && !isReconnecting
+                    if (!connecting && sinceStop > 3000L) break
+                    if (sinceStop > RECONNECT_WINDOW_MS) break
                     continue
                 }
                 val remaining = 3000L - (SystemClock.elapsedRealtime() - sentAt)
