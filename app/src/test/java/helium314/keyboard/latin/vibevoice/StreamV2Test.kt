@@ -250,4 +250,133 @@ class StreamV2Test {
         VibeVoiceStreamV2.v2Unavailable = false
     }
 
+    @Test fun resumeAfterStopResendsMissingAudioAndEnd() {
+        val heldAtDrop = AtomicLong(-1)
+        val endReceivedOnSecond = CountDownLatch(1)
+        var firstWs: WebSocket? = null
+        val first = object : FakeServer() {
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                if (heldAtDrop.get() < 0) super.onMessage(webSocket, bytes)
+            }
+            override fun onStart(ws: WebSocket, o: JSONObject) {
+                firstWs = ws
+                ws.send("""{"type":"ready","session":"s1","resume":{"token":"t1","resumed":false,"received_ms":0}}""")
+                ws.send("""{"type":"segment","idx":1,"text":"Part one.","ack_ms":100}""")
+            }
+        }
+        val second = object : FakeServer() {
+            override fun onStart(ws: WebSocket, o: JSONObject) {
+                val received = heldAtDrop.get() / 32
+                ws.send("""{"type":"ready","session":"s1","resume":{"token":"t2","resumed":true,"received_ms":$received}}""")
+            }
+            override fun onEnd(ws: WebSocket) {
+                endReceivedOnSecond.countDown()
+                ws.send("""{"type":"segment","idx":2,"text":"Part two.","ack_ms":300}""")
+                ws.send("""{"type":"end","last_idx":2,"billed_ms":300}""")
+                ws.close(1000, "done")
+            }
+        }
+        server.enqueue(MockResponse().withWebSocketUpgrade(first))
+        server.enqueue(MockResponse().withWebSocketUpgrade(second))
+        val rec = Recorder()
+        val mic = arrayOfNulls<FakeMic>(1)
+        val s = session(rec, mic)
+        s.startStreaming()
+        waitFor("first connection ready and receiving audio") { first.bytes.get() >= 3200 * 5 }
+        s.stopStreaming()
+        heldAtDrop.set(first.bytes.get())
+        firstWs?.close(1001, "drop after stop")
+
+        assertTrue("second connection never received end", endReceivedOnSecond.await(5, TimeUnit.SECONDS))
+        assertTrue("session never closed", rec.closed.await(5, TimeUnit.SECONDS))
+        assertEquals(listOf("Part one." to false, "Part two." to true), rec.pieces.toList())
+        assertTrue(rec.errors.toString(), rec.errors.isEmpty())
+        assertFalse(rec.tailMissing)
+        waitFor("all audio accounted for across both connections") {
+            heldAtDrop.get() + second.bytes.get() == mic[0]!!.captured.get()
+        }
+    }
+
+    @Test fun http502OnUpgradeDoesNotSetV2Unavailable() {
+        server.enqueue(MockResponse().setResponseCode(502))
+        val second = object : FakeServer() {
+            override fun onStart(ws: WebSocket, o: JSONObject) {
+                ws.send("""{"type":"ready","session":"s1","resume":{"token":"t1","resumed":false,"received_ms":0}}""")
+                ws.send("""{"type":"segment","idx":1,"text":"Recovered from 502.","ack_ms":100}""")
+            }
+            override fun onEnd(ws: WebSocket) {
+                ws.send("""{"type":"end","last_idx":1,"billed_ms":100}""")
+                ws.close(1000, "done")
+            }
+        }
+        server.enqueue(MockResponse().withWebSocketUpgrade(second))
+        val rec = Recorder()
+        val s = session(rec, arrayOfNulls(1))
+        VibeVoiceStreamV2.v2Unavailable = false
+        s.startStreaming()
+        waitFor("second connection after 502 retry") { second.start != null }
+        assertFalse("v2 should remain available after 502", VibeVoiceStreamV2.v2Unavailable)
+        s.stopStreaming()
+        assertTrue(rec.closed.await(5, TimeUnit.SECONDS))
+        assertEquals(listOf("Recovered from 502." to false), rec.pieces.toList())
+        assertTrue(rec.errors.toString(), rec.errors.isEmpty())
+        assertFalse(VibeVoiceStreamV2.v2Unavailable)
+    }
+
+    @Test fun trialExhaustedCloseCode4002WithoutErrorFrameYieldsErrTrialExhausted() {
+        val conn = object : FakeServer() {
+            override fun onStart(ws: WebSocket, o: JSONObject) {
+                ws.close(4002, "trial_exhausted")
+            }
+        }
+        server.enqueue(MockResponse().withWebSocketUpgrade(conn))
+        val rec = Recorder()
+        val s = session(rec, arrayOfNulls(1))
+        s.startStreaming()
+        assertTrue(rec.closed.await(5, TimeUnit.SECONDS))
+        assertEquals(listOf(VibeVoiceClient.ERR_TRIAL_EXHAUSTED), rec.errors.toList())
+        Thread.sleep(800)
+        assertEquals(1, server.requestCount)
+        s.cancel()
+    }
+
+    @Test fun trialExhaustedAfterStopStillReachesOnError() {
+        val readyLatch = CountDownLatch(1)
+        val conn = object : FakeServer() {
+            override fun onStart(ws: WebSocket, o: JSONObject) {
+                ws.send("""{"type":"ready","protocol":2,"session":"s1","resume":{"token":"t1","resumed":false,"received_ms":0}}""")
+                readyLatch.countDown()
+            }
+            override fun onEnd(ws: WebSocket) {
+                ws.send("""{"type":"error","code":"trial_exhausted","message":"Trial exhausted","retryable":false}""")
+                ws.close(4002, "trial_exhausted")
+            }
+        }
+        server.enqueue(MockResponse().withWebSocketUpgrade(conn))
+        val rec = Recorder()
+        val s = session(rec, arrayOfNulls(1))
+        s.startStreaming()
+        assertTrue(readyLatch.await(5, TimeUnit.SECONDS))
+        s.stopStreaming()
+        assertTrue("session never closed", rec.closed.await(5, TimeUnit.SECONDS))
+        assertEquals(listOf(VibeVoiceClient.ERR_TRIAL_EXHAUSTED), rec.errors.toList())
+        s.cancel()
+    }
+
+    @Test fun rateLimitExceedingOutageWindowFailsImmediately() {
+        val conn = object : FakeServer() {
+            override fun onStart(ws: WebSocket, o: JSONObject) {
+                ws.send("""{"type":"error","code":"rate_limited","message":"Rate limit exceeded. Try again in 60s.","retryable":true,"retry_after_ms":60000}""")
+                ws.close(4029, "rate_limited")
+            }
+        }
+        server.enqueue(MockResponse().withWebSocketUpgrade(conn))
+        val rec = Recorder()
+        val s = session(rec, arrayOfNulls(1))
+        s.startStreaming()
+        assertTrue(rec.closed.await(5, TimeUnit.SECONDS))
+        assertEquals(listOf("Rate limit exceeded. Try again in 60s."), rec.errors.toList())
+        s.cancel()
+    }
+
 }

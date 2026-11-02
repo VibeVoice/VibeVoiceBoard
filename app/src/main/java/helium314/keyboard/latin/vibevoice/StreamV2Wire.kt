@@ -89,6 +89,10 @@ object StreamV2Wire {
     /** Codes that mean this server does not speak our v2 at all; the keyboard falls back to v1. */
     fun meansNoV2(code: String): Boolean = code == "bad_start" || code == "unknown_message"
 
+    /** HTTP status codes that mean the endpoint does not support v2 at all. */
+    fun meansNoV2Http(statusCode: Int): Boolean =
+        statusCode == 400 || statusCode == 404 || statusCode == 405 || statusCode == 426
+
     private fun JSONObject.optStringOrNull(key: String): String? =
         if (has(key) && !isNull(key)) optString(key) else null
 }

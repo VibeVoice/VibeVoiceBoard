@@ -133,6 +133,8 @@ class VibeVoiceStreamV2(
         capture?.stop()
         synchronized(lock) {
             gen++
+            ready = false
+            endSent = false
             val old = ws
             ws = null
             quietly { old?.cancel() }
@@ -145,7 +147,7 @@ class VibeVoiceStreamV2(
     private fun onAudio(buf: ByteArray, n: Int) = synchronized(lock) {
         for (i in 0 until n) ring[((totalRead + i) % RING_BYTES).toInt()] = buf[i]
         totalRead += n
-        if (ready) ws?.send(buf.toByteString(0, n))
+        if (ready && !endSent) ws?.send(buf.toByteString(0, n))
     }
 
     private fun onMicLost(code: String) {
@@ -184,8 +186,12 @@ class VibeVoiceStreamV2(
 
     private fun connect() = synchronized(lock) {
         if (finished.get()) return@synchronized
+        val old = ws
+        ws = null
+        quietly { old?.cancel() }
         val g = ++gen
         ready = false
+        endSent = false
         connectStartedAt = SystemClock.elapsedRealtime()
         VibeVoiceDebugLogger.log("[V2] connecting (attempt ${retry + 1}, resume=${token != null})")
         ws = VibeVoiceClient.sharedHttpClient.newWebSocket(Request.Builder().url(url).build(), Listener(g))
@@ -196,15 +202,16 @@ class VibeVoiceStreamV2(
         synchronized(lock) {
             if (finished.get()) return
             VibeVoiceDebugLogger.log("[V2] link lost: $why")
-            dropSocket()
+            dropSocketLocked()
             if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
+            scheduleReconnectLocked(BACKOFF_MS[minOf(retry, BACKOFF_MS.size - 1)])
         }
-        scheduleReconnect(BACKOFF_MS[minOf(retry, BACKOFF_MS.size - 1)])
     }
 
-    private fun dropSocket() {
+    private fun dropSocketLocked() {
         gen++
         ready = false
+        endSent = false
         val old = ws
         ws = null
         quietly { old?.cancel() }
@@ -219,14 +226,17 @@ class VibeVoiceStreamV2(
         try { block() } catch (e: Exception) { VibeVoiceDebugLogger.log("[V2] ignored on a dead socket: ${e.javaClass.simpleName}") }
     }
 
-    private fun scheduleReconnect(delayMs: Long) {
+    private fun scheduleReconnectLocked(delayMs: Long) {
         reconnectJob?.cancel()
         VibeVoiceDebugLogger.log("[V2] reconnect in ${delayMs}ms")
         reconnectJob = scope.launch {
             delay(delayMs)
             if (finished.get()) return@launch
-            retry++
-            connect()
+            synchronized(lock) {
+                if (finished.get()) return@synchronized
+                retry++
+                connect()
+            }
         }
     }
 
@@ -238,7 +248,7 @@ class VibeVoiceStreamV2(
             var giveUp = false
             var degraded: Boolean
             synchronized(lock) {
-                if (ws != null && ready && now - lastProgressAt > PROGRESS_DEAD_MS) {
+                if (ws != null && ready && !endSent && now - lastProgressAt > PROGRESS_DEAD_MS) {
                     lost = "no progress for ${now - lastProgressAt}ms"
                 } else if (ws != null && !ready && now - connectStartedAt > HANDSHAKE_RETRY_MS) {
                     lost = "no ready after ${now - connectStartedAt}ms"
@@ -300,17 +310,14 @@ class VibeVoiceStreamV2(
             endSent = false
             VibeVoiceDebugLogger.log("[V2] ready, new stream from ${from / BYTES_PER_MS}ms, session ${f.session}, language ${f.language}")
         }
-        // Resumed after the end went out: the server has it and replays what is missing, then ends.
-        // Sending audio or another end would be a protocol error (doc 48, a drop right after end).
-        if (!(stopRequested && endSent)) sendBuffered(socket, minOf(from, totalRead))
+        sendBuffered(socket, minOf(from, totalRead))
         ready = true
         if (stopRequested) sendEnd()
     }
 
     private fun onSegment(f: StreamV2Wire.Segment) {
-        var shown: String
-        val isNew: Boolean
         synchronized(lock) {
+            if (finished.get()) return
             if (!appliedIdx.add(f.idx)) {
                 VibeVoiceDebugLogger.log("[V2] segment idx=${f.idx} already applied, ignored")
                 return
@@ -318,8 +325,10 @@ class VibeVoiceStreamV2(
             if (f.idx > lastAppliedIdx + 1) VibeVoiceDebugLogger.log("[V2] [FRAME_GAP] idx ${lastAppliedIdx} -> ${f.idx}")
             lastAppliedIdx = maxOf(lastAppliedIdx, f.idx)
             if (f.ackMs >= 0 && streamOriginPos >= 0) ackedPos = streamOriginPos + f.ackMs * BYTES_PER_MS
-            lastSegmentAt = SystemClock.elapsedRealtime()
-            shown = f.text.trim()
+            val now = SystemClock.elapsedRealtime()
+            lastSegmentAt = now
+            lastProgressAt = now
+            var shown = f.text.trim()
             if (trimOverlapNext) {
                 trimOverlapNext = false
                 shown = VibeVoiceClient.trimLeadingOverlap(lastSegmentText, shown)
@@ -327,10 +336,10 @@ class VibeVoiceStreamV2(
             lastSegmentText = f.text
             VibeVoiceDebugLogger.log("[V2] segment idx=${f.idx} len=${f.text.length} ack=${f.ackMs}ms")
             if (shown.isBlank()) return
-            isNew = segmentsApplied > 0
+            val isNew = segmentsApplied > 0
             segmentsApplied++
+            listener.onPartial(shown, isNew)
         }
-        listener.onPartial(shown, isNew)
     }
 
     private fun onProgress(f: StreamV2Wire.Progress) = synchronized(lock) {
@@ -343,31 +352,36 @@ class VibeVoiceStreamV2(
 
     private fun onServerError(f: StreamV2Wire.Error) {
         VibeVoiceDebugLogger.log("[V2] error ${f.code} retryable=${f.retryable}: ${f.message}")
+        val retryAfter = f.retryAfterMs
+        val remainingOutage = synchronized(lock) {
+            val elapsed = if (outageStartedAt > 0) SystemClock.elapsedRealtime() - outageStartedAt else 0L
+            maxOf(0L, OUTAGE_WINDOW_MS - elapsed)
+        }
+        if (f.retryable && retryAfter != null && retryAfter > remainingOutage) {
+            fail(f.message.ifBlank { "Rate limited" })
+            return
+        }
         when {
-            f.retryable -> {
-                synchronized(lock) {
-                    dropSocket()
-                    if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
-                }
-                scheduleReconnect(f.retryAfterMs ?: BACKOFF_MS[minOf(retry, BACKOFF_MS.size - 1)])
+            f.retryable -> synchronized(lock) {
+                dropSocketLocked()
+                if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
+                scheduleReconnectLocked(f.retryAfterMs ?: BACKOFF_MS[minOf(retry, BACKOFF_MS.size - 1)])
             }
             StreamV2Wire.meansNoV2(f.code) -> {
                 v2Unavailable = true
-                fail("v2 refused (${f.code}), next dictation uses v1")
+                fail(VibeVoiceClient.ERR_LINK_LOST)
             }
             f.code == "trial_exhausted" -> fail(VibeVoiceClient.ERR_TRIAL_EXHAUSTED)
             else -> fail(f.message.ifBlank { f.code })
         }
     }
 
-    private fun onRestarting(f: StreamV2Wire.Restarting) {
+    private fun onRestarting(f: StreamV2Wire.Restarting) = synchronized(lock) {
         VibeVoiceDebugLogger.log("[V2] server restarting, new stream in ${f.reconnectAfterMs}ms")
-        synchronized(lock) {
-            token = null // a session does not survive a restart
-            dropSocket()
-            if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
-        }
-        scheduleReconnect(f.reconnectAfterMs)
+        token = null // a session does not survive a restart
+        dropSocketLocked()
+        if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
+        scheduleReconnectLocked(f.reconnectAfterMs)
     }
 
     private fun onEnd(f: StreamV2Wire.End) {
@@ -382,24 +396,33 @@ class VibeVoiceStreamV2(
     private fun finish() {
         if (!finished.compareAndSet(false, true)) return
         teardown()
-        if (stopRequested && !endReceived) {
-            val unanswered = (stoppedAt - lastSegmentAt).coerceAtLeast(0L)
-            VibeVoiceDebugLogger.log("[V2] [TAIL_MISSING] ended without end frame; ${unanswered}ms before the stop unanswered")
-            listener.onTailMissing(unanswered)
+        synchronized(lock) {
+            if (stopRequested && !endReceived) {
+                val unanswered = (stoppedAt - lastSegmentAt).coerceAtLeast(0L)
+                VibeVoiceDebugLogger.log("[V2] [TAIL_MISSING] ended without end frame; ${unanswered}ms before the stop unanswered")
+                listener.onTailMissing(unanswered)
+            }
+            if (segmentsApplied == 0) VibeVoiceDebugLogger.log("[V2] [EMPTY_RESULT] no segment in this session")
+            listener.onClosed()
         }
-        if (segmentsApplied == 0) VibeVoiceDebugLogger.log("[V2] [EMPTY_RESULT] no segment in this session")
-        listener.onClosed()
     }
 
     /** The session cannot go on. After a stop it is not an error: whatever arrived is kept. */
     private fun fail(error: String) {
-        if (stopRequested) {
+        val stopping = synchronized(lock) { stopRequested }
+        val isQuotaOrTrial = error == VibeVoiceClient.ERR_TRIAL_EXHAUSTED ||
+            error == "trial_exhausted" ||
+            error == "quota_exceeded"
+        val normalizedError = if (error == "trial_exhausted") VibeVoiceClient.ERR_TRIAL_EXHAUSTED else error
+        if (stopping && !isQuotaOrTrial) {
             finish()
             return
         }
         if (!finished.compareAndSet(false, true)) return
         teardown()
-        listener.onError(error)
+        synchronized(lock) {
+            listener.onError(normalizedError)
+        }
     }
 
     private fun teardown() {
@@ -410,6 +433,7 @@ class VibeVoiceStreamV2(
         synchronized(lock) {
             gen++
             ready = false
+            endSent = false
             val old = ws
             ws = null
             quietly { old?.close(1000, "done") }
@@ -418,6 +442,7 @@ class VibeVoiceStreamV2(
             isLinkDegraded = false
             listener.onLinkQualityChanged(false)
         }
+        scopeJob.cancel()
     }
 
     private inner class Listener(private val g: Int) : WebSocketListener() {
@@ -437,6 +462,9 @@ class VibeVoiceStreamV2(
             val f = try { StreamV2Wire.parse(text) } catch (e: Exception) {
                 VibeVoiceDebugLogger.log("[V2] unparsable frame: ${e.message}")
                 return
+            }
+            synchronized(lock) {
+                lastProgressAt = SystemClock.elapsedRealtime()
             }
             when (f) {
                 is StreamV2Wire.Ready -> onReady(f)
@@ -458,12 +486,12 @@ class VibeVoiceStreamV2(
             val code = response?.code
             // The upgrade was answered with an HTTP status: this server has no v2 here. A network
             // failure is the same on both protocols and is retried like any other.
-            if (!everReady && code != null && code != 429 && code in 400..599 && code != 503) {
+            if (!everReady && code != null && StreamV2Wire.meansNoV2Http(code)) {
                 v2Unavailable = true
-                fail("v2 endpoint answered HTTP $code, next dictation uses v1")
+                fail(VibeVoiceClient.ERR_LINK_LOST)
                 return
             }
-            linkLost("failure: ${t.message}")
+            linkLost("failure: ${t.message ?: ("HTTP " + code)}")
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -474,7 +502,9 @@ class VibeVoiceStreamV2(
             if (!current()) return
             VibeVoiceDebugLogger.log("WS Closed [V2]: $code / $reason")
             when {
-                code in 4000..4004 -> fail("closed by server ($code $reason)")
+                code == 4002 -> fail(VibeVoiceClient.ERR_TRIAL_EXHAUSTED)
+                StreamV2Wire.retryableClose(code) -> linkLost("closed $code")
+                code in 4000..4099 -> fail(reason.ifBlank { "closed by server ($code)" })
                 else -> linkLost("closed $code")
             }
         }
