@@ -42,6 +42,7 @@ import helium314.keyboard.compat.EditorInfoCompatUtils;
 import helium314.keyboard.compat.ImeCompat;
 import helium314.keyboard.latin.vibevoice.PermissionActivity;
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient;
+import helium314.keyboard.latin.vibevoice.VoiceSession;
 import helium314.keyboard.latin.vibevoice.VibeVoiceDebugLogger;
 import helium314.keyboard.latin.vibevoice.VibeVoiceListener;
 import helium314.keyboard.latin.vibevoice.VoiceOverlay;
@@ -1672,7 +1673,7 @@ public class LatinIME extends InputMethodService implements
         mKeyboardSwitcher.onEvent(event, getCurrentAutoCapsState(), getCurrentRecapitalizeState());
     }
 
-    private VibeVoiceClient mVibeVoiceClient;
+    private VoiceSession mVibeVoiceClient;
     private android.os.Handler mUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private String mVoiceComposingText = "";
     // Everything a session committed so far. Segments are committed to the field as they finalize,
@@ -1803,7 +1804,7 @@ public class LatinIME extends InputMethodService implements
         mVoiceTargetPackage = null;
         mVoiceTargetFieldId = 0;
         mVoiceStartedWithViewShown = false;
-        final VibeVoiceClient client = mVibeVoiceClient;
+        final VoiceSession client = mVibeVoiceClient;
         mVibeVoiceClient = null;
         if (client != null) client.cancel();
         VoiceOverlay.hide(this);
@@ -1827,7 +1828,7 @@ public class LatinIME extends InputMethodService implements
         // updateVoiceInputState(true) *before* it assigns mVibeVoiceClient, so a capture reads null
         // and silently stops the animation instead of starting it. The posted runnable is queued
         // behind the current UI message, so by the time it runs the field is set.
-        final VibeVoiceClient client = mVibeVoiceClient;
+        final VoiceSession client = mVibeVoiceClient;
         // Every path that ends a session -- the user stopping it, the microphone being silenced by
         // another app, recovery running out, the connection dying -- goes through
         // finishVoiceSession and lands here with mIsRecordingVoice false, so none of them can
@@ -1918,7 +1919,7 @@ public class LatinIME extends InputMethodService implements
                     .edit().putBoolean(Settings.PREF_VOICE_KEY_PULSE, false).apply();
             updateVoiceInputState(true);
 
-            mVibeVoiceClient = new VibeVoiceClient(apiKey, new VibeVoiceListener() {
+            mVibeVoiceClient = VoiceSession.create(this, apiKey, new VibeVoiceListener() {
                 @Override
                 public void onCommitComposing() {
                     mUiHandler.post(() -> {

@@ -67,7 +67,7 @@ class VoiceOverlay(context: Context) : View(context) {
     private val glowMargin = IntArray(1)
     private var glowBox = 0
 
-    private var levelSource: WeakReference<VibeVoiceClient>? = null
+    private var levelSource: WeakReference<VoiceSession>? = null
     private var level = 0f
     private var pulse = 0f
     private var running = false
@@ -128,7 +128,7 @@ class VoiceOverlay(context: Context) : View(context) {
     // Read per session: "Remove animations" in the accessibility settings holds the mark still.
     private var animationsEnabled = true
 
-    private fun start(client: VibeVoiceClient, onDismiss: StopRequest) {
+    private fun start(client: VoiceSession, onDismiss: StopRequest) {
         this.levelSource = WeakReference(client)
         this.onDismiss = onDismiss
         animationsEnabled = try {
@@ -648,7 +648,7 @@ class VoiceOverlay(context: Context) : View(context) {
 
         /** Puts the mark on screen. Does nothing, quietly, when the permission is not granted. */
         @JvmStatic
-        fun show(context: Context, client: VibeVoiceClient, onDismiss: StopRequest) {
+        fun show(context: Context, client: VoiceSession, onDismiss: StopRequest) {
             if (current != null) return
             if (!isAllowed(context)) {
                 VibeVoiceDebugLogger.log("Overlay not shown: drawing over other apps is not allowed")

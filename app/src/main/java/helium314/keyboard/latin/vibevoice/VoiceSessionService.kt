@@ -41,7 +41,7 @@ import helium314.keyboard.latin.R
  */
 class VoiceSessionService : Service() {
 
-    private var client: VibeVoiceClient? = null
+    private var client: VoiceSession? = null
     private var onStopRequested: Runnable? = null
 
     private val notificationHandler = Handler(Looper.getMainLooper())
@@ -238,7 +238,7 @@ class VoiceSessionService : Service() {
          * window hides, which would be too late.
          */
         @JvmStatic
-        fun attach(context: Context, session: VibeVoiceClient, onStop: Runnable) {
+        fun attach(context: Context, session: VoiceSession, onStop: Runnable) {
             val intent = Intent(context.applicationContext, VoiceSessionService::class.java)
             try {
                 ContextCompat.startForegroundService(context.applicationContext, intent)
@@ -316,7 +316,7 @@ class VoiceSessionService : Service() {
         /** Guards the handover: pendingClient, pendingOnStop and the instance's own references. */
         private val pendingLock = Any()
 
-        @Volatile private var pendingClient: VibeVoiceClient? = null
+        @Volatile private var pendingClient: VoiceSession? = null
         @Volatile private var pendingOnStop: Runnable? = null
 
         /**
