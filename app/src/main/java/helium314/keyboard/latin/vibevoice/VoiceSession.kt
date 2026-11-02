@@ -44,7 +44,7 @@ interface VoiceSession {
         fun create(context: Context, apiKey: String, listener: VibeVoiceListener): VoiceSession {
             val v2 = useV2(context)
             VibeVoiceDebugLogger.log("Session protocol: ${if (v2) "v2" else "v1"}")
-            return if (v2) VibeVoiceStreamV2(apiKey, BuildConfig.VERSION_NAME, listener)
+            return if (v2) VibeVoiceStreamV2(apiKey, BuildConfig.VERSION_NAME, listener, linked = VibeVoiceClient.isLinked(context))
             else VibeVoiceClient(apiKey, listener)
         }
     }

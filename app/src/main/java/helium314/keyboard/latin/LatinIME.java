@@ -2472,7 +2472,10 @@ public class LatinIME extends InputMethodService implements
         mVoiceSessionText.setLength(0);
         mVoiceFinishToClipboard = false;
         mVoiceFinishDiscard = false;
-        mVibeVoiceClient.stopStreaming();
+        // cancel, not stop: the session is over here. A stop is a no-op on a session that is
+        // already stopping, which left a v2 session reconnecting -- and resending buffered audio
+        // the keyboard would never show -- for up to a minute after a second tap.
+        mVibeVoiceClient.cancel();
         mVibeVoiceClient = null;
         mIsStoppingVoice = false;
         VoiceOverlay.hide(this);
