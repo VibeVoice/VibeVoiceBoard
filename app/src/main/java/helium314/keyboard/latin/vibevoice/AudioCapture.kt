@@ -35,6 +35,7 @@ class AudioCapture(
     private val onAudio: (ByteArray, Int) -> Unit,
     private val onMicLost: (String) -> Unit,
 ) : AudioSource {
+    private val lock = Any()
     @Volatile private var audioRecord: AudioRecord? = null
     @Volatile private var job: Job? = null
     @Volatile private var running = false
@@ -54,25 +55,40 @@ class AudioCapture(
             return false
         }
         bufferSize = minBuf * 4
+        synchronized(lock) {
+            running = true
+        }
         if (!initAudioRecord()) {
-            release()
+            synchronized(lock) {
+                running = false
+                releaseLocked()
+            }
             return false
         }
-        running = true
         currentLevel = 0f
-        job = scope.launch { loop() }
+        synchronized(lock) {
+            if (!running) {
+                releaseLocked()
+                return false
+            }
+            job = scope.launch { loop() }
+        }
         return true
     }
 
     override fun stop() {
-        running = false
-        job?.cancel()
-        job = null
-        release()
-        currentLevel = 0f
+        val oldJob: Job?
+        synchronized(lock) {
+            running = false
+            oldJob = job
+            job = null
+            releaseLocked()
+            currentLevel = 0f
+        }
+        oldJob?.cancel()
     }
 
-    private fun release() {
+    private fun releaseLocked() {
         try { audioRecord?.stop() } catch (_: Exception) {}
         try { audioRecord?.release() } catch (_: Exception) {}
         audioRecord = null
@@ -80,10 +96,14 @@ class AudioCapture(
 
     @SuppressLint("MissingPermission")
     private fun initAudioRecord(): Boolean {
-        try {
-            audioRecord?.release()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error releasing old AudioRecord", e)
+        synchronized(lock) {
+            if (!running) return false
+            try {
+                audioRecord?.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing old AudioRecord", e)
+            }
+            audioRecord = null
         }
         try {
             val record = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -104,15 +124,25 @@ class AudioCapture(
             } else {
                 AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, sampleRate, channelConfig, audioFormat, bufferSize)
             }
-            audioRecord = record
             if (record.state != AudioRecord.STATE_INITIALIZED) {
                 VibeVoiceDebugLogger.log("AudioRecord init failed: state=${record.state}")
+                try { record.release() } catch (_: Exception) {}
                 return false
             }
             record.startRecording()
             if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                 VibeVoiceDebugLogger.log("AudioRecord start failed: recordingState=${record.recordingState}")
+                try { record.stop() } catch (_: Exception) {}
+                try { record.release() } catch (_: Exception) {}
                 return false
+            }
+            synchronized(lock) {
+                if (!running) {
+                    try { record.stop() } catch (_: Exception) {}
+                    try { record.release() } catch (_: Exception) {}
+                    return false
+                }
+                audioRecord = record
             }
             VibeVoiceDebugLogger.log("AudioRecord successfully initialized and started")
             return true
