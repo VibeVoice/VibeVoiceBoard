@@ -208,6 +208,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
     testImplementation("org.mockito:mockito-core:5.23.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("androidx.test:runner:1.7.0")
     testImplementation("androidx.test:core:1.7.0")
 }

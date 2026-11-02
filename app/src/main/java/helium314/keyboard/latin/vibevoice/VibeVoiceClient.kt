@@ -79,7 +79,7 @@ interface VibeVoiceListener {
 class VibeVoiceClient(
     private val apiKey: String,
     private val listener: VibeVoiceListener
-) {
+) : VoiceSession {
     @Volatile private var webSocket: WebSocket? = null
     @Volatile private var isStreaming = false
     // Set by stopStreaming only: tells a dropped connection after the user's stop apart from a failure.
@@ -105,7 +105,7 @@ class VibeVoiceClient(
      * Handler, because the only consumer is an animation that paints itself and would gain nothing
      * from being woken on the UI thread thirty times a second.
      */
-    @Volatile var currentLevel = 0f
+    @Volatile override var currentLevel = 0f
         private set
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
@@ -154,7 +154,7 @@ class VibeVoiceClient(
      * is a normal thing to drive through, and the session survives it as long as the unsent audio
      * still fits in the rolling buffer.
      */
-    @Volatile var isLinkDegraded = false
+    @Volatile override var isLinkDegraded = false
         private set
     @Volatile private var isWsOpen = false
     @Volatile private var pendingEndStream = false
@@ -752,7 +752,7 @@ class VibeVoiceClient(
     }
 
     @SuppressLint("MissingPermission")
-    fun startStreaming() {
+    override fun startStreaming() {
         if (isStreaming) return
         isStreaming = true
         isLinkDegraded = false
@@ -1061,7 +1061,7 @@ class VibeVoiceClient(
         ws.cancel()
     }
 
-    fun stopStreaming() {
+    override fun stopStreaming() {
         if (!isStreaming) return
         stopRequested = true
         stoppedAt = SystemClock.elapsedRealtime()
@@ -1148,7 +1148,7 @@ class VibeVoiceClient(
         listener.onClosed()
     }
 
-    fun cancel() {
+    override fun cancel() {
         stopStreaming()
         // stopStreaming leaves the socket to a 3 s backstop that runs in the scope cancelled below,
         // so an aborted session never closed its connection at all.

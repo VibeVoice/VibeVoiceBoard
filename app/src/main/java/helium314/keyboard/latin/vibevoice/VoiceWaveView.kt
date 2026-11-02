@@ -45,7 +45,7 @@ class VoiceWaveView @JvmOverloads constructor(
      * instance, for as long as this view held it -- so any path that failed to call [stop] would
      * turn a stuck animation into a leaked service. Weak, the worst case is a still line.
      */
-    @Volatile private var client: WeakReference<VibeVoiceClient>? = null
+    @Volatile private var client: WeakReference<VoiceSession>? = null
 
     /** The wave colour, resolved once per session rather than per frame. */
     private var baseColor = VoiceGlow.FALLBACK_ACCENT
@@ -96,7 +96,7 @@ class VoiceWaveView @JvmOverloads constructor(
      * Starts the animation. [source] is polled once per frame rather than pushed, so the capture
      * coroutine never has to touch the UI thread just to move a wave.
      */
-    fun start(source: VibeVoiceClient) {
+    fun start(source: VoiceSession) {
         client = WeakReference(source)
         demo = false
         readTuning()
