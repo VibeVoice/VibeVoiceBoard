@@ -40,7 +40,7 @@ android {
 
     defaultConfig {
         applicationId = "org.vibevoice.board"
-        minSdk = 21
+        minSdk = 24 // Play's automatic protection refuses bundles below 24
         targetSdk = 37
         versionCode = computedVersionCode
         versionName = versionString
