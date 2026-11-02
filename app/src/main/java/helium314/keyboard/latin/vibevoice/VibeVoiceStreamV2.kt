@@ -248,7 +248,7 @@ class VibeVoiceStreamV2(
             var giveUp = false
             var degraded: Boolean
             synchronized(lock) {
-                if (ws != null && ready && !endSent && now - lastProgressAt > PROGRESS_DEAD_MS) {
+                if (ws != null && ready && now - lastProgressAt > (if (endSent) END_SILENCE_MS else PROGRESS_DEAD_MS)) {
                     lost = "no progress for ${now - lastProgressAt}ms"
                 } else if (ws != null && !ready && now - connectStartedAt > HANDSHAKE_RETRY_MS) {
                     lost = "no ready after ${now - connectStartedAt}ms"
@@ -521,6 +521,12 @@ class VibeVoiceStreamV2(
         private const val WATCHDOG_MS = 250L
         /** Doc 48: no progress for 3 s means the link is dead. */
         private const val PROGRESS_DEAD_MS = 3_000L
+        /**
+         * After `end` the server stops its progress ticker and spends up to 10 s on the last
+         * stretch, so silence is normal there. A socket silent for longer than that is dead: drop
+         * it and resume, which makes the server replay what it finished.
+         */
+        private const val END_SILENCE_MS = 11_000L
         private const val HANDSHAKE_RETRY_MS = 10_000L
         private const val DEGRADED_AFTER_MS = 2_000L
         private const val HANDSHAKE_DEGRADED_MS = 8_000L
