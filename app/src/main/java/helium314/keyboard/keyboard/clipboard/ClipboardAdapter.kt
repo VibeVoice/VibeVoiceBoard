@@ -52,6 +52,7 @@ class ClipboardAdapter(
         private val pinnedIconView: ImageView
         private val contentTextView: TextView
         private val contentImageView: ImageView
+        private var imageLoadJob: kotlinx.coroutines.Job? = null
 
         init {
             view.apply {
@@ -78,10 +79,11 @@ class ClipboardAdapter(
         }
 
         fun setContent(historyEntry: ClipboardHistoryEntry?) {
+            imageLoadJob?.cancel()
             if (historyEntry == null) return
             itemView.tag = historyEntry.id
             if (historyEntry.filename != null) {
-                historyEntry.setImageAndDescription(contentImageView, contentTextView)
+                imageLoadJob = historyEntry.setImageAndDescription(contentImageView, contentTextView)
             } else {
                 contentTextView.text = historyEntry.text?.take(1000) // truncate displayed text for performance reasons
             }

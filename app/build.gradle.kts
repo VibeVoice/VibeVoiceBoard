@@ -1,4 +1,6 @@
 import com.android.build.api.variant.ApplicationVariant
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -6,20 +8,59 @@ plugins {
     kotlin("plugin.compose") version "2.4.0"
 }
 
+// VERSION is the name of the next release, and only a person changes it: it says what Play users
+// will see, and for them everything between two releases is one step (1.0.0 -> 1.0.1), however many
+// commits it took. It used to be bumped by a hook on every commit, which had the integration branch
+// at 1.1.7 before 1.0.1 was ever released.
+val versionFilePath = rootProject.file("VERSION")
+val versionString = if (versionFilePath.exists()) versionFilePath.readText().trim() else "1.0.0"
+// VERSION_CODE is the ordering number, and the pre-commit hook bumps it on every commit. Two facts
+// shape it. Play consumes a code permanently -- "Version code N has already been used" is what a
+// rebuild of the same release gets, even after the release carrying it was discarded as a draft --
+// and a code may never go down, with 403001 already seen from the pre-release 4.x iterations. A
+// per-commit counter satisfies both, and gives every debug build its own code, so an installer no
+// longer reports a newer build as "already installed". Gaps between released codes are expected
+// and harmless: nobody sees the code, and many apps use a CI build number the same way.
+val versionCodeFile = rootProject.file("VERSION_CODE")
+val computedVersionCode = check(versionCodeFile.exists()) { "VERSION_CODE is missing at the repo root; see AGENTS.md, Versioning" }
+    .let { versionCodeFile.readText().trim().toInt() }
+
+// Release signing material. Never committed: put it in keystore.properties (gitignored) or pass it
+// through the environment on CI. When it is absent the release variants stay unsigned, exactly as
+// they were before, so debug workflows are unaffected.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun signingValue(property: String, environment: String): String? =
+    keystoreProperties.getProperty(property) ?: System.getenv(environment)
+
 android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "helium314.keyboard"
+        applicationId = "org.vibevoice.board"
         minSdk = 21
         targetSdk = 37
-        versionCode = 4101
-        versionName = "4.1"
+        versionCode = computedVersionCode
+        versionName = versionString
         ndk {
             abiFilters.clear()
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
         }
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+    }
+
+    signingConfigs {
+        val storePath = signingValue("storeFile", "VVB_KEYSTORE_FILE")
+        if (storePath != null) {
+            create("release") {
+                storeFile = file(storePath)
+                storePassword = signingValue("storePassword", "VVB_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "VVB_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "VVB_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -28,12 +69,17 @@ android {
             isShrinkResources = false
             isDebuggable = false
             isJniDebuggable = false
+            signingConfig = signingConfigs.findByName("release")
         }
         create("nouserlib") { // same as release, but does not allow the user to provide a library
             isMinifyEnabled = true
             isShrinkResources = false
             isDebuggable = false
             isJniDebuggable = false
+            // This is the variant to ship on Google Play: JniUtils skips the user-supplied
+            // libjni_latinime.so here, and loading executable code from outside the APK is not
+            // allowed under the Play "Device and Network Abuse" policy.
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             // "normal" debug has minify for smaller APK to fit the GitHub 25 MB limit when zipped
@@ -41,6 +87,8 @@ android {
             isMinifyEnabled = true
             isJniDebuggable = false
             applicationIdSuffix = ".debug"
+            // Which commit is on the phone: every debug build of 1.0.1 carries the same name otherwise.
+            versionNameSuffix = "-dev.$computedVersionCode"
         }
         create("runTests") { // build variant for running tests on CI that skips tests known to fail
             isMinifyEnabled = false
@@ -52,8 +100,11 @@ android {
             isJniDebuggable = false
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev.$computedVersionCode"
         }
-
+        // archivesBaseName went away with the Gradle upgrade that came in with upstream; archivesName
+        // is its replacement and is a Property, so it is set rather than assigned.
+        base.archivesName.set("VibeVoiceKeyboard_$versionString-$computedVersionCode")
         androidComponents.onVariants { variant: ApplicationVariant ->
             if (variant.buildType == "debug") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
@@ -65,7 +116,7 @@ android {
             }
             variant.outputs.forEach { output ->
                 if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
-                    output.outputFileName = "HeliBoard_${defaultConfig.versionName}-${variant.buildType}.apk"
+                    output.outputFileName = "VibeVoiceKeyboard_$versionString-$computedVersionCode-${variant.buildType}.apk"
                 }
             }
         }
@@ -102,6 +153,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    kotlin {
+        target {
+            compilerOptions {
+                jvmTarget.set(JvmTarget.JVM_17)
+            }
+        }
+    }
+
     // see https://github.com/HeliBorg/HeliBoard/issues/477
     dependenciesInfo {
         includeInApk = false
@@ -111,6 +170,9 @@ android {
     namespace = "helium314.keyboard.latin"
     lint {
         abortOnError = true
+        // Locale resources are managed by Weblate upstream and must not be hand-edited here, so an
+        // incomplete translation set is the normal state of this tree rather than a build error.
+        disable += "MissingTranslation"
     }
 }
 
@@ -134,6 +196,11 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("sh.calvin.reorderable:reorderable:3.1.0") // for easier re-ordering
     implementation("com.github.skydoves:colorpicker-compose:1.1.3") // for user-defined colors, newer requires minSdk 23
+
+    // vibevoice
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // test
     testImplementation(kotlin("test"))

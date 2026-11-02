@@ -1,0 +1,53 @@
+06 — Die Bildschirmaufnahme der beiden Auslöser
+===============================================
+
+WOFÜR
+-----
+Zwei Ausgaben aus **einer** Aufnahme:
+
+* eine kurze Endlosschleife im Einrichtungs-Assistenten, die zeigt, wie man startet,
+* das Promo-Video im Play Store (das muss ein YouTube-Link sein — Play nimmt kein GIF).
+
+Deshalb wird einmal aufgenommen und nicht zweimal.
+
+AUFBAU
+------
+Zwei Sequenzen, nacheinander in derselben Aufnahme:
+
+**Sequenz A — der Tipp aufs Logo (zuerst, weil einfacher).**
+1. Textfeld offen, Tastatur sichtbar, nichts läuft.
+2. Eine Sekunde ruhig stehen lassen.
+3. Oben rechts auf das V tippen.
+4. Die Wellen gehen an, ein Satz wird gesprochen, Text erscheint.
+5. Nochmal aufs V tippen, es endet.
+
+**Sequenz B — die Leertaste halten.**
+1. Wieder Ruhe, Tastatur sichtbar.
+2. Leertaste lang drücken, bis das Diktat startet.
+3. Loslassen und weitersprechen — das ist die Stelle, die niemand von allein errät.
+4. Leertaste antippen, es endet.
+
+Zwischen A und B zwei Sekunden Pause lassen, damit ich sauber schneiden kann.
+
+NICHT IM BILD
+-------------
+* Keine hektische Bedienung. Langsam, fast übertrieben deutlich — es ist eine Anleitung.
+* Kein Wechsel der App mitten in der Aufnahme.
+* Keine private Konversation als Hintergrund; ein leeres Notizfeld reicht völlig.
+
+AUFNAHME
+--------
+* Android-Bildschirmaufnahme, ohne Ton (den Ton braucht keine der beiden Ausgaben).
+* **Berührungen anzeigen einschalten**: Entwickleroptionen → „Fingertipps anzeigen".
+  Ohne das sieht man im Video nicht, wo gedrückt wird, und die ganze Aufnahme ist wertlos.
+* Insgesamt unter 30 Sekunden.
+
+DANACH
+------
+Ich schneide daraus:
+* zwei kurze Schleifen für den Assistenten (je 3–4 Sekunden, ohne Ton, endlos),
+* einen Schnitt für den Store mit Texteinblendungen.
+
+Wenn wir das Video im Store einsetzen, brauchen wir zusätzlich die Feature-Grafik
+1024 × 500 — die baue ich aus Wortmarke, Slogan und Wellen, dafür brauche ich nichts
+von dir.

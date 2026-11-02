@@ -1,0 +1,5 @@
+First release.
+
+A full Android keyboard with dictation built in: tap the mark in the toolbar or hold the space bar, and what you say appears in the field you were already in — punctuation and casing included. Dictation keeps running after the keyboard closes, so you can start a thought in one app and finish it in another.
+
+Everything else about the keyboard works offline, with no account.

@@ -18,7 +18,9 @@ import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.latin.utils.getActivity
 import helium314.keyboard.settings.Setting
+import helium314.keyboard.settings.SettingsActivity
 import helium314.keyboard.settings.preferences.Preference
 import helium314.keyboard.settings.SearchSettingsScreen
 import helium314.keyboard.settings.preferences.SwitchPreference
@@ -36,6 +38,7 @@ fun DebugScreen(
     val settings = createDebugSettings(ctx)
     val items = listOfNotNull(
         if (!BuildConfig.DEBUG) DebugSettings.PREF_SHOW_DEBUG_SETTINGS else null,
+        DebugSettings.PREF_OPEN_SETUP_WIZARD,
         DebugSettings.PREF_DEBUG_MODE,
         DebugSettings.PREF_SHOW_SUGGESTION_INFOS,
         DebugSettings.PREF_FORCE_NON_DISTINCT_MULTITOUCH,
@@ -68,6 +71,15 @@ fun DebugScreen(
 private var needsRestart = false
 
 private fun createDebugSettings(context: Context) = listOf(
+    Setting(context, DebugSettings.PREF_OPEN_SETUP_WIZARD, R.string.debug_open_setup_wizard) { setting ->
+        val ctx = LocalContext.current
+        Preference(
+            name = setting.title,
+            onClick = {
+                (ctx.getActivity() as? SettingsActivity)?.openSetupWizard()
+            }
+        )
+    },
     Setting(context, DebugSettings.PREF_SHOW_DEBUG_SETTINGS, R.string.prefs_show_debug_settings) { setting ->
         val prefs = LocalContext.current.prefs()
         SwitchPreference(setting, false)
