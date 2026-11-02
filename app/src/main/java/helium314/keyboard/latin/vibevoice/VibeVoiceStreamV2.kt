@@ -113,10 +113,15 @@ class VibeVoiceStreamV2(
     override fun stopStreaming() {
         if (!streaming) return
         streaming = false
-        stopRequested = true
-        capture?.stop()
+        // The time first, then the flag, both under the lock the watchdog reads them under: a
+        // watchdog tick that saw the flag with stoppedAt still 0 took the stop for ages old and
+        // finished the session at once, dropping the text the server was about to send.
         synchronized(lock) {
             stoppedAt = SystemClock.elapsedRealtime()
+            stopRequested = true
+        }
+        capture?.stop()
+        synchronized(lock) {
             VibeVoiceDebugLogger.log("[V2] stop, captured ${totalRead / BYTES_PER_MS}ms")
             if (ready) sendEnd() else VibeVoiceDebugLogger.log("[V2] not ready, end deferred until ready")
         }
@@ -246,13 +251,14 @@ class VibeVoiceStreamV2(
                 isLinkDegraded = degraded
                 listener.onLinkQualityChanged(degraded)
             }
-            if (stopRequested && !endReceived) {
-                val sinceProgress = now - maxOf(stoppedAt, lastProgressAt)
-                if (sinceProgress > STOP_WAIT_MS || now - stoppedAt > STOP_HARD_LIMIT_MS) {
-                    VibeVoiceDebugLogger.log("[V2] no end ${now - stoppedAt}ms after the stop")
-                    finish()
-                    return
-                }
+            val stopTimedOut = synchronized(lock) {
+                stopRequested && !endReceived && stoppedAt > 0 &&
+                    (now - maxOf(stoppedAt, lastProgressAt) > STOP_WAIT_MS || now - stoppedAt > STOP_HARD_LIMIT_MS)
+            }
+            if (stopTimedOut) {
+                VibeVoiceDebugLogger.log("[V2] no end ${now - stoppedAt}ms after the stop")
+                finish()
+                return
             }
             if (giveUp) {
                 VibeVoiceDebugLogger.log("[V2] outage longer than ${OUTAGE_WINDOW_MS}ms, giving up")
