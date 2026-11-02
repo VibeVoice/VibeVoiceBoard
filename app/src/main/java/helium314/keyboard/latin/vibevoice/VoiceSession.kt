@@ -24,10 +24,10 @@ interface VoiceSession {
         const val PREF_STREAM_PROTOCOL = "vibevoice_stream_protocol"
 
         /**
-         * v2 is the default in debug builds, where it is being tested, and stays off in release
-         * builds until it has run on the phone. A v2 endpoint that answered with an HTTP error or
-         * refused our start frame turns v2 off for the rest of the process (see
-         * [VibeVoiceStreamV2.v2Unavailable]), so the next dictation works on v1.
+         * v2 is the default in every build since 1.0.4; the preference can still force either.
+         * A v2 endpoint that does not exist (HTTP 400/404/405/426) or refuses our start frame
+         * turns v2 off for the rest of the process (see [VibeVoiceStreamV2.v2Unavailable]), so
+         * the next dictation works on v1.
          */
         @JvmStatic
         fun useV2(context: Context): Boolean {
@@ -36,7 +36,7 @@ interface VoiceSession {
             return when (pref) {
                 "v1" -> false
                 "v2" -> true
-                else -> BuildConfig.DEBUG
+                else -> true
             }
         }
 
