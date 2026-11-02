@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -188,13 +189,14 @@ class VibeVoiceClient(
      * ignored from then on.
      */
     @Volatile private var resumingAfterStop = false
-    @Volatile private var resumeAfterStopTried = false
+    private val resumeAfterStopTried = AtomicBoolean(false)
     /** The first piece of a stream that resent audio from a guessed offset may repeat a few words. */
     @Volatile private var trimOverlapNext = false
+    /** When END_STREAM went on the wire, including deferred END_STREAM; 0 until sent. */
+    @Volatile private var endStreamSentAt = 0L
 
-    private val preOpenBuffer = ArrayDeque<okio.ByteString>()
-    private var preOpenBufferSizeBytes = 0
-    private val maxPreOpenBufferBytes = MAX_PRE_OPEN_BUFFER_SECONDS * 16000 * 2
+    // Guards socket send state and audio handoff
+    private val preOpenBuffer = Any()
 
     /** Appends [length] bytes and advances [totalRead]; the two must happen atomically, because the
      *  reader derives its start offset from totalRead. */
@@ -259,15 +261,22 @@ class VibeVoiceClient(
      * Returns false when there is nothing to go back for, and the caller ends the session as before.
      */
     private fun tryResumeAfterStop(reason: String): Boolean {
-        if (!stopRequested || endMarkerReceived || resumeAfterStopTried) return false
-        if (resumeToken == null) return false
-        resumeAfterStopTried = true
+        if (!stopRequested || endMarkerReceived) return false
+        // Without a token there is nothing to resume, except when no socket ever reached the server:
+        // then the whole stream is still in the rolling buffer, and a fresh connection sends it from
+        // the first sample and ends it (resendPlan, "nothing delivered yet"). Stopping during a
+        // dead spot at the very start used to lose the dictation outright.
+        if (resumeToken == null && everOpened) return false
+        if (!resumeAfterStopTried.compareAndSet(false, true)) return false
         resumingAfterStop = true
         VibeVoiceDebugLogger.log("Stopped without a final ($reason); resuming to collect it")
         val old = webSocket
+        val hasToken = resumeToken != null
         synchronized(preOpenBuffer) {
             isWsOpen = false
-            isReconnecting = true
+            // When no socket ever opened, the new socket takes the first-connection path in onOpen
+            // to send from the rolling buffer followed by deferred END_STREAM.
+            isReconnecting = hasToken
             awaitingAuthReply = false
         }
         // Replaced first, so the old socket's own close is recognised as stale and ignored.
@@ -379,16 +388,21 @@ class VibeVoiceClient(
             while (isActive && isStreaming) {
                 delay(LINK_CHECK_INTERVAL_MS)
                 if (!isStreaming) break
-                // Nothing ever answered. Not a degraded link but a session that never began, and
-                // waiting out the full reconnect window means half a minute of talking to nobody.
-                if (!everOpened && SystemClock.elapsedRealtime() - startedAt > HANDSHAKE_TIMEOUT_MS) {
-                    VibeVoiceDebugLogger.log("No connection within ${HANDSHAKE_TIMEOUT_MS}ms; giving up")
+                // Nothing has answered yet. This used to end the session at eight seconds and
+                // throw the audio away, although the rolling buffer held all of it and the next
+                // attempt would have resent it from the first sample (bug report #10866, a dead
+                // spot of a few seconds). Now the slow start counts as a degraded link -- the
+                // user sees it -- and only the reconnect window ends a session that never began.
+                val elapsed = SystemClock.elapsedRealtime() - startedAt
+                if (!everOpened && elapsed > RECONNECT_WINDOW_MS) {
+                    VibeVoiceDebugLogger.log("No connection within ${RECONNECT_WINDOW_MS}ms; giving up")
                     giveUp("handshake timeout")
                     break
                 }
+                val slowStart = !everOpened && elapsed > HANDSHAKE_TIMEOUT_MS
                 val ws = webSocket
                 val queued = try { ws?.queueSize() ?: 0L } catch (_: Exception) { 0L }
-                val bad = isReconnecting || (isWsOpen && queued > LINK_QUEUE_STALL_BYTES)
+                val bad = isReconnecting || slowStart || (isWsOpen && queued > LINK_QUEUE_STALL_BYTES)
                 if (bad && outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
                 if (bad != isLinkDegraded) {
                     VibeVoiceDebugLogger.log("Link ${if (bad) "degraded" else "recovered"}: queued=$queued reconnecting=$isReconnecting")
@@ -436,8 +450,6 @@ class VibeVoiceClient(
                 awaitingAuthReply = false
                 isReconnecting = false
                 pendingEndStream = false
-                preOpenBuffer.clear()
-                preOpenBufferSizeBytes = 0
             }
             VibeVoiceDebugLogger.log("Resumed replay-only after idx $lastAppliedIdx; collecting the tail")
             return
@@ -477,9 +489,6 @@ class VibeVoiceClient(
                     offset = end
                 }
             }
-            // Everything queued meanwhile is inside the resend.
-            preOpenBuffer.clear()
-            preOpenBufferSizeBytes = 0
             isWsOpen = true
             isReconnecting = false
             retryCount = 0
@@ -497,6 +506,7 @@ class VibeVoiceClient(
     private fun sendDeferredEndStream(webSocket: WebSocket) {
         if (pendingEndStream) {
             pendingEndStream = false
+            endStreamSentAt = SystemClock.elapsedRealtime()
             VibeVoiceDebugLogger.log("Sending deferred END_STREAM after auth")
             webSocket.send("END_STREAM")
         }
@@ -552,15 +562,24 @@ class VibeVoiceClient(
                         awaitingAuthReply = true
                         armAuthReplyTimeout(webSocket)
                     } else {
-                        // The server's clock starts at the first byte it receives, which is the
-                        // oldest frame still queued.
-                        streamOriginPos = totalRead - preOpenBufferSizeBytes
+                        // From the rolling buffer, not from preOpenBuffer. The pre-open queue keeps
+                        // five seconds, and a first connection on a poor link takes longer than that:
+                        // the queue had dropped the opening words before the socket was there to take
+                        // them, while the rolling buffer still held all of it. Everything since the
+                        // first sample, up to its thirty seconds, in frames the usual size.
+                        val data = readUnconfirmedAudio(0L)
+                        // The server's clock starts at the first byte it receives.
+                        streamOriginPos = totalRead - (data?.size ?: 0)
                         isWsOpen = true
-                        for (bytes in preOpenBuffer) {
-                            webSocket.send(bytes)
+                        if (data != null) {
+                            VibeVoiceDebugLogger.log("First connection after ${data.size / BYTES_PER_MS}ms of audio; sending it from the rolling buffer")
+                            var offset = 0
+                            while (offset < data.size) {
+                                val end = minOf(offset + FLUSH_CHUNK_BYTES, data.size)
+                                webSocket.send(data.toByteString(offset, end - offset))
+                                offset = end
+                            }
                         }
-                        preOpenBuffer.clear()
-                        preOpenBufferSizeBytes = 0
                         sendDeferredEndStream(webSocket)
                     }
                 }
@@ -762,12 +781,8 @@ class VibeVoiceClient(
         lastPiecePos = -1L
         trimOverlapNext = false
         resumingAfterStop = false
-        resumeAfterStopTried = false
-
-        synchronized(preOpenBuffer) {
-            preOpenBuffer.clear()
-            preOpenBufferSizeBytes = 0
-        }
+        resumeAfterStopTried.set(false)
+        endStreamSentAt = 0L
 
         connectWebSocket()
 
@@ -992,12 +1007,6 @@ class VibeVoiceClient(
                         writeToRollingBuffer(buffer, 0, read) // also advances totalRead
                         if (isWsOpen) {
                             webSocket?.send(bytesToSend)
-                        } else {
-                            preOpenBuffer.addLast(bytesToSend)
-                            preOpenBufferSizeBytes += bytesToSend.size
-                            while (preOpenBufferSizeBytes > maxPreOpenBufferBytes && preOpenBuffer.isNotEmpty()) {
-                                preOpenBufferSizeBytes -= preOpenBuffer.removeFirst().size
-                            }
                         }
                     }
                     val now = System.currentTimeMillis()
@@ -1065,6 +1074,7 @@ class VibeVoiceClient(
         // happens whenever a session is stopped within the first few hundred milliseconds.
         synchronized(preOpenBuffer) {
             if (isWsOpen) {
+                endStreamSentAt = SystemClock.elapsedRealtime()
                 ws?.send("END_STREAM")
             } else {
                 VibeVoiceDebugLogger.log("Socket not open yet — deferring END_STREAM until after auth")
@@ -1072,8 +1082,30 @@ class VibeVoiceClient(
             }
         }
         closureJob = scope.launch {
-            VibeVoiceDebugLogger.log("Closing WS in 3.0s backstop timer started. Total bytes read: $totalRead")
-            delay(3000)
+            VibeVoiceDebugLogger.log("Closing WS backstop timer started. Total bytes read: $totalRead")
+            // The backstop counts from when END_STREAM actually reached the wire, including deferred
+            // END_STREAM on a socket that took a few seconds to connect.
+            while (isActive && !endMarkerReceived) {
+                val sentAt = endStreamSentAt
+                if (sentAt == 0L) {
+                    delay(200)
+                    val sinceStop = SystemClock.elapsedRealtime() - stoppedAt
+                    // Only a socket that is still connecting can carry the deferred END_STREAM. Stopped
+                    // during a reconnect backoff, the pending attempt is cancelled and nothing will
+                    // ever send it: waiting would hold the keyboard in "finishing" for the whole
+                    // window. Then three seconds as before, and the resume below goes back for it.
+                    val connecting = webSocket != null && !isReconnecting
+                    if (!connecting && sinceStop > 3000L) break
+                    if (sinceStop > RECONNECT_WINDOW_MS) break
+                    continue
+                }
+                val remaining = 3000L - (SystemClock.elapsedRealtime() - sentAt)
+                if (remaining > 0) {
+                    delay(remaining)
+                } else {
+                    break
+                }
+            }
             // With a token, two seconds more before going back for the final: a short tail's final
             // normally lands within one or two seconds of END_STREAM, and going back early only
             // costs a reconnect on a slow link -- the server makes it safe either way.
@@ -1097,7 +1129,7 @@ class VibeVoiceClient(
         }
     }
 
-    private val closedNotified = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val closedNotified = AtomicBoolean(false)
 
     /** The listener hears that a session ended once, whichever of the socket, the backstop or a stop reports it. */
     private fun notifyClosed() {
@@ -1175,7 +1207,6 @@ class VibeVoiceClient(
 
     companion object {
         private val JSON = "application/json".toMediaType()
-        private const val MAX_PRE_OPEN_BUFFER_SECONDS = 5
         /** 100 ms of 16 kHz 16-bit mono -- the size of a frame the live stream sends. */
         private const val FLUSH_CHUNK_BYTES = 3200
         /** 16 kHz, 16-bit, mono. */
@@ -1275,7 +1306,7 @@ class VibeVoiceClient(
         const val ERR_TRIAL_EXHAUSTED = "trial_exhausted"
         private const val TAG = "VibeVoiceClient"
         private const val LINK_CHECK_INTERVAL_MS = 1000L
-        /** How long a session may go without a single socket reaching the server. */
+        /** How long a first connection may take before the link is shown as degraded. It no longer ends the session. */
         private const val HANDSHAKE_TIMEOUT_MS = 8_000L
         /** Six seconds of audio at 16 kHz, 16-bit mono. Below this it is jitter; above it, a backlog. */
         private const val LINK_QUEUE_STALL_BYTES = 6 * 32000L
