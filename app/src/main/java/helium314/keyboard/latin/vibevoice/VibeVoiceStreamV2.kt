@@ -37,10 +37,10 @@ class VibeVoiceStreamV2(
     private val clientVersion: String,
     private val listener: VibeVoiceListener,
     private val url: String = StreamV2Wire.URL,
-    private val newCapture: (CoroutineScope, (ByteArray, Int) -> Unit, (String) -> Unit) -> AudioSource =
-        { scope, onAudio, onLost -> AudioCapture(scope, onAudio, onLost) },
     /** A linked account, not a trial key: decides what a bare 4002 close means. */
     private val linked: Boolean = false,
+    private val newCapture: (CoroutineScope, (ByteArray, Int) -> Unit, (String) -> Unit) -> AudioSource =
+        { scope, onAudio, onLost -> AudioCapture(scope, onAudio, onLost) },
 ) : VoiceSession {
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
