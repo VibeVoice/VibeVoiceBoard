@@ -39,6 +39,8 @@ class VibeVoiceStreamV2(
     private val url: String = StreamV2Wire.URL,
     private val newCapture: (CoroutineScope, (ByteArray, Int) -> Unit, (String) -> Unit) -> AudioSource =
         { scope, onAudio, onLost -> AudioCapture(scope, onAudio, onLost) },
+    /** A linked account, not a trial key: decides what a bare 4002 close means. */
+    private val linked: Boolean = false,
 ) : VoiceSession {
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
@@ -288,7 +290,7 @@ class VibeVoiceStreamV2(
         outageStartedAt = 0L
         retry = 0
         lastProgressAt = now
-        token = f.token
+        token = f.token?.takeIf { it.isNotBlank() } // an empty token would be refused as bad_start
         val from: Long
         if (f.resumed && streamOriginPos >= 0) {
             from = streamOriginPos + f.receivedMs * BYTES_PER_MS
@@ -372,6 +374,9 @@ class VibeVoiceStreamV2(
                 fail(VibeVoiceClient.ERR_LINK_LOST)
             }
             f.code == "trial_exhausted" -> fail(VibeVoiceClient.ERR_TRIAL_EXHAUSTED)
+            // Out of paid minutes: the server's own sentence, as v1 shows it, and reported even
+            // after a stop so the user learns why the next dictation will be refused too.
+            f.code == "quota_exceeded" -> fail(f.message.ifBlank { QUOTA_MESSAGE }, alwaysReport = true)
             else -> fail(f.message.ifBlank { f.code })
         }
     }
@@ -408,20 +413,16 @@ class VibeVoiceStreamV2(
     }
 
     /** The session cannot go on. After a stop it is not an error: whatever arrived is kept. */
-    private fun fail(error: String) {
+    private fun fail(error: String, alwaysReport: Boolean = error == VibeVoiceClient.ERR_TRIAL_EXHAUSTED) {
         val stopping = synchronized(lock) { stopRequested }
-        val isQuotaOrTrial = error == VibeVoiceClient.ERR_TRIAL_EXHAUSTED ||
-            error == "trial_exhausted" ||
-            error == "quota_exceeded"
-        val normalizedError = if (error == "trial_exhausted") VibeVoiceClient.ERR_TRIAL_EXHAUSTED else error
-        if (stopping && !isQuotaOrTrial) {
+        if (stopping && !alwaysReport) {
             finish()
             return
         }
         if (!finished.compareAndSet(false, true)) return
         teardown()
         synchronized(lock) {
-            listener.onError(normalizedError)
+            listener.onError(error)
         }
     }
 
@@ -502,7 +503,10 @@ class VibeVoiceStreamV2(
             if (!current()) return
             VibeVoiceDebugLogger.log("WS Closed [V2]: $code / $reason")
             when {
-                code == 4002 -> fail(VibeVoiceClient.ERR_TRIAL_EXHAUSTED)
+                // 4002 is both "trial over" and "out of paid minutes"; only the key tells them apart.
+                code == 4002 ->
+                    if (linked) fail(reason.ifBlank { QUOTA_MESSAGE }, alwaysReport = true)
+                    else fail(VibeVoiceClient.ERR_TRIAL_EXHAUSTED)
                 StreamV2Wire.retryableClose(code) -> linkLost("closed $code")
                 code in 4000..4099 -> fail(reason.ifBlank { "closed by server ($code)" })
                 else -> linkLost("closed $code")
@@ -521,6 +525,7 @@ class VibeVoiceStreamV2(
         private const val WATCHDOG_MS = 250L
         /** Doc 48: no progress for 3 s means the link is dead. */
         private const val PROGRESS_DEAD_MS = 3_000L
+        private const val QUOTA_MESSAGE = "Usage quota exceeded"
         /**
          * After `end` the server stops its progress ticker and spends up to 10 s on the last
          * stretch, so silence is normal there. A socket silent for longer than that is dead: drop

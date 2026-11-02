@@ -179,8 +179,11 @@ class AudioCapture(
         while (isActive && running) {
             val record = audioRecord
             if (record == null) {
-                delay(50)
-                continue
+                // Only a failed re-open leaves no recorder while running. Waiting here would keep
+                // a session "recording" that sends nothing until the user notices; end it instead.
+                VibeVoiceDebugLogger.log("Microphone could not be re-opened. Ending session gracefully.")
+                lose(VibeVoiceClient.WARN_MIC_UNAVAILABLE)
+                break
             }
             val startTime = System.nanoTime()
             val read = try {

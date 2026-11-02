@@ -36,7 +36,9 @@ object VibeVoiceBugReporter {
     private fun deviceSnapshot(context: Context, usage: JSONObject?): String {
         val sb = StringBuilder("=== DEVICE & SETTINGS ===\n")
         fun line(key: String, value: () -> Any?) {
-            val v = try { value() } catch (e: Exception) {
+            // Throwable, not Exception: a method missing on an old Android is a NoSuchMethodError,
+            // and one field of a diagnostic must not take the settings screen down with it.
+            val v = try { value() } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 "unavailable (${e.javaClass.simpleName})"
             }
@@ -49,7 +51,10 @@ object VibeVoiceBugReporter {
         line("screen_dp") { "${conf.screenWidthDp}x${conf.screenHeightDp} dp, smallest ${conf.smallestScreenWidthDp} dp" }
         line("orientation") { if (conf.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait" }
         line("font_scale") { conf.fontScale }
-        line("locale") { conf.locales[0]?.toLanguageTag() }
+        line("locale") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) conf.locales[0]?.toLanguageTag()
+            else @Suppress("DEPRECATION") conf.locale?.toLanguageTag()
+        }
         line("dark_mode") { (conf.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES }
         line("folded") { FoldableUtils.isFolded }
 
@@ -95,10 +100,14 @@ object VibeVoiceBugReporter {
             } ?: "unknown (sideloaded?)"
         }
         line("app_build") { "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}, ${BuildConfig.BUILD_TYPE})" }
+        // Runtime permissions and the overlay check exist from Android 6; before that, install-time
+        // grants mean both are simply held.
+        val m = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
         line("perm_microphone") {
-            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (m) context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            else "granted at install"
         }
-        line("perm_overlay") { android.provider.Settings.canDrawOverlays(context) }
+        line("perm_overlay") { if (m) android.provider.Settings.canDrawOverlays(context) else "granted at install" }
         line("perm_notifications") {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
