@@ -127,6 +127,8 @@ public class LatinIME extends InputMethodService implements
     private static final int EXTENDED_TOUCHABLE_REGION_HEIGHT = 100;
     private static final int PERIOD_FOR_AUDIO_AND_HAPTIC_FEEDBACK_IN_KEY_REPEAT = 2;
     private static final int PENDING_IMS_CALLBACK_DURATION_MILLIS = 800;
+    /** An empty result after at least this much recording is reported; below it, it was a tap. */
+    private static final long EMPTY_RESULT_WARN_MS = 3000L;
     static final long DELAY_WAIT_FOR_DICTIONARY_LOAD_MILLIS = TimeUnit.SECONDS.toMillis(2);
     static final long DELAY_DEALLOCATE_MEMORY_MILLIS = TimeUnit.SECONDS.toMillis(10);
 
@@ -1728,6 +1730,10 @@ public class LatinIME extends InputMethodService implements
     private boolean mVoiceStartedWithViewShown = false;
     /** Set when the session ended without the server's end marker; how long went unanswered. -1 = no. */
     private long mVoiceTailMissingMs = -1;
+    /** When this session began, for telling an empty result after real talking from a short tap. */
+    private long mVoiceSessionStartedAt = 0L;
+    /** An error or warning already told the user why this session ended; no second toast. */
+    private boolean mVoiceEndExplained = false;
     private long mVoiceStartedAt = 0L;
     private volatile boolean mVoiceLinkDegraded = false;
 
@@ -1908,6 +1914,8 @@ public class LatinIME extends InputMethodService implements
             mVoiceFinishDiscard = false;
             mVoiceSessionText.setLength(0);
             mVoiceTailMissingMs = -1;
+            mVoiceSessionStartedAt = android.os.SystemClock.elapsedRealtime();
+            mVoiceEndExplained = false;
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
             final EditorInfo startEditor = getCurrentInputEditorInfo();
@@ -2003,6 +2011,7 @@ public class LatinIME extends InputMethodService implements
                 public void onError(@NonNull String error) {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
+                        mVoiceEndExplained = true;
                         // Not a fault: the free minutes ran out. The server keeps this code
                         // distinct from invalid_api_key precisely so this branch can exist -- one
                         // is an invitation to link an account, the other is something broken, and
@@ -2056,6 +2065,7 @@ public class LatinIME extends InputMethodService implements
                 public void onWarning(@NonNull String code) {
                     mUiHandler.post(() -> {
                         if (mVibeVoiceClient == null || sessionId != mVoiceSessionId) return;
+                        mVoiceEndExplained = true;
                         final int messageRes = VibeVoiceClient.WARN_MIC_BUSY.equals(code)
                                 ? R.string.vibevoice_mic_busy
                                 : R.string.vibevoice_mic_unavailable;
@@ -2439,6 +2449,18 @@ public class LatinIME extends InputMethodService implements
             // the session still said something, and the clipboard entry is where it can be found again.
             if (mVoiceSessionText.length() > 0)
                 mClipboardHistoryManager.addTextToHistory(mVoiceSessionText.toString().trim());
+            // Seconds of recording and not one word back. A short tap does that on purpose; after
+            // real talking it means the speech was lost somewhere between the microphone and the
+            // server, and ending quietly made the user find out by reading an empty field.
+            final long recordedMs = mVoiceSessionStartedAt == 0L
+                    ? 0L : android.os.SystemClock.elapsedRealtime() - mVoiceSessionStartedAt;
+            if (mVoiceSessionText.length() == 0 && recordedMs >= EMPTY_RESULT_WARN_MS
+                    && !mVoiceEndExplained && mVoiceTailMissingMs < 0) {
+                VibeVoiceDebugLogger.log("[EMPTY_RESULT] told the user nothing was recognized (" + recordedMs + "ms session)");
+                android.widget.Toast.makeText(this,
+                        getString(R.string.vibevoice_nothing_recognized, (int) Math.round(recordedMs / 1000.0)),
+                        android.widget.Toast.LENGTH_LONG).show();
+            }
         } else {
             EditorInfo editorInfo = getCurrentInputEditorInfo();
             boolean isMultiline = editorInfo != null &&
