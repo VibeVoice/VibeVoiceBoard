@@ -151,6 +151,7 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_tail_missing">Nach dem Beenden kam keine Antwort vom Server. Die letzten Worte fehlen womöglich.</string>
     <string name="vibevoice_nothing_recognized">Für %1$d Sekunden Aufnahme kam kein Text zurück. Bitte noch einmal versuchen.</string>
     <string name="vibevoice_copied">Diktat in die Zwischenablage kopiert</string>
+    <string name="vibevoice_commit_lost">Die App hat dein Diktat nicht übernommen. Es liegt in der Zwischenablage.</string>
     <string name="vibevoice_overlay_description">Diktat läuft. Doppeltippen beendet es und kopiert es.</string>
     <string name="vibevoice_mic_blocked">Kein Zugriff auf das Mikrofon. Erlaube ihn unter Berechtigungen, um zu diktieren.</string>
     <string name="vibevoice_blocked_private_field">In Passwortfeldern und privaten Tabs ist das Diktat aus</string>

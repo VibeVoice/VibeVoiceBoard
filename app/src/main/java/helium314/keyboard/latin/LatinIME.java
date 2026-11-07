@@ -1734,6 +1734,8 @@ public class LatinIME extends InputMethodService implements
     private long mVoiceSessionStartedAt = 0L;
     /** An error or warning already told the user why this session ended; no second toast. */
     private boolean mVoiceEndExplained = false;
+    /** A commit of this session was read back from the field and was not there. */
+    private boolean mVoiceCommitLost = false;
     private long mVoiceStartedAt = 0L;
     private volatile boolean mVoiceLinkDegraded = false;
 
@@ -1916,6 +1918,7 @@ public class LatinIME extends InputMethodService implements
             mVoiceTailMissingMs = -1;
             mVoiceSessionStartedAt = android.os.SystemClock.elapsedRealtime();
             mVoiceEndExplained = false;
+            mVoiceCommitLost = false;
             mIsStoppingVoice = false;
             final int sessionId = ++mVoiceSessionId;
             final EditorInfo startEditor = getCurrentInputEditorInfo();
@@ -2161,6 +2164,10 @@ public class LatinIME extends InputMethodService implements
      * Android still lets write to the clipboard without any.
      */
     private void copyVoiceSessionToClipboard(final String text) {
+        copyVoiceSessionToClipboard(text, R.string.vibevoice_copied);
+    }
+
+    private void copyVoiceSessionToClipboard(final String text, final int messageRes) {
         if (text.isEmpty()) return;
         mClipboardHistoryManager.addTextToHistory(text);
         // Not in incognito, and not out of a password field: addTextToHistory refuses both, and the
@@ -2176,7 +2183,7 @@ public class LatinIME extends InputMethodService implements
                     (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (clipboard != null)
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("VibeVoice", text));
-            android.widget.Toast.makeText(this, R.string.vibevoice_copied, android.widget.Toast.LENGTH_LONG).show();
+            android.widget.Toast.makeText(this, messageRes, android.widget.Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             VibeVoiceDebugLogger.log("Could not copy the dictation: " + e.getMessage());
         }
@@ -2214,10 +2221,11 @@ public class LatinIME extends InputMethodService implements
     }
 
     /**
-     * Reads the field back and says whether what was just written is in it. Logging only -- it must
-     * never decide anything, because an app that answers nothing is not proof that nothing arrived,
-     * and acting on that would duplicate text instead of losing it. But when a commit vanishes
-     * again, this is the line that says so instead of leaving it to be inferred.
+     * Reads the field back and says whether what was just written is in it. It never writes again:
+     * an app that answers nothing is not proof that nothing arrived, and committing a second time
+     * would duplicate text instead of losing it. Only a field that answered and does not hold the
+     * text marks the session, so its end puts the dictation on the clipboard -- an app that swaps
+     * its field mid-dictation, as the Google search bar does, used to swallow it without a word.
      */
     private void verifyVoiceCommit(final String written) {
         try {
@@ -2238,6 +2246,7 @@ public class LatinIME extends InputMethodService implements
             } else {
                 VibeVoiceDebugLogger.logText("COMMIT DID NOT STICK (" + voiceFieldState() + "); the field reads",
                         read.toString());
+                mVoiceCommitLost = true;
             }
         } catch (RuntimeException e) {
             VibeVoiceDebugLogger.log("Commit verification threw: " + e);
@@ -2475,6 +2484,12 @@ public class LatinIME extends InputMethodService implements
             helium314.keyboard.latin.utils.DeviceProtectedUtils.getSharedPreferences(this)
                     .edit().putBoolean(Settings.PREF_HAS_DICTATED, true).apply();
         }
+        if (mVoiceCommitLost && !mVoiceFinishDiscard && !mVoiceFinishToClipboard) {
+            final String all = mVoiceSessionText.toString().trim();
+            VibeVoiceDebugLogger.log("Commit lost in the field; copying " + all.length() + " characters to the clipboard");
+            copyVoiceSessionToClipboard(all, R.string.vibevoice_commit_lost);
+        }
+        mVoiceCommitLost = false;
         if (mVoiceTailMissingMs >= 0 && !mVoiceFinishDiscard) {
             // The server never confirmed the end, so the last stretch may simply not exist as text.
             // That used to be known here and thrown away: the session ended as if it had finished,
