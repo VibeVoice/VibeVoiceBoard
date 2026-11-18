@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VibeVoice Board replica</title>
+<link rel="stylesheet" href="keyboard.css">
+<style>
+  html, body { margin: 0; background: #14181b; color: #dfe5e8; font: 15px/1.45 system-ui, sans-serif; }
+  body.light { background: #dfe3e6; color: #1b2327; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; display: grid; gap: 28px; grid-template-columns: minmax(0, 420px) 1fr; align-items: start; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  h1 { font-size: 20px; margin: 0 0 4px; grid-column: 1 / -1; }
+  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; opacity: .7; margin: 18px 0 8px; }
+  .stage { position: sticky; top: 16px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, select { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #44525a; background: #222b30; color: inherit; cursor: pointer; }
+  body.light button, body.light select { background: #fff; border-color: #b8c1c6; }
+  button:hover { border-color: #87d1ea; }
+  button.on { background: #2f5b6a; border-color: #87d1ea; color: #fff; }
+  code { font: 13px ui-monospace, monospace; opacity: .85; }
+  .note { opacity: .7; font-size: 13px; }
+  .size { display: flex; align-items: center; gap: 10px; }
+  .size input { flex: 1; }
+</style>
+</head>
+<body>
+<main>
+  <h1>VibeVoice Board &ndash; HTML replica</h1>
+
+  <div class="stage">
+    <div id="kb" style="width:390px"></div>
+  </div>
+
+  <div>
+    <h2>Dictation (the real flow)</h2>
+    <div class="btns">
+      <button id="play">play(): mic &rarr; listening &rarr; stop &rarr; text block</button>
+      <button id="playSpace">play(): long-press space</button>
+      <button id="stop">stop()</button>
+    </div>
+    <p class="note">Tap the mic in the top-right of the strip, or hold the space bar for 0.3 s, to try it by hand. The text arrives as one block about 0.4 s after you stop.</p>
+
+    <h2>States (still frames: <code>setState</code>)</h2>
+    <div class="btns" id="states"></div>
+
+    <h2>Toasts</h2>
+    <div class="btns" id="toasts"></div>
+
+    <h2>Theme</h2>
+    <div class="btns">
+      <button data-theme="dark" class="on">Dark</button>
+      <button data-theme="light">Light</button>
+      <select id="accent">
+        <option value="default">accent: code default</option>
+        <option value="screenshots">accent: as in the screenshots (#87D1EA)</option>
+      </select>
+    </div>
+
+    <h2>Field / suggestions / size</h2>
+    <div class="btns">
+      <button id="clear">clear text</button>
+      <button id="sug">toggle suggestions</button>
+      <button id="fieldToggle">toggle text field</button>
+    </div>
+    <p class="size"><label for="w">width</label><input id="w" type="range" min="320" max="760" value="390"><span id="wv">390 px</span></p>
+  </div>
+</main>
+
+<script src="keyboard.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var el = document.getElementById("kb");
+  var theme = q.get("theme") || "dark";
+  var accent = q.get("accent") || "default";
+  var bare = q.get("bare") === "1";
+  var animate = q.get("animate") !== "0";
+  var field = q.get("field") !== "0";
+  if (q.get("w")) el.style.width = q.get("w") + "px";
+  if (bare) {
+    document.querySelectorAll("main > div:not(.stage), h1").forEach(function (n) { n.style.display = "none"; });
+    document.querySelector("main").style.cssText = "display:block;max-width:none;padding:0";
+    document.querySelector(".stage").style.position = "static";
+    document.body.style.background = "transparent";
+  }
+  if (theme === "light") document.body.classList.add("light");
+
+  var kb = VibeVoiceKeyboard.mount(el, { theme: theme, accent: accent, field: field && !bare ? true : (q.get("field") === "1"), animate: animate });
+  window.kb = kb;
+  if (q.get("text")) kb.setText(q.get("text"));
+  if (q.get("sug") != null) kb.setSuggestions(q.get("sug") ? q.get("sug").split("|") : []);
+  if (q.get("state")) kb.setState(q.get("state"), { seconds: q.get("seconds") != null ? +q.get("seconds") : undefined, frames: q.get("frames") != null ? +q.get("frames") : undefined });
+
+  var states = ["idle", "connecting", "listening", "stopping", "degraded", "pulse"];
+  var sbox = document.getElementById("states");
+  states.forEach(function (s) {
+    var b = document.createElement("button"); b.textContent = s;
+    b.onclick = function () { kb.setState(s, s === "listening" ? { seconds: 12 } : {}); };
+    sbox.appendChild(b);
+  });
+  var tbox = document.getElementById("toasts");
+  Object.keys(VibeVoiceKeyboard.TOASTS).forEach(function (k) {
+    var b = document.createElement("button"); b.textContent = k;
+    b.onclick = function () { kb.showToast(k); };
+    tbox.appendChild(b);
+  });
+
+  var sample = "I just walked through the old town and found the bakery you told me about. It was still open, so I got two croissants for tomorrow morning.";
+  document.getElementById("play").onclick = function () { kb.setText(""); kb.play({ text: sample }); };
+  document.getElementById("playSpace").onclick = function () { kb.setText(""); kb.play({ text: sample, via: "space" }); };
+  document.getElementById("stop").onclick = function () { kb.stop(); };
+  document.getElementById("clear").onclick = function () { kb.setText(""); };
+  var sugOn = true;
+  document.getElementById("sug").onclick = function () { sugOn = !sugOn; kb.setSuggestions(sugOn ? ["And", "I", "Then"] : []); };
+  var fieldOn = field;
+  document.getElementById("fieldToggle").onclick = function () {
+    fieldOn = !fieldOn;
+    var st = kb.getState(), th = kb.opts.theme, ac = kb.opts.accent, tx = kb.getText();
+    kb.destroy();
+    kb = window.kb = VibeVoiceKeyboard.mount(el, { theme: th, accent: ac, field: fieldOn });
+    kb.setText(tx); if (st !== "idle") kb.setState(st);
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-theme]"), function (b) {
+    b.onclick = function () {
+      kb.setTheme(b.dataset.theme);
+      document.body.classList.toggle("light", b.dataset.theme === "light");
+      document.querySelectorAll("[data-theme]").forEach(function (x) { x.classList.toggle("on", x === b); });
+    };
+  });
+  document.getElementById("accent").value = accent;
+  document.getElementById("accent").onchange = function (e) { kb.setAccent(e.target.value); };
+  var w = document.getElementById("w"), wv = document.getElementById("wv");
+  w.oninput = function () { el.style.width = w.value + "px"; wv.textContent = w.value + " px"; };
+})();
+</script>
+</body>
+</html>
