@@ -4,6 +4,7 @@ package helium314.keyboard.settings
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
@@ -13,6 +14,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import helium314.keyboard.latin.BuildConfig
+import helium314.keyboard.latin.settings.DebugSettings
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.common.LocaleUtils.constructLocale
 import helium314.keyboard.latin.settings.SettingsSubtype.Companion.toSettingsSubtype
 import helium314.keyboard.latin.settings.getTransitionAnimationScale
@@ -32,6 +37,7 @@ import helium314.keyboard.settings.screens.SecondaryLayoutScreen
 import helium314.keyboard.settings.screens.SubtypeScreen
 import helium314.keyboard.settings.screens.TextCorrectionScreen
 import helium314.keyboard.settings.screens.ToolbarScreen
+import helium314.keyboard.settings.screens.VibeVoiceSettingsScreen
 import helium314.keyboard.settings.screens.gesturedata.GestureDataScreen
 import helium314.keyboard.settings.screens.gesturedata.ReviewScreen
 import kotlinx.coroutines.CoroutineScope
@@ -78,6 +84,7 @@ fun SettingsNavHost(
                 onClickLanguage = { navController.navigate(SettingsDestination.Languages) },
                 onClickLayouts = { navController.navigate(SettingsDestination.Layouts) },
                 onClickDictionaries = { navController.navigate(SettingsDestination.Dictionaries) },
+                onClickVibeVoice = { navController.navigate(SettingsDestination.VibeVoice) },
                 onClickBack = ::goBack,
             )
         }
@@ -106,7 +113,15 @@ fun SettingsNavHost(
             AdvancedSettingsScreen(onClickBack = ::goBack)
         }
         composable(SettingsDestination.Debug) {
-            DebugScreen(onClickBack = ::goBack)
+            val isDebugUnlocked = BuildConfig.DEBUG || LocalContext.current.prefs().getBoolean(DebugSettings.PREF_SHOW_DEBUG_SETTINGS, Defaults.PREF_SHOW_DEBUG_SETTINGS)
+            if (!isDebugUnlocked) {
+                // Navigation is a side effect, so it runs once from an effect rather than in the
+                // composable body -- called directly it fires again on every recomposition while the
+                // back stack is still settling.
+                LaunchedEffect(Unit) { goBack() }
+            } else {
+                DebugScreen(onClickBack = ::goBack)
+            }
         }
         composable(SettingsDestination.Appearance) {
             AppearanceScreen(onClickBack = ::goBack)
@@ -139,6 +154,9 @@ fun SettingsNavHost(
         composable(SettingsDestination.Subtype + "{subtype}") {
             SubtypeScreen(initialSubtype = it.arguments?.getString("subtype")!!.toSettingsSubtype(), onClickBack = ::goBack)
         }
+        composable(SettingsDestination.VibeVoice) {
+            VibeVoiceSettingsScreen(onClickBack = ::goBack)
+        }
     }
     if (target.value != SettingsDestination.Settings/* && target.value != navController.currentBackStackEntry?.destination?.route*/)
         navController.navigate(route = target.value)
@@ -164,6 +182,13 @@ object SettingsDestination {
     const val Subtype = "subtype/"
     const val Layouts = "layouts"
     const val Dictionaries = "dictionaries"
+    const val VibeVoice = "vibevoice"
+
+    private val plainRoutes = setOf(Settings, About, TextCorrection, Preferences, Toolbar, GestureTyping, DataGathering,
+        DataReview, Advanced, Debug, Appearance, PersonalDictionaries, Languages, Layouts, Dictionaries, VibeVoice)
+    private val routePrefixes = listOf(Colors, ColorsNight, PersonalDictionary, Subtype)
+    fun isKnown(route: String) = route in plainRoutes || routePrefixes.any { route.startsWith(it) && route.length > it.length }
+
     val navTarget = MutableStateFlow(Settings)
 
     private val navScope = CoroutineScope(Dispatchers.Default)

@@ -1,0 +1,33 @@
+#!/bin/bash
+# pre-commit: bump VERSION_CODE by one and stage it into the same commit.
+#
+# VERSION (the release name) is not touched: a person sets it when a release is cut. See the
+# Versioning section of AGENTS.md for why the two are separate.
+# Skips during a merge, and when VERSION_CODE is already staged by hand.
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+CODE_FILE="$REPO_ROOT/VERSION_CODE"
+
+# git rev-parse --git-path, not "$REPO_ROOT/.git": in a worktree .git is a file, not a directory.
+if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+  exit 0
+fi
+
+if git diff --cached --name-only | grep -q "^VERSION_CODE$"; then
+  exit 0
+fi
+
+if [ ! -f "$CODE_FILE" ]; then
+  exit 0
+fi
+
+CODE=$(tr -d '[:space:]' < "$CODE_FILE")
+if ! [[ "$CODE" =~ ^[0-9]+$ ]]; then
+  echo "[pre-commit] ERROR: VERSION_CODE is not a number. Got: '$CODE'"
+  exit 1
+fi
+
+NEW_CODE=$((CODE + 1))
+echo "$NEW_CODE" > "$CODE_FILE"
+git add "$CODE_FILE"
+echo "[pre-commit] VERSION_CODE -> $NEW_CODE ($(tr -d '[:space:]' < "$REPO_ROOT/VERSION"))"

@@ -1,0 +1,44 @@
+02 — Die Tastatur beim Diktieren, in Gmail
+==========================================
+
+WOFÜR
+-----
+Screenshot 2. Sagt „überall", ohne dass jemand ein Wort lesen muss: dieselbe Tastatur,
+eine völlig andere App. Zwei Bilder nebeneinander machen das Argument, das ein Bild
+allein nicht machen kann.
+
+Zweitens ist eine Mail der Fall, in dem Diktieren am meisten spart — längerer Text,
+richtige Sätze, echte Interpunktion.
+
+AUFBAU
+------
+* Gmail, neue Mail (Verfassen).
+* Empfänger: eine offensichtlich unechte Adresse. `max@beispiel.de` oder
+  `team@example.com`. Kein echter Kontakt, kein Autovervollständigen-Vorschlag im Bild.
+* Betreff ausgefüllt, etwas Neutrales — „Rückmeldung zum Termin".
+* Im Textkörper drei bis vier Zeilen diktierter Text, sichtbar mit Kommas und Punkten.
+* Tastatur mit laufenden Wellen, V leuchtet.
+
+Hier braucht es nichts nachzubearbeiten: eine leere neue Mail mit Platzhalter-Empfänger
+ist von Haus aus sauber. Das ist der Grund, warum dieses Bild Gmail und nicht den
+Posteingang zeigt.
+
+NICHT IM BILD
+-------------
+* Keine Kontaktvorschläge unter dem Empfängerfeld.
+* Kein echtes Konto im Absenderfeld, wenn es die private Adresse zeigt — notfalls den
+  oberen Rand so wählen, dass die Absenderzeile knapp herausfällt.
+* Keine Signatur mit Telefonnummer.
+
+AUFNAHME
+--------
+1. Gmail → Verfassen.
+2. Empfänger und Betreff tippen.
+3. In den Textkörper wechseln, Diktat starten.
+4. Ein paar Sätze sprechen, die Absätze und Kommas ergeben.
+5. Während des Sprechens auslösen.
+
+DANACH
+------
+Textzeile oben von mir: die Interpunktion oder das Tempo, je nachdem, was Bild 05 am
+Ende übernimmt.

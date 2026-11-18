@@ -19,6 +19,9 @@ import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.prefs
 import java.io.File
 import kotlin.collections.joinToString
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /** Class providing cached access to the clipboard table */
 // currently we should not need to worry about synchronizing access (though maybe we could addClip in a coroutine, then it might be relevant)
@@ -75,9 +78,12 @@ class ClipboardDao private constructor(private val db: Database) {
         clearOldClips()
         val extension = if (description.mimeTypeCount == 0) ""
             else ".${MimeTypeMap.getSingleton().getExtensionFromMimeType(description.getMimeType(0))}"
-        val tempFile = File(context.filesDir, "temp_clip")
+        val tempFile = runCatching { File.createTempFile("temp_clip", extension, context.cacheDir) }.getOrNull() ?: return@synchronized
         tempFile.delete()
-        runCatching { FileUtils.copyContentUriToNewFile(uri, context, tempFile) }.onFailure { return@synchronized }
+        runCatching { FileUtils.copyContentUriToNewFile(uri, context, tempFile) }.onFailure {
+            tempFile.delete()
+            return@synchronized
+        }
 
         // we set the file name to the sha256 of the content to have virtually unique names and an easy way to find duplicates
         val sha256 = ChecksumCalculator.checksum(tempFile)
@@ -90,7 +96,10 @@ class ClipboardDao private constructor(private val db: Database) {
             tempFile.delete()
             return@synchronized
         }
-        tempFile.renameTo(file)
+        if (!tempFile.renameTo(file)) {
+            tempFile.delete()
+            return@synchronized
+        }
         // we could try getting a thumbnail using context.contentResolver.loadThumbnail(uri, Size(a, b), null)
         // but currently we don't cache them anyway, so no use for that
         insertNewEntry(timestamp, pinned, description.label?.toString(), file.name, description.getMimeTypes(), context)
@@ -98,16 +107,14 @@ class ClipboardDao private constructor(private val db: Database) {
 
     // keep pinned and the first non-pinned, others can be deleted
     private fun deleteIfSizeExceeded(prefs: SharedPreferences) {
-        val sizeLimit = prefs.getInt(Settings.PREF_CLIPBOARD_FILES_SIZE_LIMIT, Defaults.PREF_CLIPBOARD_FILES_SIZE_LIMIT) * 1000000
-        var size = 0L
+        val sizeLimit = prefs.getInt(Settings.PREF_CLIPBOARD_FILES_SIZE_LIMIT, Defaults.PREF_CLIPBOARD_FILES_SIZE_LIMIT) * 1000000L
+        var size = cache.filter { it.isPinned && it.filename != null }.sumOf { File(clipFilesDir, it.filename!!).length() }
         var keepMin = 1
         val toRemove = mutableListOf<ClipboardHistoryEntry>()
-        cache.forEach {
-            if (it.filename == null) return@forEach
-            val file = File(clipFilesDir, it.filename)
+        val unpinnedEntries = cache.filter { !it.isPinned && it.filename != null }
+        unpinnedEntries.forEach {
+            val file = File(clipFilesDir, it.filename!!)
             size += file.length()
-            if (it.isPinned)
-                return@forEach
             if (size > sizeLimit) {
                 if (keepMin > 0) --keepMin
                 else toRemove.add(it)
@@ -126,7 +133,10 @@ class ClipboardDao private constructor(private val db: Database) {
         // § should be a safe separator, not allowed in mime types: https://datatracker.ietf.org/doc/html/rfc6838#section-4.2
         cv.put(COLUMN_MIME_TYPE, mimeTypes?.joinToString("§"))
         val rowId = db.writableDatabase.insert(TABLE, null, cv)
-
+        if (rowId == -1L) {
+            Log.e(TAG, "Failed to insert clipboard entry")
+            return
+        }
         val entry = ClipboardHistoryEntry(rowId, timestamp, pinned, text, filename, mimeTypes)
         if (filename != null && context != null)
             deleteIfSizeExceeded(context.prefs())
@@ -182,8 +192,10 @@ class ClipboardDao private constructor(private val db: Database) {
 
     private fun delete(entries: List<ClipboardHistoryEntry>) = synchronized(this) {
         if (entries.isEmpty()) return@synchronized
+        entries.chunked(999).forEach { chunk ->
+            db.writableDatabase.delete(TABLE, "$COLUMN_ID IN (${chunk.joinToString(",") { it.id.toString() }})", null)
+        }
         cache.removeAll(entries)
-        db.writableDatabase.delete(TABLE, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
         entries.forEach { if (it.filename != null) File(clipFilesDir, it.filename).delete() }
     }
 
@@ -220,10 +232,10 @@ class ClipboardDao private constructor(private val db: Database) {
         db.writableDatabase.delete(TABLE, null, null)
     }
 
-    fun cleanupFiles(prefs: SharedPreferences) {
+    fun cleanupFiles(prefs: SharedPreferences) = synchronized(this) {
         if (!prefs.getBoolean(Settings.PREF_CLIPBOARD_USE_FILES, Defaults.PREF_CLIPBOARD_USE_FILES)) {
             delete(cache.filter { it.filename != null && !it.isPinned })
-            return
+            return@synchronized
         }
 
         val files = clipFilesDir.listFiles()?.toMutableList() ?: return
@@ -280,7 +292,9 @@ class ClipboardDao private constructor(private val db: Database) {
                     instance = ClipboardDao(Database.getInstance(context))
                     clipFilesDir = File(context.filesDir, "clipboard")
                     clipFilesDir.mkdirs()
-                    instance?.cleanupFiles(context.prefs())
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
+                        instance?.cleanupFiles(context.prefs())
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "can't create ClipboardDao", e)
                 }

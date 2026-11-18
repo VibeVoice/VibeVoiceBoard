@@ -1,0 +1,8 @@
+#!/bin/bash
+# post-merge: intentionally does nothing.
+#
+# It used to bump the minor version on merges into the integration branch. The release name is a
+# person's decision now (see the Versioning section of AGENTS.md), and the merge commit itself needs
+# no new VERSION_CODE: the next ordinary commit bumps it. The file stays so that re-running
+# install-hooks.sh replaces the old hook in existing clones instead of leaving it behind.
+exit 0
