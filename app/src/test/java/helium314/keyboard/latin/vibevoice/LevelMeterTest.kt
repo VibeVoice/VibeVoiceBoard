@@ -78,6 +78,21 @@ class LevelMeterTest {
     }
 
     @Test
+    fun aLowVoiceInAQuietRoomLooksExactlyAsBefore() {
+        // A male voice's fundamental sits below the high-pass; the drawn level must not lose it.
+        val meter = LevelMeter()
+        repeat(30) { meter.feed(noise(0.0005)) }
+        var level = 0f
+        var raw = 0f
+        repeat(5) {
+            val voice = sine(0.03, hz = 120.0)
+            level = meter.feed(voice)
+            raw = pcm(voice).let { AudioCapture.level(it, it.size) }
+        }
+        assertEquals(raw, level, 0.01f)
+    }
+
+    @Test
     fun aSustainedSyllableIsNotLearnedAsNoise() {
         val meter = LevelMeter()
         repeat(60) { meter.feed(noise(0.01)) }

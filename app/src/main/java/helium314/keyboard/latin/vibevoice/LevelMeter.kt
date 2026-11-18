@@ -9,16 +9,20 @@ import kotlin.math.sqrt
  *
  * The raw level ([AudioCapture.level]) answers "how loud is it", which is the wrong question for a
  * display: a fan or a car engine is loud, steady and uninteresting, and it kept the waves swelling
- * the whole time so that speech no longer stood out. This meter answers "how much louder than the
- * room is it":
+ * the whole time so that speech no longer stood out. This meter asks "is this louder than the
+ * room", and only uses the answer to open or close a gate over the raw level:
  *
- *  - a one-pole high-pass takes the rumble out of the measurement (engines, wind, handling noise),
- *    which carries most of the energy of steady noise and almost none of the speech;
- *  - an adaptive floor follows the quietest recent level -- quickly down, slowly up -- so a
+ *  - a one-pole high-pass takes the rumble out of the measurement the gate decides on (engines,
+ *    wind, handling noise), which carries most of the energy of steady noise;
+ *  - an adaptive floor follows the quietest recent filtered level -- quickly down, slowly up -- so a
  *    syllable, which is over in well under a second, does not become the floor but a minute of
  *    traffic does;
- *  - what is left above the floor goes through the same square-root curve as the raw level, so
- *    speech looks as it always did.
+ *  - the gate is shut up to [noiseFloorFactor] times the floor and fully open from twice that.
+ *
+ * What is drawn is the raw level times the gate. An earlier version drew the filtered level minus
+ * the floor instead: the filter cut into the fundamental of a low voice (100-130 Hz) and the
+ * subtraction shrank quiet syllables most, so speech came out flatter and followed the voice less.
+ * With the gate open, speech looks exactly as it did before the meter existed.
  *
  * It only ever reads the samples. The caller's buffer is never modified, so the bytes that go on to
  * the server are untouched. Not thread-safe: one capture loop owns one meter.
@@ -67,6 +71,7 @@ class LevelMeter {
         // freshest quarter is measured, as in the raw level: that is what keeps the waves quick.
         val tailStart = (numSamples * 3) / 4
         var squares = 0.0
+        var rawSquares = 0.0
         var x1 = hpIn
         var y1 = hpOut
         for (i in 0 until numSamples) {
@@ -76,11 +81,15 @@ class LevelMeter {
             val y = HP_COEFFICIENT * (y1 + x - x1)
             x1 = x
             y1 = y
-            if (i >= tailStart) squares += y * y
+            if (i >= tailStart) {
+                squares += y * y
+                rawSquares += x * x
+            }
         }
         hpIn = x1
         hpOut = y1
         val rms = sqrt(squares / (numSamples - tailStart))
+        val rawRms = sqrt(rawSquares / (numSamples - tailStart))
 
         val seconds = numSamples / SAMPLE_RATE
         if (!floorKnown) {
@@ -103,8 +112,12 @@ class LevelMeter {
             floor += (rms - floor) * (1.0 - exp(-seconds / tau))
         }
 
-        val above = (rms - floor * noiseFloorFactor).coerceAtLeast(0.0)
-        return sqrt(above / LEVEL_FULL_SCALE).coerceIn(0.0, 1.0).toFloat()
+        val gate = if (floor <= 0.0) 1.0 else {
+            val factor = noiseFloorFactor
+            val t = ((rms / floor - factor) / factor.coerceAtLeast(MIN_GATE_SPAN)).coerceIn(0.0, 1.0)
+            t * t * (3 - 2 * t) // smoothstep, so the waves fade in and out instead of switching
+        }
+        return (sqrt(rawRms / LEVEL_FULL_SCALE).coerceIn(0.0, 1.0) * gate).toFloat()
     }
 
     companion object {
@@ -125,12 +138,15 @@ class LevelMeter {
         private const val FLOOR_RISE_OVER_SPEECH_SECONDS = 12.0
         private const val SPEECH_OVER_FLOOR = 3.0
 
+        /** The gate opens over at least this ratio of level to floor, even with a factor near 0. */
+        private const val MIN_GATE_SPAN = 0.5
+
         /** 300 ms of 16 kHz 16-bit mono. */
         const val SILENT_NOW_BYTES = 9_600L
 
         /**
-         * How far above the floor a sound must be to count. A little over 1 keeps the ripple of
-         * steady noise below the line. Written by [VoiceWaveView] from the debug slider, otherwise
+         * How far above the floor a sound must be to show at all; at twice this it shows in full.
+         * A little over 1 keeps the ripple of steady noise below the line. Written by [VoiceWaveView] from the debug slider, otherwise
          * this default. A plain field rather than a constructor argument because the meter is
          * created deep inside the capture, which has no business reading preferences.
          */
