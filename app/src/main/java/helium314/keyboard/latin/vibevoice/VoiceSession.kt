@@ -17,6 +17,8 @@ interface VoiceSession {
     val isLinkDegraded: Boolean
     /** The microphone delivered only exact zeros for a while during this session. */
     val micSilenceSeen: Boolean get() = false
+    /** The microphone is delivering exact zeros right now; the waves go still while it does. */
+    val micSilentNow: Boolean get() = false
     fun startStreaming()
     fun stopStreaming()
     fun cancel()

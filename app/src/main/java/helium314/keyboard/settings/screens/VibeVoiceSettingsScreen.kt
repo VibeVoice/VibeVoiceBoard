@@ -690,6 +690,13 @@ fun VibeVoiceSettingsScreen(onClickBack: () -> Unit) {
                 range = 0f..1f,
                 description = { if (it < 0.02f) "none" else "${(100 * it).toInt()}%" }
             ) { }
+            SliderPreference(
+                name = stringResource(R.string.vibevoice_waves_noise_floor),
+                key = Settings.PREF_WAVE_NOISE_FLOOR,
+                default = Defaults.PREF_WAVE_NOISE_FLOOR,
+                range = 0f..4f,
+                description = { String.format(Locale.US, "%.2fx", it) }
+            ) { }
             }
             }
         }

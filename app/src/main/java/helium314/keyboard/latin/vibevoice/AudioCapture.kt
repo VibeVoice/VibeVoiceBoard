@@ -28,6 +28,8 @@ interface AudioSource {
     val currentLevel: Float
     /** The microphone delivered a second or more of exact zeros at some point since [start]. */
     val silenceSeen: Boolean get() = false
+    /** The microphone is delivering exact zeros right now (for 300 ms or more); clears with the first sound. */
+    val micSilentNow: Boolean get() = false
     fun start(): Boolean
     fun stop()
 }
@@ -45,6 +47,11 @@ class AudioCapture(
         private set
     @Volatile override var silenceSeen = false
         private set
+    @Volatile override var micSilentNow = false
+        private set
+
+    /** Measures the display level on a copy of the samples; [onAudio] always gets the buffer as read. */
+    private val meter = LevelMeter()
 
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
@@ -71,6 +78,8 @@ class AudioCapture(
         }
         currentLevel = 0f
         silenceSeen = false
+        micSilentNow = false
+        meter.reset()
         synchronized(lock) {
             if (!running) {
                 releaseLocked()
@@ -89,6 +98,7 @@ class AudioCapture(
             job = null
             releaseLocked()
             currentLevel = 0f
+            micSilentNow = false
         }
         oldJob?.cancel()
     }
@@ -202,7 +212,8 @@ class AudioCapture(
 
             if (read > 0) {
                 readsSinceInit++
-                currentLevel = level(buffer, read)
+                currentLevel = meter.update(buffer, read)
+                micSilentNow = meter.silentNow
 
                 var isAllZeros = true
                 for (i in 0 until read) {
@@ -279,7 +290,11 @@ class AudioCapture(
         /** One second of 16 kHz 16-bit mono. */
         private const val SILENCE_SEEN_BYTES = 32_000L
 
-        /** The level for the waves from the freshest quarter of a read, as in [VibeVoiceClient]. */
+        /**
+         * The raw level of the freshest quarter of a read, as in [VibeVoiceClient]. The waves no
+         * longer use it -- [LevelMeter] subtracts the room's noise first -- but it is the curve
+         * the meter's output is held to.
+         */
         internal fun level(buffer: ByteArray, read: Int): Float {
             val numSamples = read / 2
             if (numSamples <= 0) return 0f
