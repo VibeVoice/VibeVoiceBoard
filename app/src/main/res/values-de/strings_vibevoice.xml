@@ -149,6 +149,7 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_no_network">Keine Internetverbindung. Das Diktat braucht eine.</string>
     <string name="vibevoice_tail_missing_seconds">Nach dem Beenden kam keine Antwort vom Server. Die letzten %1$d Sekunden fehlen womöglich.</string>
     <string name="vibevoice_tail_missing">Nach dem Beenden kam keine Antwort vom Server. Die letzten Worte fehlen womöglich.</string>
+    <string name="vibevoice_mic_silent">Dein Mikrofon hat nur Stille geliefert. Vielleicht nutzt es gerade eine andere App.</string>
     <string name="vibevoice_nothing_recognized">Für %1$d Sekunden Aufnahme kam kein Text zurück. Bitte noch einmal versuchen.</string>
     <string name="vibevoice_copied">Diktat in die Zwischenablage kopiert</string>
     <string name="vibevoice_commit_lost">Die App hat dein Diktat nicht übernommen. Es liegt in der Zwischenablage.</string>

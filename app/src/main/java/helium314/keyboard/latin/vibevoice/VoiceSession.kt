@@ -15,6 +15,8 @@ interface VoiceSession {
     val currentLevel: Float
     /** Whether the link is currently too poor to stream into. */
     val isLinkDegraded: Boolean
+    /** The microphone delivered only exact zeros for a while during this session. */
+    val micSilenceSeen: Boolean get() = false
     fun startStreaming()
     fun stopStreaming()
     fun cancel()

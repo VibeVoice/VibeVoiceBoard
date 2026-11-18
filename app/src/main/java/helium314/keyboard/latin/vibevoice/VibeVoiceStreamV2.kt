@@ -48,6 +48,7 @@ class VibeVoiceStreamV2(
 
     @Volatile private var capture: AudioSource? = null
     override val currentLevel: Float get() = capture?.currentLevel ?: 0f
+    override val micSilenceSeen: Boolean get() = capture?.silenceSeen ?: false
     @Volatile override var isLinkDegraded = false
         private set
 

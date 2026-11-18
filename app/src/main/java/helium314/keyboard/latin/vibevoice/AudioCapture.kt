@@ -26,6 +26,8 @@ import kotlinx.coroutines.launch
  */
 interface AudioSource {
     val currentLevel: Float
+    /** The microphone delivered a second or more of exact zeros at some point since [start]. */
+    val silenceSeen: Boolean get() = false
     fun start(): Boolean
     fun stop()
 }
@@ -40,6 +42,8 @@ class AudioCapture(
     @Volatile private var job: Job? = null
     @Volatile private var running = false
     @Volatile override var currentLevel = 0f
+        private set
+    @Volatile override var silenceSeen = false
         private set
 
     private val sampleRate = 16000
@@ -66,6 +70,7 @@ class AudioCapture(
             return false
         }
         currentLevel = 0f
+        silenceSeen = false
         synchronized(lock) {
             if (!running) {
                 releaseLocked()
@@ -206,8 +211,12 @@ class AudioCapture(
                         break
                     }
                 }
-                if (isAllZeros) consecutiveZeroBytes += read
-                else {
+                if (isAllZeros) {
+                    consecutiveZeroBytes += read
+                    // Exact zeros, not a quiet room: even silence has noise in it. A second of them
+                    // means nothing is reaching us, which the keyboard reports instead of "no text".
+                    if (consecutiveZeroBytes >= SILENCE_SEEN_BYTES) silenceSeen = true
+                } else {
                     consecutiveZeroBytes = 0L
                     recoveryAttempts = 0
                 }
@@ -267,6 +276,8 @@ class AudioCapture(
     companion object {
         private const val TAG = "AudioCapture"
         private const val LEVEL_FULL_SCALE = 0.15
+        /** One second of 16 kHz 16-bit mono. */
+        private const val SILENCE_SEEN_BYTES = 32_000L
 
         /** The level for the waves from the freshest quarter of a read, as in [VibeVoiceClient]. */
         internal fun level(buffer: ByteArray, read: Int): Float {

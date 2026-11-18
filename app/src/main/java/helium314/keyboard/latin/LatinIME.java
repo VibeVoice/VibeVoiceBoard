@@ -2465,10 +2465,15 @@ public class LatinIME extends InputMethodService implements
                     ? 0L : android.os.SystemClock.elapsedRealtime() - mVoiceSessionStartedAt;
             if (mVoiceSessionText.length() == 0 && recordedMs >= EMPTY_RESULT_WARN_MS
                     && !mVoiceEndExplained && mVoiceTailMissingMs < 0) {
-                VibeVoiceDebugLogger.log("[EMPTY_RESULT] told the user nothing was recognized (" + recordedMs + "ms session)");
-                android.widget.Toast.makeText(this,
-                        getString(R.string.vibevoice_nothing_recognized, (int) Math.round(recordedMs / 1000.0)),
-                        android.widget.Toast.LENGTH_LONG).show();
+                // A microphone that sent exact zeros is the likelier cause, and the one the user
+                // can do something about: another app is holding it.
+                final boolean micSilent = mVibeVoiceClient.getMicSilenceSeen();
+                VibeVoiceDebugLogger.log("[EMPTY_RESULT] told the user nothing was recognized (" + recordedMs
+                        + "ms session, micSilent=" + micSilent + ")");
+                final String message = micSilent
+                        ? getString(R.string.vibevoice_mic_silent)
+                        : getString(R.string.vibevoice_nothing_recognized, (int) Math.round(recordedMs / 1000.0));
+                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
             }
         } else {
             EditorInfo editorInfo = getCurrentInputEditorInfo();

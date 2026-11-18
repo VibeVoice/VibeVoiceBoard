@@ -52,6 +52,7 @@
     <string name="vibevoice_no_network">No internet connection. Dictation needs one.</string>
     <string name="vibevoice_tail_missing_seconds">No reply from the server after you stopped. The last %1$d seconds may be missing.</string>
     <string name="vibevoice_tail_missing">No reply from the server after you stopped. The last words may be missing.</string>
+    <string name="vibevoice_mic_silent">Your microphone delivered only silence. Another app may be using it.</string>
     <string name="vibevoice_nothing_recognized">No text came back for %1$d seconds of recording. Please try again.</string>
     <string name="vibevoice_copied">Dictation copied to the clipboard</string>
     <string name="vibevoice_commit_lost">The app did not keep your dictation. It is on the clipboard.</string>
