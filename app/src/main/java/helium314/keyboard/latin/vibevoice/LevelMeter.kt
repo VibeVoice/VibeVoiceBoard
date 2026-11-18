@@ -33,6 +33,8 @@ class LevelMeter {
     private var floor = 0.0
     private var floorKnown = false
     private var zeroBytes = 0L
+    private var gate = 0.0
+    private var held = 0.0
 
     /** The microphone has been delivering exact zeros for at least [SILENT_NOW_BYTES]. */
     var silentNow = false
@@ -45,6 +47,8 @@ class LevelMeter {
         floorKnown = false
         zeroBytes = 0L
         silentNow = false
+        gate = 0.0
+        held = 0.0
     }
 
     /** Takes one read of 16-bit little-endian mono PCM and returns the display level, 0..1. */
@@ -112,12 +116,20 @@ class LevelMeter {
             floor += (rms - floor) * (1.0 - exp(-seconds / tau))
         }
 
-        val gate = if (floor <= 0.0) 1.0 else {
+        val gateNow = if (floor <= 0.0) 1.0 else {
             val factor = noiseFloorFactor
             val t = ((rms / floor - factor) / factor.coerceAtLeast(MIN_GATE_SPAN)).coerceIn(0.0, 1.0)
             t * t * (3 - 2 * t) // smoothstep, so the waves fade in and out instead of switching
         }
-        return (sqrt(rawRms / LEVEL_FULL_SCALE).coerceIn(0.0, 1.0) * gate).toFloat()
+        // Opens at once, closes slowly: the gap between two words is room noise, and a gate that
+        // shut on it made the waves collapse between every word.
+        gate = maxOf(gateNow, gate * exp(-seconds / GATE_RELEASE_SECONDS))
+        val now = sqrt(rawRms / LEVEL_FULL_SCALE).coerceIn(0.0, 1.0) * gate
+        // The same for the level itself: a syllable's end sinks over a fraction of a second rather
+        // than dropping to the room. A dead microphone still goes flat at once.
+        held = if (allZero) 0.0 else maxOf(now, held * exp(-seconds / LEVEL_RELEASE_SECONDS))
+        if (allZero) gate = 0.0
+        return held.toFloat()
     }
 
     companion object {
@@ -140,6 +152,10 @@ class LevelMeter {
 
         /** The gate opens over at least this ratio of level to floor, even with a factor near 0. */
         private const val MIN_GATE_SPAN = 0.5
+        /** The gate takes about this long to close after speech stops, so word gaps keep their waves. */
+        private const val GATE_RELEASE_SECONDS = 0.5
+        /** The drawn level falls with this time constant instead of dropping between syllables. */
+        private const val LEVEL_RELEASE_SECONDS = 0.25
 
         /** 300 ms of 16 kHz 16-bit mono. */
         const val SILENT_NOW_BYTES = 9_600L

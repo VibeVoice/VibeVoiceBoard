@@ -93,6 +93,19 @@ class LevelMeterTest {
     }
 
     @Test
+    fun aWordGapDoesNotDropTheWavesAtOnce() {
+        val meter = LevelMeter()
+        repeat(60) { meter.feed(noise(0.005)) }
+        var speech = 0f
+        repeat(5) { speech = meter.feed(sine(0.08).zip(noise(0.005)) { a, b -> a + b }.toDoubleArray()) }
+        val gap = meter.feed(noise(0.005)) // 100 ms of room between two words
+        assertTrue("gap $gap after speech $speech", gap > speech * 0.5f)
+        var later = 1f
+        repeat(20) { later = meter.feed(noise(0.005)) } // two seconds of quiet
+        assertTrue("still $later after two seconds", later < 0.05f)
+    }
+
+    @Test
     fun aSustainedSyllableIsNotLearnedAsNoise() {
         val meter = LevelMeter()
         repeat(60) { meter.feed(noise(0.01)) }
