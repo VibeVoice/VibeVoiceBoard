@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.latin.suggestions
 
-import android.graphics.Canvas
-import android.graphics.ColorFilter
-import android.graphics.PixelFormat
 import android.graphics.Rect
-import android.graphics.drawable.Drawable
 import helium314.keyboard.keyboard.Keyboard
 
 /**
@@ -28,11 +24,6 @@ data class StripCapGrid(
     val slotWidth: Int get() = (right - left) / slots
 
     fun slotLeft(index: Int): Int = left + (right - left) * index / slots
-
-    fun slotRight(index: Int): Int = slotLeft(index + 1)
-
-    /** Cap of one slot: the column minus the half gap on each side. */
-    fun capRect(index: Int): Rect = Rect(slotLeft(index) + hGap / 2, capTop, slotRight(index) - hGap / 2, capBottom)
 
     /** One cap over the whole grid, from the first key's left edge to the last key's right edge. */
     fun wideCapRect(): Rect = Rect(left + hGap / 2, capTop, right - hGap / 2, capBottom)
@@ -70,53 +61,4 @@ data class StripCapGrid(
             return from(boxLeft, boxRight, hGap, firstRowTop, first.verticalGap, stripHeight, minCapHeight)
         }
     }
-}
-
-/** Mutable numbers shared by all [KeyCapDrawable]s of one strip, so a new grid reaches them without rebuilding. */
-class CapMetrics {
-    var hInset = 0
-    var top = 0
-    var bottom = 0
-
-    /** True while the toolbar icons are shown: each icon has its own cap. Otherwise one wide cap is drawn by the strip. */
-    var perKeyCaps = false
-}
-
-/**
- * A toolbar key's background when keys are drawn: the keyboard's own key drawable (same colour,
- * alpha, corner radius and pressed state), inset to the cap's rectangle, plus an optional
- * [extra] layer (pinned highlight, recording glow) over the full view bounds.
- */
-class KeyCapDrawable(private val cap: Drawable, private val extra: Drawable?, private val metrics: CapMetrics) : Drawable() {
-    override fun draw(canvas: Canvas) {
-        val b = bounds
-        if (metrics.perKeyCaps) {
-            cap.setBounds(b.left + metrics.hInset, b.top + metrics.top, b.right - metrics.hInset, b.bottom - metrics.bottom)
-            cap.draw(canvas)
-        }
-        extra?.let {
-            it.setBounds(b)
-            it.draw(canvas)
-        }
-    }
-
-    override fun isStateful() = true
-
-    override fun onStateChange(state: IntArray): Boolean {
-        val changed = cap.setState(state)
-        val extraChanged = extra?.setState(state) ?: false
-        return changed || extraChanged
-    }
-
-    override fun setAlpha(alpha: Int) {
-        cap.alpha = alpha
-        extra?.alpha = alpha
-    }
-
-    override fun setColorFilter(colorFilter: ColorFilter?) {
-        extra?.colorFilter = colorFilter
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun getOpacity() = PixelFormat.TRANSLUCENT
 }

@@ -23,12 +23,11 @@ class StripCapGridTest {
     }
 
     @Test
-    fun tenCaps_lineUpWithTenKeyColumnsAndHaveTheKeyGap() {
-        val caps = (0 until 10).map { grid.capRect(it) }
-        assertEquals(grid.wideCapRect().left, caps.first().left)
-        assertEquals(grid.wideCapRect().right, caps.last().right)
-        for (i in 0 until 9) assertEquals("gap between cap $i and ${i + 1}", 18, caps[i + 1].left - caps[i].right)
-        caps.forEach { assertEquals(140 - 18, it.width()) }
+    fun tenSlots_coverTheWholeGridEvenly() {
+        assertEquals(140, grid.slotWidth)
+        assertEquals(20, grid.slotLeft(0))
+        assertEquals(1420, grid.slotLeft(10))
+        for (i in 0 until 10) assertEquals(140, grid.slotLeft(i + 1) - grid.slotLeft(i))
     }
 
     @Test

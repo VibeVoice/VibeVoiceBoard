@@ -103,7 +103,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     /** Draw-keys style: the strip is drawn like the keys, as caps on the key grid. Off: nothing below changes. */
     private val useCaps = Settings.getValues().mColors.hasKeyBorders
-    private val capMetrics = CapMetrics()
     private var grid: StripCapGrid? = null
 
     init {
@@ -143,9 +142,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
-    /** Background of a toolbar key in caps mode: its own cap while the icons are shown, [extra] on top. */
-    private fun keyCapBackground(colors: Colors, extra: Drawable? = null): Drawable = KeyCapDrawable(newCap(colors), extra, capMetrics)
-
     /** Background of a suggestion word in caps mode: nothing, the wide cap is behind it, but the cap's pressed look. */
     private fun pressOnlyCapBackground(colors: Colors): Drawable = StateListDrawable().apply {
         addState(intArrayOf(android.R.attr.state_pressed), newCap(colors))
@@ -169,9 +165,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         val g = computeGrid() ?: return
         if (g == grid) return
         grid = g
-        capMetrics.hInset = g.hGap / 2
-        capMetrics.top = g.capTop
-        capMetrics.bottom = height - g.capBottom
         stripWrapper.setPadding(g.left, 0, (width - g.right).coerceAtLeast(0), 0)
         (toolbarExpandKey.layoutParams as? LinearLayout.LayoutParams)?.let {
             it.width = g.slotWidth
@@ -194,7 +187,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             val computed = computeGrid()
             if (computed != null && computed != grid) post { applyKeyGrid() }
             val g = grid
-            if (g != null && !toolbarContainer.isVisible) {
+            if (g != null) { // one wide cap behind the whole row, toolbar and suggestions alike
                 wideCap.bounds = g.wideCapRect()
                 wideCap.draw(canvas)
             }
@@ -241,8 +234,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         toolbarExpandKey.layoutParams.height = toolbarHeight
         toolbarExpandKey.layoutParams.width = toolbarHeight // we want it square
         if (useCaps) {
-            // a cap like the other slots instead of the round button; the arrow in the keys' icon colour
-            toolbarExpandKey.background = keyCapBackground(colors)
+            // no button of its own: the wide cap is behind it; the arrow in the keys' icon colour
+            toolbarExpandKey.background = ColorDrawable(Color.TRANSPARENT)
+            toolbarContainer.showScrollBar = false
+        toolbarContainer.overScrollMode = OVER_SCROLL_NEVER
+        toolbarContainer.isHorizontalFadingEdgeEnabled = false
             colors.setColor(toolbarExpandKey, ColorType.KEY_ICON)
         } else {
             colors.setBackground(toolbarExpandKey, ColorType.STRIP_BACKGROUND) // necessary because background is re-used for defaultToolbarBackground
@@ -361,7 +357,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         pinnedKeys.isVisible = !toolbarVisible
         suggestionsStrip.isVisible = !toolbarVisible
         toolbarContainer.isVisible = toolbarVisible
-        capMetrics.perKeyCaps = toolbarVisible
         if (useCaps) invalidate()
 
         if (DEBUG_SUGGESTIONS) {
@@ -775,7 +770,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // The glow goes on the layer underneath as the view's background, which is also what
             // keeps it out of any tint: a colour filter on an ImageView applies to its image and
             // not to its background.
-            button.background = if (useCaps) keyCapBackground(Settings.getValues().mColors, voiceActiveGlow) else voiceActiveGlow
+            button.background = voiceActiveGlow
         } else {
             button.setImageDrawable(KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.VOICE.name, context))
             // No "pinned" highlight to preserve any more: the key is not in the toolbar and not in
@@ -788,11 +783,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
-    private fun pinnedHighlightBackground(colors: Colors): Drawable =
-        if (useCaps) keyCapBackground(colors, enabledToolKeyBackground) else enabledToolKeyBackground
+    private fun pinnedHighlightBackground(@Suppress("UNUSED_PARAMETER") colors: Colors): Drawable = enabledToolKeyBackground
 
     private fun plainKeyBackground(): Drawable? =
-        if (useCaps) keyCapBackground(Settings.getValues().mColors) else defaultToolbarBackground.constantState?.newDrawable(resources)
+        if (useCaps) ColorDrawable(Color.TRANSPARENT) else defaultToolbarBackground.constantState?.newDrawable(resources)
 
     private fun updateKeys() {
         updateVoiceKey()
@@ -890,7 +884,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         view.setOnLongClickListener(this)
         (view.layoutParams as LinearLayout.LayoutParams).weight = 1f
         colors.setColor(view, ColorType.TOOL_BAR_KEY)
-        if (useCaps) view.background = keyCapBackground(colors)
+        if (useCaps) view.background = ColorDrawable(Color.TRANSPARENT)
         else colors.setBackground(view, ColorType.STRIP_BACKGROUND)
     }
 
