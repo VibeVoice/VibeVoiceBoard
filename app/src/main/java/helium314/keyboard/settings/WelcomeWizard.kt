@@ -178,7 +178,7 @@ fun WelcomeWizard(
 
     @Composable fun bigText() {
         // Nothing above the hero or closing screens
-        if (step == 0 || step == 5) return
+        if (step == 0 || step == 6) return
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text(
                 stringResource(R.string.brand_wordmark).uppercase(),
@@ -207,7 +207,7 @@ fun WelcomeWizard(
     // accent, the rest a faint track, and the colour eases across when the step changes instead of
     // snapping.
     @Composable fun StepNumbers(current: Int) {
-        val total = 4
+        val total = 5
         Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
             Text(
                 stringResource(R.string.setup_step_progress, current, total).uppercase(),
@@ -367,7 +367,7 @@ fun WelcomeWizard(
     @Composable fun steps() {
         if (step == 0) {
             WizardHero(closing = false) { step = 1 }
-        } else if (step == 5) {
+        } else if (step == 6) {
             WizardHero(closing = true) {
                 ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
                 finish()
@@ -812,6 +812,23 @@ fun WelcomeWizard(
                             shape = cardShape
                         )
                     }
+                } else if (step == 5) {
+                    StepHeader(
+                        5,
+                        stringResource(R.string.setup_vibrate_title),
+                        stringResource(R.string.setup_vibrate_instruction)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    VibrateStep(
+                        dark = dark,
+                        onAnswer = { vibrate ->
+                            ctx.prefs().edit().putBoolean(KeySettings.PREF_VIBRATE_ON, vibrate).apply()
+                            step = 6
+                        },
+                        onSkip = {
+                            step = 6
+                        }
+                    )
                 }
             }
         }
@@ -819,7 +836,7 @@ fun WelcomeWizard(
     Box(Modifier.fillMaxSize()) {
         BrandBackground(dark)
         // The waves on hero and closing screens
-        if (step == 0 || step == 5) HeroWaves(dark)
+        if (step == 0 || step == 6) HeroWaves(dark)
         Surface(color = Color.Transparent) {
         CompositionLocalProvider(
             LocalContentColor provides textColor,
@@ -851,13 +868,13 @@ fun WelcomeWizard(
                     // between steps. Anchored to the top, only the content below them changes. The
                     // hero and the closing screen are single compositions and stay centred.
                     .padding(horizontal = 28.dp)
-                    .padding(top = if (step == 0 || step == 5) 32.dp else 64.dp, bottom = 32.dp),
-                verticalArrangement = if (step == 0 || step == 5) Arrangement.Center else Arrangement.Top,
+                    .padding(top = if (step == 0 || step == 6) 32.dp else 64.dp, bottom = 32.dp),
+                verticalArrangement = if (step == 0 || step == 6) Arrangement.Center else Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Not for the hero and the closing screen: bigText has nothing for them, and the split
                 // left a blank 40 % column beside a squeezed screen.
-                if (useWideLayout && step != 0 && step != 5)
+                if (useWideLayout && step != 0 && step != 6)
                     Row {
                         Box(Modifier.weight(0.4f)) {
                             bigText()
@@ -1100,6 +1117,86 @@ private fun WidePreview() {
     Theme(previewDark) {
         Surface {
             WelcomeWizard({}) {  }
+        }
+    }
+}
+
+/**
+ * Step asking the user whether to enable vibration on keypress.
+ * Off by default; "No" is highlighted as the primary default answer.
+ */
+@Composable
+fun VibrateStep(
+    dark: Boolean,
+    onAnswer: (Boolean) -> Unit,
+    onSkip: () -> Unit
+) {
+    val cardShape = RoundedCornerShape(6.dp)
+    val stepBackgroundColor = if (dark) Color(0x17FFFFFF) else Color(0x0F000000)
+    val textColor = Brand.text(dark)
+    val textColorDim = Brand.textFaint(dark)
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
+                .background(Brand.accent(dark).copy(alpha = if (dark) 0.20f else 0.14f))
+                .clickable { onAnswer(false) }
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_setup_check), null,
+                Modifier.size(20.dp),
+                tint = Brand.accent(dark)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                stringResource(R.string.setup_vibrate_no),
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge.merge(color = textColor),
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
+                .background(stepBackgroundColor)
+                .clickable { onAnswer(true) }
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_setup_select), null,
+                Modifier.size(20.dp),
+                tint = textColorDim
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                stringResource(R.string.setup_vibrate_yes),
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge.merge(color = textColor),
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clickable { onSkip() }
+                .padding(vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                stringResource(R.string.setup_try_skip),
+                style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
