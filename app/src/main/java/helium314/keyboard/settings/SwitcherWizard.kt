@@ -58,6 +58,7 @@ import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.SwitcherHelper
 import helium314.keyboard.latin.utils.BackButton
+import helium314.keyboard.latin.utils.getActivity
 import java.util.Locale
 
 /**
@@ -459,9 +460,15 @@ fun SwitcherFlow(
 fun SwitcherScreen(
     onClickBack: () -> Unit
 ) {
+    val ctx = LocalContext.current
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val textColor = Brand.text(dark)
     val scrollState = rememberScrollState()
+
+    val onFinish = {
+        (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+        onClickBack()
+    }
 
     Box(Modifier.fillMaxSize()) {
         BrandBackground(dark)
@@ -493,8 +500,8 @@ fun SwitcherScreen(
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
                 SwitcherFlow(
-                    onFinished = onClickBack,
-                    onSkipped = onClickBack,
+                    onFinished = onFinish,
+                    onSkipped = onFinish,
                     onBack = onClickBack
                 )
             }
