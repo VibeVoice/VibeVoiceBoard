@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.core.content.edit
 import androidx.test.core.app.ApplicationProvider
 import helium314.keyboard.keyboard.KeyboardTheme
+import helium314.keyboard.latin.LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS
+import helium314.keyboard.latin.checkVersionUpgrade
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
@@ -107,5 +109,44 @@ class DrawKeysThemeTest {
         }
         val borderColors = KeyboardTheme.getColorsForCurrentTheme(context)
         assertTrue(borderColors.hasKeyBorders)
+    }
+
+    @Test
+    fun upgradeCopiesKeyBordersIntoDrawKeysOnce() {
+        val prefs = context.prefs()
+        prefs.edit {
+            putInt(Settings.PREF_VERSION_CODE, LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS - 1)
+            putBoolean(Settings.PREF_THEME_KEY_BORDERS, true)
+        }
+
+        checkVersionUpgrade(context)
+
+        assertTrue(prefs.contains(Settings.PREF_DRAW_KEYS))
+        assertTrue(prefs.getBoolean(Settings.PREF_DRAW_KEYS, Defaults.PREF_DRAW_KEYS))
+    }
+
+    @Test
+    fun upgradeKeepsExplicitDrawKeysValue() {
+        val prefs = context.prefs()
+        prefs.edit {
+            putInt(Settings.PREF_VERSION_CODE, LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS - 1)
+            putBoolean(Settings.PREF_THEME_KEY_BORDERS, true)
+            putBoolean(Settings.PREF_DRAW_KEYS, false)
+        }
+
+        checkVersionUpgrade(context)
+
+        assertFalse(prefs.getBoolean(Settings.PREF_DRAW_KEYS, true))
+    }
+
+    @Test
+    fun upgradeWithoutKeyBordersLeavesDrawKeysUnset() {
+        val prefs = context.prefs()
+        prefs.edit { putInt(Settings.PREF_VERSION_CODE, LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS - 1) }
+
+        checkVersionUpgrade(context)
+
+        assertFalse(prefs.contains(Settings.PREF_DRAW_KEYS))
+        assertFalse(Settings.readDrawKeys(prefs))
     }
 }

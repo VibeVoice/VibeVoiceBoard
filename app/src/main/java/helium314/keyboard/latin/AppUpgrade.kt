@@ -720,6 +720,9 @@ private object AppUpgrade {
             // stored a value had it on, and must keep it.
             if (!prefs.contains(Settings.PREF_VIBRATE_ON))
                 prefs.edit { putBoolean(Settings.PREF_VIBRATE_ON, true) }
+            // the "draw keys" switch is new, and what it does used to be the theme_key_borders setting
+            if (!prefs.contains(Settings.PREF_DRAW_KEYS) && prefs.contains(Settings.PREF_THEME_KEY_BORDERS))
+                prefs.edit { putBoolean(Settings.PREF_DRAW_KEYS, prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)) }
         }
         upgradeToolbarPrefs(prefs)
         LayoutUtilsCustom.onLayoutFileChanged() // just to be sure
