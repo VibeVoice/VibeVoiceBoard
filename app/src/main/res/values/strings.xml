@@ -798,6 +798,25 @@ language, hence "No language". -->
     <string name="setup_done_slogan_line2" translatable="false">Typing will never</string>
     <string name="setup_done_slogan_line3" translatable="false">feel the same.</string>
     <string name="setup_step_progress">Step %1$d of %2$d</string>
+
+    <!-- Switcher wizard (switching from another keyboard) -->
+    <string name="switcher_settings_title">Switching from another keyboard?</string>
+    <string name="switcher_settings_summary">Match presets and set up languages</string>
+    <string name="switcher_step_progress">Question %1$d of %2$d</string>
+    <string name="switcher_skip">Skip</string>
+    <string name="switcher_q1_title">Which keyboard did you use before?</string>
+    <string name="switcher_q1_instruction">We\'ll adjust key spacing and layout to match your muscle memory.</string>
+    <string name="switcher_keyboard_gboard">Gboard</string>
+    <string name="switcher_keyboard_samsung">Samsung Keyboard</string>
+    <string name="switcher_keyboard_other">Something else</string>
+    <string name="switcher_keyboard_other_desc">Keep standard layout (default)</string>
+    <string name="switcher_q2_title">Which language do you mostly type in?</string>
+    <string name="switcher_q2_instruction">Sets your primary typing language.</string>
+    <string name="switcher_system_language_badge">System language</string>
+    <string name="switcher_q3_title">Do you also type in a second language?</string>
+    <string name="switcher_q3_instruction">Enables multilingual typing with predictions in both languages.</string>
+    <string name="switcher_second_lang_no">No, just one language</string>
+    <string name="switcher_second_lang_no_desc">Single language typing (default)</string>
     <string name="debug_open_setup_wizard">Open setup wizard</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>

@@ -159,4 +159,23 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_blocked_private_field">In Passwortfeldern und privaten Tabs ist das Diktat aus</string>
     <string name="setup_link_action">Konto verknüpfen</string>
     <string name="setup_step_progress">Schritt %1$d von %2$d</string>
+
+    <!-- Switcher wizard (switching from another keyboard) -->
+    <string name="switcher_settings_title">Von einer anderen Tastatur wechseln?</string>
+    <string name="switcher_settings_summary">Layout anpassen und Sprachen einrichten</string>
+    <string name="switcher_step_progress">Frage %1$d von %2$d</string>
+    <string name="switcher_skip">Überspringen</string>
+    <string name="switcher_q1_title">Welche Tastatur hast du vorher genutzt?</string>
+    <string name="switcher_q1_instruction">Wir passen Tastenabstand und Layout an deine Gewohnheiten an.</string>
+    <string name="switcher_keyboard_gboard">Gboard</string>
+    <string name="switcher_keyboard_samsung">Samsung Keyboard</string>
+    <string name="switcher_keyboard_other">Eine andere</string>
+    <string name="switcher_keyboard_other_desc">Standard-Layout beibehalten (Standard)</string>
+    <string name="switcher_q2_title">In welcher Sprache tippst du meistens?</string>
+    <string name="switcher_q2_instruction">Legt deine Hauptsprache fest.</string>
+    <string name="switcher_system_language_badge">Systemsprache</string>
+    <string name="switcher_q3_title">Tippst du auch in einer zweiten Sprache?</string>
+    <string name="switcher_q3_instruction">Aktiviert mehrsprachiges Tippen mit Vorschlägen in beiden Sprachen.</string>
+    <string name="switcher_second_lang_no">Nein, nur eine Sprache</string>
+    <string name="switcher_second_lang_no_desc">Einsprachiges Tippen (Standard)</string>
 </resources>
