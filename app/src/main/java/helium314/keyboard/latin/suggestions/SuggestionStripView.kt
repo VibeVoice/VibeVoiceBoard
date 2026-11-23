@@ -165,7 +165,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun slotCount() = (1 + toolbar.childCount + voiceAnchor.childCount).coerceAtLeast(MIN_SLOTS)
 
     /** The slot width: an even share of the grid, but never so narrow that a key is hard to hit (then the toolbar scrolls). */
-    private fun slotWidthOf(g: StripCapGrid) = max(g.slotWidth, (toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION).toInt())
+    private fun slotWidthOf(g: StripCapGrid) =
+        max((g.right - g.left - rightInset()) / g.slots, (toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION).toInt())
+
+    /**
+     * Extra room kept free on the right so the padding between the cap's edge and the outermost icons is the same on
+     * both sides: the expand arrow's ink is narrow, the VibeVoice mark's is wide, and centres stay evenly spaced.
+     */
+    private fun rightInset() = ((VOICE_INK_DP - EXPAND_INK_DP) / 2f * resources.displayMetrics.density).toInt()
 
     /**
      * Lays the strip out on the key grid: the ten slots of the toolbar (expand key, eight tools,
@@ -182,7 +189,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 container.layoutParams = container.layoutParams.also { it.height = stripHeight }
             }
         }
-        stripWrapper.setPadding(g.left, 0, (width - g.right).coerceAtLeast(0), 0)
+        stripWrapper.setPadding(g.left, 0, (width - g.right).coerceAtLeast(0) + rightInset(), 0)
         (toolbarExpandKey.layoutParams as? LinearLayout.LayoutParams)?.let {
             it.width = slotWidthOf(g)
             it.height = LinearLayout.LayoutParams.MATCH_PARENT
@@ -195,6 +202,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             child.layoutParams = child.layoutParams.also { it.width = slotWidthOf(g) }
         }
         fitToolbarKeys()
+        updateVoiceKey() // its mark is sized from the slot
         requestLayout()
         invalidate()
     }
@@ -784,6 +792,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             button.clearColorFilter()
             if (mark != null) button.setImageBitmap(mark) else button.setImageDrawable(plain)
             button.scaleType = ImageView.ScaleType.CENTER
+            button.setPadding(0, 0, 0, 0)
             // The glow goes on the layer underneath as the view's background, which is also what
             // keeps it out of any tint: a colour filter on an ImageView applies to its image and
             // not to its background.
@@ -804,7 +813,16 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 button.clearColorFilter()
                 colors.setColor(button, ColorType.TOOL_BAR_KEY)
             }
-            button.scaleType = ImageView.ScaleType.CENTER
+            val slotGrid = grid
+            if (useCaps && slotGrid != null) {
+                // drawn at a fixed ink width inside its slot so it keeps the same padding to the cap's edge as the arrow on the left
+                val pad = ((slotWidthOf(slotGrid) - (VOICE_INK_DP * resources.displayMetrics.density).toInt()) / 2).coerceAtLeast(0)
+                button.setPadding(pad, 0, pad, 0)
+                button.scaleType = ImageView.ScaleType.FIT_CENTER
+            } else {
+                button.setPadding(0, 0, 0, 0)
+                button.scaleType = ImageView.ScaleType.CENTER
+            }
             view.rotation = 0f // an older build left the key tilted; clear it once
         }
     }
@@ -929,6 +947,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
         /** A cap never gets thinner than this, however small the strip. */
         private const val MIN_CAP_HEIGHT_DP = 34
+
+        /** Visible width of the expand arrow and of the VibeVoice mark, to balance the padding at the cap's two ends. */
+        private const val EXPAND_INK_DP = 7f
+        private const val VOICE_INK_DP = 22f
 
         /** The caps' slots never get fewer than this, so a toolbar of a few keys is not spread thin. */
         private const val MIN_SLOTS = 8

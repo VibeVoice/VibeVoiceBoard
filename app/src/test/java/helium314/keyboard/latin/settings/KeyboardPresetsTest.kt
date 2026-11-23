@@ -31,9 +31,9 @@ class KeyboardPresetsTest {
         val gapKey = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
         val paddingKey = createPrefKeyForBooleanSettings(Settings.PREF_SIDE_PADDING_SCALE_PREFIX, 0, 3)
 
-        assertEquals(1.05f, prefs.getFloat(heightKey, 0f), 0.001f)
-        assertEquals(1.10f, prefs.getFloat(gapKey, 0f), 0.001f)
-        assertEquals(0.14f, prefs.getFloat(paddingKey, 0f), 0.001f)
+        assertEquals(0.865f, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(1.03f, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(0.06f, prefs.getFloat(paddingKey, 0f), 0.001f)
         assertEquals("functional_keys_gboard", prefs.getString("layout_FUNCTIONAL", null))
     }
 
@@ -47,15 +47,15 @@ class KeyboardPresetsTest {
         assertTrue(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, false))
         assertFalse(prefs.getBoolean(Settings.PREF_SHOW_HINTS, true))
         assertFalse(prefs.getBoolean(Settings.PREF_SHOW_EMOJI_KEY, true))
-        assertFalse(prefs.getBoolean(Settings.PREF_SHOW_LANGUAGE_SWITCH_KEY, true))
+        assertTrue(prefs.getBoolean(Settings.PREF_SHOW_LANGUAGE_SWITCH_KEY, true))
 
         val heightKey = createPrefKeyForBooleanSettings(Settings.PREF_KEYBOARD_HEIGHT_SCALE_PREFIX, 0, 2)
         val gapKey = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
         val paddingKey = createPrefKeyForBooleanSettings(Settings.PREF_SIDE_PADDING_SCALE_PREFIX, 0, 3)
 
-        assertEquals(1.05f, prefs.getFloat(heightKey, 0f), 0.001f)
-        assertEquals(1.35f, prefs.getFloat(gapKey, 0f), 0.001f)
-        assertEquals(0.26f, prefs.getFloat(paddingKey, 0f), 0.001f)
+        assertEquals(1.17f, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(0.99f, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(0.18f, prefs.getFloat(paddingKey, 0f), 0.001f)
         assertEquals("functional_keys_samsung", prefs.getString("layout_FUNCTIONAL", null))
     }
 

@@ -10,6 +10,8 @@ import androidx.test.core.app.ApplicationProvider
 import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.settings.KeyboardPreset
+import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.suggestions.SuggestionStripView
 import helium314.keyboard.latin.suggestions.ToolbarScrollView
@@ -43,13 +45,18 @@ class StripScreenshotTest {
         view.layout(0, 0, view.measuredWidth, view.measuredHeight)
     }
 
-    private fun render(name: String) {
+    @Test @Config(qualifiers = "w411dp-h891dp-night-560dpi") fun gboard_1440() = render("gboard_1440", KeyboardPreset.GBOARD)
+
+    @Test @Config(qualifiers = "w411dp-h891dp-night-560dpi") fun samsung_1440() = render("samsung_1440", KeyboardPreset.SAMSUNG)
+
+    private fun render(name: String, preset: KeyboardPreset? = null) {
         ShadowLog.setupLogging()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         context.prefs().edit(commit = true) {
             clear()
             putBoolean(Settings.PREF_DRAW_KEYS, true)
         }
+        if (preset != null) KeyboardPresets.apply(context, preset)
         val latinIME = Robolectric.setupService(LatinIME::class.java)
         val switcher = KeyboardSwitcher.getInstance()
         val view = switcher.onCreateInputView(latinIME, true)
@@ -83,6 +90,42 @@ class StripScreenshotTest {
         val scroll = strip.findViewById<ToolbarScrollView>(R.id.toolbar_container)
         val toolbar = scroll.getChildAt(0) as ViewGroup
         println("SHOT $name ${bmp.width}x${bmp.height} strip h=${strip.height} icons=${toolbar.childCount} scrollW=${scroll.width} toolbarW=${toolbar.width} scrolling=${scroll.isScrollingEnabled}")
+        // measure the icons in the rendered pixels: bright columns inside the cap, grouped into icons
+        val gridField = SuggestionStripView::class.java.getDeclaredField("grid").apply { isAccessible = true }
+        val g = gridField.get(strip) as helium314.keyboard.latin.suggestions.StripCapGrid
+        val stripLoc = IntArray(2); strip.getLocationInWindow(stripLoc)
+        val cap = g.wideCapRect()
+        val bright = BooleanArray(bmp.width)
+        for (x in cap.left + 2 until cap.right - 2) for (y in stripLoc[1] + cap.top + 2 until stripLoc[1] + cap.bottom - 2) {
+            val c = bmp.getPixel(x, y)
+            if (minOf(android.graphics.Color.red(c), android.graphics.Color.green(c), android.graphics.Color.blue(c)) > 170) { bright[x] = true; break }
+        }
+        val boxes = ArrayList<IntArray>()
+        var x = cap.left
+        while (x < cap.right) {
+            if (bright[x]) {
+                var end = x; var gap = 0; var i = x
+                while (i < cap.right && gap <= 14) { if (bright[i]) { end = i; gap = 0 } else gap++; i++ }
+                boxes.add(intArrayOf(x, end)); x = end + 1
+            } else x++
+        }
+        val centers = boxes.map { (it[0] + it[1]) / 2 }
+        println("MEASURE $name cap=${cap.left}..${cap.right} capH=${cap.height()} icons=${boxes.size}")
+        println("MEASURE boxes=${boxes.map { "${it[0]}-${it[1]}" }}")
+        println("MEASURE center-to-center=${centers.zipWithNext { a, b -> b - a }}")
+        println("MEASURE edge gaps=${boxes.zipWithNext { a, b -> b[0] - a[1] }}")
+        println("MEASURE padLeft=${boxes.first()[0] - cap.left} padRight=${cap.right - boxes.last()[1]}")
+        run {
+            val kb = switcher.keyboard!!
+            val rows = kb.sortedKeys.filter { !it.isSpacer }.groupBy { it.y }.toSortedMap()
+            val stripH = strip.height
+            val sTop = stripLoc[1]
+            val tops = rows.keys.toList()
+            val heights = rows.values.map { it.first().height }
+            println("GEOM $name W=${bmp.width} stripH=$stripH capTop=${g.capTop} capBottom=${g.capBottom} rowTops=${tops.map { it + sTop + stripH }} keyH=$heights " +
+                "pitch=${tops.zipWithNext { a, b -> b - a }} lastRowBottom=${tops.last() + heights.last() + sTop + stripH} bmpH=${bmp.height} kbH=${kb.mOccupiedHeight} " +
+                "bottomRowKeyW=${rows.values.last().sortedBy { it.x }.map { "%.3f".format(it.width / bmp.width.toFloat()) }} keyW=${rows.values.first().first().width} hGap=${rows.values.first().first().horizontalGap} vGap=${rows.values.first().first().verticalGap} sideL=${rows.values.first().minOf { it.x }}")
+        }
         val voice = strip.findViewById<ViewGroup>(R.id.voice_anchor)
         val loc = IntArray(2); voice.getLocationInWindow(loc)
         var brightest = 0
