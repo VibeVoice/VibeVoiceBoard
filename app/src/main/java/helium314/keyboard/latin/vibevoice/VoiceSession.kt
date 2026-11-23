@@ -17,6 +17,8 @@ interface VoiceSession {
     val isLinkDegraded: Boolean
     /** The microphone delivered only exact zeros for a while during this session. */
     val micSilenceSeen: Boolean get() = false
+    /** The session ended without text because the server was never reachable or kept refusing. */
+    val serverUnavailable: Boolean get() = false
     fun startStreaming()
     fun stopStreaming()
     fun cancel()

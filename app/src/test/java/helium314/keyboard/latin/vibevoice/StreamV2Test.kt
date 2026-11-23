@@ -101,7 +101,8 @@ class StreamV2Test {
         override fun onFinal(text: String, isNewSegment: Boolean) { errors.add("unexpected onFinal") }
         override fun onError(error: String) { errors.add(error); closed.countDown() }
         override fun onWarning(code: String) {}
-        override fun onLinkQualityChanged(degraded: Boolean) {}
+        @Volatile var degradedSeen = false
+        override fun onLinkQualityChanged(degraded: Boolean) { if (degraded) degradedSeen = true }
         override fun onTailMissing(unansweredMs: Long) { tailMissing = true }
         override fun onClosed() { closed.countDown() }
         override fun onCommitComposing() {}
@@ -379,4 +380,48 @@ class StreamV2Test {
         s.cancel()
     }
 
+    private open inner class FakeServer2 : FakeServer() {
+        override fun onStart(ws: WebSocket, o: JSONObject) {
+            ws.send("""{"type":"error","code":"server_restarting","message":"restarting","retryable":true}""")
+            ws.close(1012, "restarting")
+        }
+    }
+
+    private fun refusingServer(n: Int) = repeat(n) { server.enqueue(MockResponse().withWebSocketUpgrade(FakeServer2())) }
+
+    @Test fun serverRestartingBeforeReadyShowsWaitingAndKeepsTryingLongerThanTheOrdinaryWindow() {
+        refusingServer(40)
+        val rec = Recorder()
+        // Ordinary window 1.5 s; restart window 6 s: still alive after the ordinary one.
+        val s = VibeVoiceStreamV2("key", "test", rec, server.url("/api/v2/stream").toString(), false, 1_500L, 6_000L) { scope, onAudio, _ ->
+            FakeMic(scope, onAudio)
+        }
+        s.startStreaming()
+        waitFor("degraded before ready", 1_400) { s.isLinkDegraded }
+        assertTrue(rec.degradedSeen)
+        Thread.sleep(2_500)
+        assertTrue("session ended early: ${rec.errors}", rec.closed.count == 1L)
+        s.cancel()
+    }
+
+    @Test fun giveUpAfterRefusalsFlagsTheServerAsUnavailableAndSkipsTailMissing() {
+        refusingServer(40)
+        val rec = Recorder()
+        val s = VibeVoiceStreamV2("key", "test", rec, server.url("/api/v2/stream").toString(), false, 1_500L, 2_500L) { scope, onAudio, _ ->
+            FakeMic(scope, onAudio)
+        }
+        s.startStreaming()
+        Thread.sleep(300)
+        s.stopStreaming() // not ready: the end is deferred and the session keeps retrying
+        // Robolectric's SystemClock stands still, so move it: 3 s of outage against a 2.5 s window.
+        val until = System.currentTimeMillis() + 10_000
+        while (rec.closed.count > 0 && System.currentTimeMillis() < until) {
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(300))
+            Thread.sleep(50)
+        }
+        assertTrue("session never closed", rec.closed.count == 0L)
+        assertTrue(s.serverUnavailable)
+        assertFalse("no misleading tail warning", rec.tailMissing)
+        s.cancel()
+    }
 }
