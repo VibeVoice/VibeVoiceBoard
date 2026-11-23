@@ -1894,6 +1894,11 @@ public class LatinIME extends InputMethodService implements
 
             String apiKey = VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
+                if (VibeVoiceClient.isSetupWizardActive(this)) {
+                    VibeVoiceDebugLogger.log("Voice input requested in setup wizard without key: triggering retry");
+                    VibeVoiceClient.triggerTrialRetry(this);
+                    return;
+                }
                 android.widget.Toast
                         .makeText(this, R.string.vibevoice_not_linked, android.widget.Toast.LENGTH_LONG).show();
                 launchSettings("vibevoice");

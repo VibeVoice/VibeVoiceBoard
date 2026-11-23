@@ -786,6 +786,8 @@ language, hence "No language". -->
     <string name="setup_try_phase_b_instruction">Now the other half — let it hear you.</string>
     <string name="setup_try_phase_c_title">Tap the mark and say something.</string>
     <string name="setup_try_phase_c_instruction">Tap the V at the top right of the keyboard, or hold the space bar.</string>
+    <string name="setup_try_trial_connecting">Setting up your free trial minutes…</string>
+    <string name="setup_try_trial_retry">Couldn’t connect to VibeVoice. Tap to retry.</string>
 
     <string name="setup_minutes_title">"Your minutes"</string>
     <string name="setup_minutes_instruction">"These first 10 minutes are on us — no account needed.\n\nAfter that, a free account gives you 30 minutes a month. Pro is €3 for 180."</string>
