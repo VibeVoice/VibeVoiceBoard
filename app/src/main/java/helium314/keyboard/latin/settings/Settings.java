@@ -58,6 +58,7 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_ICON_STYLE = "icon_style";
     public static final String PREF_THEME_COLORS = "theme_colors";
     public static final String PREF_THEME_COLORS_NIGHT = "theme_colors_night";
+    public static final String PREF_DRAW_KEYS = "draw_keys";
     public static final String PREF_THEME_KEY_BORDERS = "theme_key_borders";
     public static final String PREF_THEME_DAY_NIGHT = "theme_auto_day_night";
     public static final String PREF_USER_COLORS_PREFIX = "user_colors_";
@@ -508,6 +509,10 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
         int index = SettingsKt.findIndexOfDefaultSetting(landscape, folded);
         float defaultValue = Defaults.PREF_KEY_GAP_SCALE[index];
         return prefs.getFloat(SettingsKt.createPrefKeyForBooleanSettings(PREF_KEY_GAP_SCALE_PREFIX, index, 2), defaultValue);
+    }
+
+    public static boolean readDrawKeys(final SharedPreferences prefs) {
+        return prefs.getBoolean(PREF_DRAW_KEYS, prefs.getBoolean(PREF_THEME_KEY_BORDERS, Defaults.PREF_DRAW_KEYS));
     }
 
     public static boolean readHasHardwareKeyboard(final Configuration conf) {

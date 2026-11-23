@@ -1,15 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item >
-        <shape android:shape="rectangle">
-            <solid android:color="@color/key_bottom_bevel_lxx_base" />
-            <corners android:radius="5dp"/>
-        </shape>
-    </item>
-    <item android:bottom="1dp">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/key_background_normal_lxx_base_border" />
-            <corners android:radius="5dp" />
-        </shape>
-    </item>
-</layer-list>
+<!--
+    SPDX-License-Identifier: Apache-2.0
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/key_background_normal_lxx_base_border" />
+    <corners android:radius="@dimen/config_key_caps_corner_radius" />
+</shape>

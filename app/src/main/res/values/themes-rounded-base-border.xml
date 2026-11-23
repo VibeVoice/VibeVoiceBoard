@@ -21,6 +21,8 @@
         >
         <!-- This should be aligned with KeyboardTheme.THEME_ID_* -->
         <item name="themeId">RoundedBaseBorder</item>
+        <item name="horizontalGap">@fraction/config_key_caps_horizontal_gap</item>
+        <item name="verticalGap">@fraction/config_key_caps_vertical_gap</item>
     </style>
     <style
         name="KeyboardView.Rounded_Base_Border"

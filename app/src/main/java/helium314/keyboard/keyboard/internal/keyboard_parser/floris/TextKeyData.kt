@@ -418,8 +418,7 @@ sealed interface KeyData : AbstractKeyData {
             KeyLabel.SHIFT -> return Key.BACKGROUND_TYPE_FUNCTIONAL
         }
         if (type == KeyType.PLACEHOLDER) return Key.BACKGROUND_TYPE_EMPTY
-        if ((params.mId.element == KeyboardElement.SYMBOLS || params.mId.element == KeyboardElement.SYMBOLS_SHIFTED)
-                && (groupId == GROUP_COMMA || groupId == GROUP_PERIOD))
+        if (groupId == GROUP_COMMA || groupId == GROUP_PERIOD)
             return Key.BACKGROUND_TYPE_FUNCTIONAL
         return Key.BACKGROUND_TYPE_NORMAL
     }

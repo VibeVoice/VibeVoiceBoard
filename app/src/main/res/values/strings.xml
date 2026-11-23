@@ -1430,6 +1430,11 @@ New dictionary:
     <!-- Hint indicating that long-press selects entries
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="gesture_data_long_press_select_hint">Long-press to select</string>
+    <!-- Title of the setting for drawing key caps -->
+    <string name="draw_keys">Draw keys</string>
+    <!-- Description of the setting for drawing key caps -->
+    <string name="draw_keys_summary">Visible key caps</string>
+
     <!-- Toolbar key to enable / disable background gesture data gathering
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="background_gathering" tools:keep="@string/background_gathering">Background data gathering</string>
