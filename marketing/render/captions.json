@@ -32,8 +32,8 @@
       },
       {
         "id": "languages",
-        "en": { "lead": "Three languages.", "rest": "One sentence.", "note": "9.31% word error rate · over fifty languages" },
-        "de": { "lead": "Drei Sprachen.", "rest": "Ein Satz.", "note": "9,31 % Wortfehlerrate · über fünfzig Sprachen" }
+        "en": { "lead": "Three languages.", "rest": "One sentence.", "note": "7.33% word error rate · over fifty languages" },
+        "de": { "lead": "Drei Sprachen.", "rest": "Ein Satz.", "note": "7,33 % Wortfehlerrate · über fünfzig Sprachen" }
       },
       {
         "id": "floating",
