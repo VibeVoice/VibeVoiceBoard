@@ -6,7 +6,9 @@ import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.common.Constants.Subtype.ExtraValue
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.KeyboardPreset
+import helium314.keyboard.latin.settings.PreviousKeyboard
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.settings.createPrefKeyForBooleanSettings
 import helium314.keyboard.latin.settings.SettingsSubtype
 import helium314.keyboard.latin.settings.SettingsSubtype.Companion.toSettingsSubtype
 import helium314.keyboard.latin.settings.SwitcherHelper
@@ -282,5 +284,63 @@ class SwitcherHelperTest {
 
         val displayName = SwitcherHelper.getLocaleDisplayName(latinIME, Locale.GERMANY)
         assertTrue(displayName.isNotBlank())
+    }
+
+    @Test
+    fun previousKeyboardToPresetMapping() {
+        assertEquals(KeyboardPreset.GBOARD, PreviousKeyboard.GBOARD.toPreset())
+        assertEquals(KeyboardPreset.SAMSUNG, PreviousKeyboard.SAMSUNG.toPreset())
+        assertEquals(null, PreviousKeyboard.OTHER.toPreset())
+        assertEquals(null, PreviousKeyboard.FIRST.toPreset())
+    }
+
+    @Test
+    fun applyingOtherOrFirstPresetPreservesCustomKeyboardPreferences() {
+        val prefs = latinIME.prefs()
+        val gapKey = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
+        prefs.edit {
+            putBoolean(Settings.PREF_SHOW_NUMBER_ROW, true)
+            putFloat(gapKey, 1.45f)
+        }
+
+        // Apply with OTHER preset (which maps to null)
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = PreviousKeyboard.OTHER.toPreset(),
+            mainLocale = null,
+            secondLocale = null
+        )
+
+        assertTrue(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, false))
+        assertEquals(1.45f, prefs.getFloat(gapKey, 0f))
+
+        // Apply with FIRST preset (which maps to null)
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = PreviousKeyboard.FIRST.toPreset(),
+            mainLocale = null,
+            secondLocale = null
+        )
+
+        assertTrue(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, false))
+        assertEquals(1.45f, prefs.getFloat(gapKey, 0f))
+    }
+
+    @Test
+    fun languageOptionsFormattedWithSingleBracketAndNoDuplicateLanguages() {
+        val options = SwitcherHelper.getLanguageOptions(latinIME)
+        assertTrue(options.isNotEmpty())
+
+        options.forEach { opt ->
+            assertTrue(opt.label.isNotBlank())
+            assertFalse(opt.label.contains("((") || opt.label.contains("))"))
+        }
+
+        val us = options.find { it.locale.toLanguageTag() == "en-US" }
+        assertNotNull(us)
+        assertEquals("English (US)", us.label)
+
+        val tags = options.map { it.locale.toLanguageTag() }
+        assertEquals(tags.size, tags.toSet().size)
     }
 }
