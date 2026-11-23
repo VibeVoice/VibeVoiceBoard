@@ -26,6 +26,8 @@ import android.util.StateSet
 import android.util.TypedValue
 import android.view.Gravity
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.DrawableCompat
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.LayoutInflater
@@ -71,6 +73,7 @@ import helium314.keyboard.latin.utils.removePinnedKey
 import helium314.keyboard.latin.utils.setToolbarButtonsActivatedStateOnPrefChange
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 import androidx.core.view.isGone
 import helium314.keyboard.latin.utils.onClickToolbarKey
@@ -150,11 +153,19 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     private val wideCap: Drawable by lazy { newCap(Settings.getValues().mColors) }
 
-    private fun computeGrid(): StripCapGrid? {
+    private fun computeGrid(): Pair<StripCapGrid, Int>? {
         if (height <= 0 || width <= 0) return null
         val keyboard = KeyboardSwitcher.getInstance().keyboard ?: return null
-        return StripCapGrid.fromKeyboard(keyboard, height, MIN_CAP_HEIGHT_DP.dpToPx(resources))
+        val minCap = MIN_CAP_HEIGHT_DP.dpToPx(resources)
+        val stripHeight = StripCapGrid.stripHeightOf(keyboard, minCap) ?: return null
+        return StripCapGrid.fromKeyboard(keyboard, stripHeight, minCap, slotCount())?.let { it to stripHeight }
     }
+
+    /** One slot for the expand key, one per toolbar key, one for the VibeVoice key: all of them share the width evenly. */
+    private fun slotCount() = (1 + toolbar.childCount + voiceAnchor.childCount).coerceAtLeast(MIN_SLOTS)
+
+    /** The slot width: an even share of the grid, but never so narrow that a key is hard to hit (then the toolbar scrolls). */
+    private fun slotWidthOf(g: StripCapGrid) = max(g.slotWidth, (toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION).toInt())
 
     /**
      * Lays the strip out on the key grid: the ten slots of the toolbar (expand key, eight tools,
@@ -162,12 +173,18 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      */
     private fun applyKeyGrid() {
         if (!useCaps) return
-        val g = computeGrid() ?: return
+        val (g, stripHeight) = computeGrid() ?: return
         if (g == grid) return
         grid = g
+        // the strip is as tall as the caps need: a cap taller than the icons, the gap to the first key row like the row gaps
+        (parent as? View)?.let { container ->
+            if (container.layoutParams?.height != stripHeight) {
+                container.layoutParams = container.layoutParams.also { it.height = stripHeight }
+            }
+        }
         stripWrapper.setPadding(g.left, 0, (width - g.right).coerceAtLeast(0), 0)
         (toolbarExpandKey.layoutParams as? LinearLayout.LayoutParams)?.let {
-            it.width = g.slotWidth
+            it.width = slotWidthOf(g)
             it.height = LinearLayout.LayoutParams.MATCH_PARENT
             it.marginStart = 0
             it.gravity = Gravity.NO_GRAVITY
@@ -175,7 +192,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
         for (i in 0 until voiceAnchor.childCount) {
             val child = voiceAnchor.getChildAt(i)
-            child.layoutParams = child.layoutParams.also { it.width = g.slotWidth }
+            child.layoutParams = child.layoutParams.also { it.width = slotWidthOf(g) }
         }
         fitToolbarKeys()
         requestLayout()
@@ -184,7 +201,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     override fun dispatchDraw(canvas: Canvas) {
         if (useCaps) {
-            val computed = computeGrid()
+            val computed = computeGrid()?.first
             if (computed != null && computed != grid) post { applyKeyGrid() }
             val g = grid
             if (g != null) { // one wide cap behind the whole row, toolbar and suggestions alike
@@ -237,8 +254,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // no button of its own: the wide cap is behind it; the arrow in the keys' icon colour
             toolbarExpandKey.background = ColorDrawable(Color.TRANSPARENT)
             toolbarContainer.showScrollBar = false
-        toolbarContainer.overScrollMode = OVER_SCROLL_NEVER
-        toolbarContainer.isHorizontalFadingEdgeEnabled = false
+            toolbarContainer.overScrollMode = OVER_SCROLL_NEVER
+            toolbarContainer.isHorizontalFadingEdgeEnabled = false
             colors.setColor(toolbarExpandKey, ColorType.KEY_ICON)
         } else {
             colors.setBackground(toolbarExpandKey, ColorType.STRIP_BACKGROUND) // necessary because background is re-used for defaultToolbarBackground
@@ -777,7 +794,16 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // the pinned row, it is the anchor's only child, so the plain background is always the
             // right one.
             button.background = plainKeyBackground()
-            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
+            val colors = Settings.getValues().mColors
+            if (useCaps && ColorUtils.calculateLuminance(colors.get(ColorType.MAIN_BACKGROUND)) <= 0.5) {
+                // The mark is white artwork. The toolbar tint (the key text colour, then multiplied) leaves it a shade
+                // off white, so on a dark keyboard it is drawn untinted: pure white, full alpha.
+                button.drawable?.let { DrawableCompat.setTintList(it, null); it.colorFilter = null }
+                button.setColorFilter(Color.WHITE)
+            } else {
+                button.clearColorFilter()
+                colors.setColor(button, ColorType.TOOL_BAR_KEY)
+            }
             button.scaleType = ImageView.ScaleType.CENTER
             view.rotation = 0f // an older build left the key tilted; clear it once
         }
@@ -856,8 +882,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         val forKeys = viewport - toolbar.paddingLeft - toolbar.paddingRight
         if (forKeys <= 0) return
 
-        val slot = grid?.slotWidth?.takeIf { useCaps && it > 0 }
-        val target = if (slot != null) slot // exactly one key column each: the caps line up with the key grid
+        val slot = grid?.let { slotWidthOf(it) }?.takeIf { useCaps && it > 0 }
+        val target = if (slot != null) slot // an even share of the cap each, so everything fits without scrolling
             else if (count * toolbarKeyWidth <= forKeys) toolbarKeyWidth
             else (forKeys / count).takeIf { it >= toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION }
                 ?: toolbarKeyWidth
@@ -865,9 +891,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         for (i in 0 until count) {
             val child = toolbar.getChildAt(i)
             val params = child.layoutParams
-            if (params.width != target || (slot != null && (params as? LinearLayout.LayoutParams)?.weight != 0f)) {
+            if (params.width != target) {
                 params.width = target
-                if (slot != null) (params as? LinearLayout.LayoutParams)?.weight = 0f
                 child.layoutParams = params
             }
         }
@@ -903,7 +928,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         private const val MIN_KEY_WIDTH_FRACTION = 0.75f
 
         /** A cap never gets thinner than this, however small the strip. */
-        private const val MIN_CAP_HEIGHT_DP = 24
+        private const val MIN_CAP_HEIGHT_DP = 34
+
+        /** The caps' slots never get fewer than this, so a toolbar of a few keys is not spread thin. */
+        private const val MIN_SLOTS = 8
 
         private const val VOICE_GLOW_BOX_DP = 40f
     }

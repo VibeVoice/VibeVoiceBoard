@@ -44,4 +44,14 @@ class StripCapGridTest {
         assertTrue(tall.capBottom <= 100)
         assertTrue(tall.capBottom - tall.capTop >= 40)
     }
+
+    @Test
+    fun stripHeight_givesACapTallerThanTheMinimumWithTheRowGapBelow() {
+        // key 130 px tall: 0.62 of it is 80 px, the 100 px minimum wins; gap above is half a row gap, below a full one
+        val h = StripCapGrid.stripHeightFor(keyHeight = 130, vGap = 32, firstRowTop = 16, minCapHeight = 100)
+        val g = StripCapGrid.from(0, 1000, 14, firstRowTop = 16, vGap = 32, stripHeight = h, minCapHeight = 100, slots = 11)
+        assertEquals(100, g.capBottom - g.capTop)
+        assertEquals(32, (h - g.capBottom) + 16)
+        assertEquals(11, g.slots)
+    }
 }
