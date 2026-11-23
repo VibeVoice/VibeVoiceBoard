@@ -18,6 +18,7 @@ import helium314.keyboard.latin.common.StringUtils
 import helium314.keyboard.latin.common.encodeBase36
 import helium314.keyboard.latin.database.ClipboardDao
 import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.settings.SettingsSubtype
 import helium314.keyboard.latin.settings.SettingsSubtype.Companion.toSettingsSubtype
@@ -724,6 +725,8 @@ private object AppUpgrade {
             if (!prefs.contains(Settings.PREF_DRAW_KEYS) && prefs.contains(Settings.PREF_THEME_KEY_BORDERS))
                 prefs.edit { putBoolean(Settings.PREF_DRAW_KEYS, prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)) }
         }
+        // Gboard / Samsung preset sizes were corrected after some phones had stored them
+        KeyboardPresets.migrateSizes(prefs)
         upgradeToolbarPrefs(prefs)
         LayoutUtilsCustom.onLayoutFileChanged() // just to be sure
         prefs.edit { putInt(Settings.PREF_VERSION_CODE, BuildConfig.VERSION_CODE) }

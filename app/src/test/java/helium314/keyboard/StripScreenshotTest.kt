@@ -10,7 +10,9 @@ import androidx.test.core.app.ApplicationProvider
 import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.checkVersionUpgrade
 import helium314.keyboard.latin.settings.KeyboardPreset
+import helium314.keyboard.latin.settings.createPrefKeyForBooleanSettings
 import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.suggestions.SuggestionStripView
@@ -49,9 +51,14 @@ class StripScreenshotTest {
 
     @Test @Config(qualifiers = "w411dp-h891dp-notnight-560dpi") fun gboard_1440_light() = render("gboard_1440_light", KeyboardPreset.GBOARD)
 
+    /** A phone that chose Gboard before the sizes were corrected: old stored values, then the upgrade runs, then we render at 1182 px. */
+    @Test @Config(qualifiers = "w411dp-h891dp-night-460dpi") fun gboard_1182_migrated() = render("gboard_1182_migrated", null, oldGboard = true)
+
+    @Test @Config(qualifiers = "w411dp-h891dp-night-460dpi") fun samsung_1182_migrated() = render("samsung_1182_migrated", null, oldSamsung = true)
+
     @Test @Config(qualifiers = "w411dp-h891dp-night-560dpi") fun samsung_1440() = render("samsung_1440", KeyboardPreset.SAMSUNG)
 
-    private fun render(name: String, preset: KeyboardPreset? = null) {
+    private fun render(name: String, preset: KeyboardPreset? = null, oldGboard: Boolean = false, oldSamsung: Boolean = false) {
         ShadowLog.setupLogging()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         context.prefs().edit(commit = true) {
@@ -59,6 +66,19 @@ class StripScreenshotTest {
             putBoolean(Settings.PREF_DRAW_KEYS, true)
         }
         if (preset != null) KeyboardPresets.apply(context, preset)
+        if (oldGboard || oldSamsung) {
+            val h = createPrefKeyForBooleanSettings(Settings.PREF_KEYBOARD_HEIGHT_SCALE_PREFIX, 0, 2)
+            val g = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
+            val sd = createPrefKeyForBooleanSettings(Settings.PREF_SIDE_PADDING_SCALE_PREFIX, 0, 3)
+            context.prefs().edit(commit = true) {
+                putString(Settings.PREF_KEYBOARD_PRESET, if (oldGboard) "GBOARD" else "SAMSUNG")
+                putBoolean(Settings.PREF_DRAW_KEYS, true)
+                putBoolean(Settings.PREF_SHOW_NUMBER_ROW, oldSamsung)
+                putFloat(h, 1.05f); putFloat(g, if (oldGboard) 1.10f else 1.35f); putFloat(sd, if (oldGboard) 0.14f else 0.26f)
+                putInt(Settings.PREF_VERSION_CODE, 600063)
+            }
+            checkVersionUpgrade(context)
+        }
         val latinIME = Robolectric.setupService(LatinIME::class.java)
         val switcher = KeyboardSwitcher.getInstance()
         val view = switcher.onCreateInputView(latinIME, true)

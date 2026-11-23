@@ -2,6 +2,7 @@ package helium314.keyboard.latin.settings
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import helium314.keyboard.latin.checkVersionUpgrade
 import helium314.keyboard.latin.utils.prefs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -85,5 +86,55 @@ class KeyboardPresetsTest {
         assertEquals(Defaults.PREF_SIDE_PADDING_SCALE[0], prefs.getFloat(paddingKey, -1f), 0.001f)
         // Functional layout key should be removed so default functional layout is used
         assertFalse(prefs.contains("layout_FUNCTIONAL"))
+    }
+
+    private val heightKey = createPrefKeyForBooleanSettings(Settings.PREF_KEYBOARD_HEIGHT_SCALE_PREFIX, 0, 2)
+    private val gapKey = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
+    private val sideKey = createPrefKeyForBooleanSettings(Settings.PREF_SIDE_PADDING_SCALE_PREFIX, 0, 3)
+
+    /** A phone that chose the preset before the sizes were corrected: the old values, no migration flag. */
+    private fun storeOldSizes(preset: KeyboardPreset, height: Float, gap: Float, side: Float) {
+        prefs.edit().clear().commit()
+        prefs.edit()
+            .putString(Settings.PREF_KEYBOARD_PRESET, preset.name)
+            .putFloat(heightKey, height).putFloat(gapKey, gap).putFloat(sideKey, side)
+            .putBoolean(Settings.PREF_SHOW_LANGUAGE_SWITCH_KEY, false) // not a size: must survive
+            .putInt(Settings.PREF_VERSION_CODE, 600063)
+            .commit()
+    }
+
+    @Test
+    fun upgrade_bringsStoredGboardSizesUpToTheCurrentOnes_once() {
+        storeOldSizes(KeyboardPreset.GBOARD, 1.05f, 1.10f, 0.14f)
+        checkVersionUpgrade(context)
+        val now = KeyboardPresets.sizesOf(KeyboardPreset.GBOARD)
+        assertEquals(now.height, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(now.gap, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(now.sidePadding, prefs.getFloat(sideKey, 0f), 0.001f)
+        assertFalse("other settings stay as they were", prefs.getBoolean(Settings.PREF_SHOW_LANGUAGE_SWITCH_KEY, true))
+
+        // the user changes the height afterwards; a later upgrade must not take it back
+        prefs.edit().putFloat(heightKey, 0.95f).putInt(Settings.PREF_VERSION_CODE, 600064).commit()
+        checkVersionUpgrade(context)
+        assertEquals(0.95f, prefs.getFloat(heightKey, 0f), 0.001f)
+    }
+
+    @Test
+    fun upgrade_bringsStoredSamsungSizesUpToTheCurrentOnes() {
+        storeOldSizes(KeyboardPreset.SAMSUNG, 1.05f, 1.35f, 0.26f)
+        checkVersionUpgrade(context)
+        val now = KeyboardPresets.sizesOf(KeyboardPreset.SAMSUNG)
+        assertEquals(now.height, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(now.gap, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(now.sidePadding, prefs.getFloat(sideKey, 0f), 0.001f)
+    }
+
+    @Test
+    fun upgrade_leavesTheOwnPresetAlone() {
+        storeOldSizes(KeyboardPreset.OWN, 1.2f, 1.5f, 0.3f)
+        checkVersionUpgrade(context)
+        assertEquals(1.2f, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(1.5f, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(0.3f, prefs.getFloat(sideKey, 0f), 0.001f)
     }
 }
