@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -141,14 +142,20 @@ fun WelcomeWizard(
     LaunchedEffect(step == 0 || step == 2) {
         if (step != 0 && step != 2) return@LaunchedEffect
         if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx)) return@LaunchedEffect
-        if (VibeVoiceClient.requestTrialKey(ctx) !is TrialResult.Granted)
+        if (VibeVoiceClient.requestTrialKeyWithRetry(ctx) !is TrialResult.Granted)
             VibeVoiceDebugLogger.log("Wizard: no trial key (step $step)")
     }
 
-    // Ensure pulse preference is cleared when wizard leaves composition
+    // Ensure pulse preference and wizard active state are maintained with composition
     DisposableEffect(Unit) {
+        VibeVoiceClient.isWizardActive = true
+        ctx.prefs().edit().putBoolean(KeySettings.PREF_SETUP_WIZARD_ACTIVE, true).apply()
         onDispose {
-            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+            VibeVoiceClient.isWizardActive = false
+            ctx.prefs().edit()
+                .putBoolean(KeySettings.PREF_SETUP_WIZARD_ACTIVE, false)
+                .putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false)
+                .apply()
         }
     }
 
@@ -469,9 +476,32 @@ fun WelcomeWizard(
                         mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
                                 == PackageManager.PERMISSION_GRANTED)
                     }
+                    val scope = rememberCoroutineScope()
+                    var hasApiKey by remember { mutableStateOf(VibeVoiceClient.getApiKey(ctx) != null) }
+                    var trialIsRetrying by remember { mutableStateOf(false) }
 
-                    // Refresh microphone permission on resume from Android Settings or PermissionActivity
+                    fun retryTrialKey() {
+                        if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx) || VibeVoiceClient.isLinked(ctx)) {
+                            hasApiKey = true
+                            return
+                        }
+                        trialIsRetrying = true
+                        scope.launch {
+                            val result = VibeVoiceClient.requestTrialKey(ctx)
+                            trialIsRetrying = false
+                            hasApiKey = (result is TrialResult.Granted) || (VibeVoiceClient.getApiKey(ctx) != null)
+                        }
+                    }
+
+                    LaunchedEffect(Unit) {
+                        VibeVoiceClient.trialRetryFlow.collect {
+                            retryTrialKey()
+                        }
+                    }
+
+                    // Refresh microphone permission and trial key status on resume
                     OnResume {
+                        hasApiKey = VibeVoiceClient.getApiKey(ctx) != null
                         val granted = ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                         micGranted = granted
                         if (granted && phase == TryPhase.B) {
@@ -593,6 +623,46 @@ fun WelcomeWizard(
                         )
                     )
 
+                    if (!hasApiKey && !VibeVoiceClient.isLinked(ctx) && !VibeVoiceClient.isTrialSpent(ctx)) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(cardShape)
+                                .background(color = stepBackgroundColor)
+                                .clickable(enabled = !trialIsRetrying) { retryTrialKey() }
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (trialIsRetrying) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Brand.accent(dark),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    stringResource(R.string.setup_try_trial_connecting),
+                                    style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                Icon(
+                                    painterResource(R.drawable.ic_redo),
+                                    null,
+                                    Modifier.size(20.dp),
+                                    tint = Brand.accent(dark)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    stringResource(R.string.setup_try_trial_retry),
+                                    style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+
                     if (phase == TryPhase.B) {
                         Spacer(Modifier.height(12.dp))
                         Text(
@@ -651,6 +721,15 @@ fun WelcomeWizard(
                             step = 4
                         }
                     } else {
+                        ActionRow(
+                            R.drawable.ic_setup_check,
+                            stringResource(R.string.setup_next_action),
+                            active = true,
+                            primary = true
+                        ) {
+                            step = 4
+                        }
+                        Spacer(Modifier.height(8.dp))
                         val linkCardModifier = Modifier
                             .fillMaxWidth()
                             .clip(cardShape)
@@ -671,14 +750,11 @@ fun WelcomeWizard(
                                         else R.string.setup_link_action
                                     ),
                                     enabled,
-                                    brand = true
+                                    brand = true,
+                                    primary = false
                                 ) { if (enabled) onClick() }
                             }
                         ) { linked = true }
-                        Spacer(Modifier.height(8.dp))
-                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_link_later_equal), false) {
-                            step = 4
-                        }
                     }
                 } else if (step == 4) {
                     var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }

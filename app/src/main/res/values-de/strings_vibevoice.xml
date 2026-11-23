@@ -131,6 +131,8 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_try_phase_b_instruction">Jetzt die andere Hälfte – lass sie dich hören.</string>
     <string name="setup_try_phase_c_title">Tippe auf die Marke und sag etwas.</string>
     <string name="setup_try_phase_c_instruction">Tippe oben rechts auf das V oder halte die Leertaste gedrückt.</string>
+    <string name="setup_try_trial_connecting">Kostenlose Testminuten werden eingerichtet…</string>
+    <string name="setup_try_trial_retry">VibeVoice nicht erreichbar. Zum Wiederholen tippen.</string>
     <string name="setup_minutes_title">"Deine Minuten"</string>
     <string name="setup_minutes_instruction">"Diese ersten 10 Minuten gehen auf uns – ganz ohne Konto.\n\nDanach gibt dir ein kostenloses Konto 30 Minuten im Monat. Pro kostet 3 € für 180."</string>
     <string name="setup_link_later_equal">Später</string>

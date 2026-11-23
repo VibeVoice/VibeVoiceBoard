@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Color
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.vibevoice.VibeVoiceClient
+import helium314.keyboard.latin.vibevoice.VibeVoiceDebugLogger
+import androidx.core.app.BundleCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -110,6 +112,7 @@ fun VibeVoiceLinkPanel(
                 prefs.edit().putString(VIBEVOICE_API_KEY_PREF, tokenRes.getString("api_key")).apply()
                 userCode = null
                 deviceCode = null
+                bringAppToForeground(context)
                 onLinked()
                 return
             } else if (tokenRes.optString("error") == "slow_down") {
@@ -160,7 +163,7 @@ fun VibeVoiceLinkPanel(
             expiresAt = System.currentTimeMillis() + res.optInt("expires_in", 600).coerceAtLeast(30) * 1000L
 
             try {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$uri?code=$code")))
+                openLinkInBrowser(context, "$uri?code=$code")
             } catch (_: android.content.ActivityNotFoundException) {
                 // Nothing can approve the code without a browser, so polling for ten minutes would
                 // only hide the message behind a spinner.
@@ -220,5 +223,29 @@ fun VibeVoiceLinkPanel(
                 }
             }
         }
+    }
+}
+
+internal fun openLinkInBrowser(context: android.content.Context, url: String) {
+    val uri = Uri.parse(url)
+    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val bundle = android.os.Bundle()
+        BundleCompat.putBinder(bundle, "android.support.customtabs.extra.SESSION", null)
+        putExtras(bundle)
+        putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", 0xFF171717.toInt())
+        putExtra("androidx.browser.customtabs.extra.COLOR_SCHEME", 2)
+    }
+    context.startActivity(intent)
+}
+
+internal fun bringAppToForeground(context: android.content.Context) {
+    try {
+        val intent = Intent(context, SettingsActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        VibeVoiceDebugLogger.log("Failed to bring app to foreground: ${e.message}")
     }
 }

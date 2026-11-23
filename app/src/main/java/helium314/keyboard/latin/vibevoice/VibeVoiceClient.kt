@@ -18,9 +18,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.prefs
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -1418,6 +1422,9 @@ class VibeVoiceClient(
          * Returns without asking if an account is already linked -- a linked device spending a
          * trial would burn it for nothing -- or if one has already been stored.
          */
+        @Volatile
+        internal var trialKeyEndpoint: String = "https://vibevoice.net/api/trial/key"
+
         suspend fun requestTrialKey(context: Context): TrialResult = withContext(Dispatchers.IO) {
             val prefs = vibeVoicePrefs(context)
             if (isLinked(context)) return@withContext TrialResult.AlreadyUsed
@@ -1426,7 +1433,7 @@ class VibeVoiceClient(
             }
             val body = JSONObject().put("install_id", installId(context)).toString().toRequestBody(JSON)
             val request = Request.Builder()
-                .url("https://vibevoice.net/api/trial/key")
+                .url(trialKeyEndpoint)
                 .post(body)
                 .build()
             try {
@@ -1447,6 +1454,49 @@ class VibeVoiceClient(
                 VibeVoiceDebugLogger.log("Trial key request failed: ${e.message}")
                 TrialResult.Failed
             }
+        }
+
+        /**
+         * Requests trial key with automatic retry and exponential backoff.
+         * Retries on [TrialResult.Failed] or [TrialResult.RateLimited].
+         */
+        suspend fun requestTrialKeyWithRetry(
+            context: Context,
+            maxAttempts: Int = 3,
+            initialDelayMs: Long = 1000L
+        ): TrialResult {
+            var delayMs = initialDelayMs
+            var lastResult: TrialResult = TrialResult.Failed
+            for (attempt in 1..maxAttempts) {
+                lastResult = requestTrialKey(context)
+                if (lastResult is TrialResult.Granted || lastResult is TrialResult.AlreadyUsed) {
+                    return lastResult
+                }
+                if (attempt < maxAttempts) {
+                    delay(delayMs)
+                    delayMs *= 2
+                }
+            }
+            return lastResult
+        }
+
+        @JvmStatic
+        @Volatile
+        var isWizardActive: Boolean = false
+
+        private val _trialRetryFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val trialRetryFlow = _trialRetryFlow.asSharedFlow()
+
+        @JvmStatic
+        fun isSetupWizardActive(context: Context): Boolean {
+            return isWizardActive || context.prefs().getBoolean(Settings.PREF_SETUP_WIZARD_ACTIVE, false)
+        }
+
+        @JvmStatic
+        fun triggerTrialRetry(context: Context) {
+            val count = context.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0)
+            context.prefs().edit().putInt(Settings.PREF_TRIAL_RETRY_TRIGGER, count + 1).apply()
+            _trialRetryFlow.tryEmit(Unit)
         }
 
         /**
