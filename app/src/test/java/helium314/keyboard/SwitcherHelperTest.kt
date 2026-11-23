@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard
 
+import androidx.core.content.edit
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.common.Constants.Subtype.ExtraValue
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.settings.SettingsSubtype
 import helium314.keyboard.latin.settings.SettingsSubtype.Companion.toSettingsSubtype
 import helium314.keyboard.latin.settings.SwitcherHelper
 import helium314.keyboard.latin.utils.SubtypeSettings
@@ -98,12 +100,10 @@ class SwitcherHelperTest {
         val additionalSubtypes = SubtypeSettings.createSettingsSubtypes(additionalPref)
         assertTrue(additionalSubtypes.any { it.locale.language == "de" && it.hasExtraValueOf(ExtraValue.SECONDARY_LOCALES) })
 
-        // Enabled subtypes must contain both German (multilingual) and English
+        // Main language is enabled with multilingual typing; secondary language is not added as separate subtype
         val enabledSubtypes = SubtypeSettings.getEnabledSubtypes(false)
-        assertEquals(2, enabledSubtypes.size)
-        val enabledLanguages = enabledSubtypes.map { it.locale().language }.toSet()
-        assertTrue(enabledLanguages.contains("de"))
-        assertTrue(enabledLanguages.contains("en"))
+        assertEquals(1, enabledSubtypes.size)
+        assertEquals("de", enabledSubtypes.first().locale().language)
 
         // The active selected InputMethodSubtype has secondary locales
         val currentSubtype = SubtypeSettings.getSelectedSubtype(prefs)
@@ -125,7 +125,7 @@ class SwitcherHelperTest {
             mainLocale = deLocale,
             secondLocale = enLocale
         )
-        assertEquals(2, SubtypeSettings.getEnabledSubtypes(false).size)
+        assertEquals(1, SubtypeSettings.getEnabledSubtypes(false).size)
 
         // Then switch back to single language (no second language)
         SwitcherHelper.applyAnswers(
@@ -149,6 +149,103 @@ class SwitcherHelperTest {
         val additionalPref = prefs.getString(Settings.PREF_ADDITIONAL_SUBTYPES, Defaults.PREF_ADDITIONAL_SUBTYPES)!!
         val additionalSubtypes = SubtypeSettings.createSettingsSubtypes(additionalPref)
         assertFalse(additionalSubtypes.any { it.locale.language == "de" && it.hasExtraValueOf(ExtraValue.SECONDARY_LOCALES) })
+    }
+
+    @Test
+    fun threeLanguagesEnabledStaysThree() {
+        val prefs = latinIME.prefs()
+        // Pre-enable German, French, and Spanish
+        val deSettings = SettingsSubtype(Locale.GERMAN, "KeyboardLayoutSet=MAIN:qwertz")
+        val frSettings = SettingsSubtype(Locale.FRENCH, "KeyboardLayoutSet=MAIN:azerty")
+        val esSettings = SettingsSubtype(Locale.forLanguageTag("es"), "KeyboardLayoutSet=MAIN:qwerty+")
+        prefs.edit {
+            putString(Settings.PREF_ENABLED_SUBTYPES, SubtypeSettings.createPrefSubtypes(listOf(deSettings, frSettings, esSettings)))
+        }
+        SubtypeSettings.reloadEnabledSubtypes(latinIME)
+        assertEquals(3, SubtypeSettings.getEnabledSubtypes(false).size)
+
+        // Run switcher: main language German, second language English
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = KeyboardPreset.GBOARD,
+            mainLocale = Locale.GERMAN,
+            secondLocale = Locale.US
+        )
+
+        // Three languages must stay three (German with secondary en, plus French and Spanish)
+        val enabledSubtypes = SubtypeSettings.getEnabledSubtypes(false)
+        assertEquals(3, enabledSubtypes.size)
+        val languages = enabledSubtypes.map { it.locale().language }.toSet()
+        assertTrue(languages.contains("de"))
+        assertTrue(languages.contains("fr"))
+        assertTrue(languages.contains("es"))
+
+        // German subtype has secondary locale en-US
+        val deSubtype = enabledSubtypes.first { it.locale().language == "de" }
+        val parsedSecondaries = getSecondaryLocales(deSubtype.extraValue)
+        assertEquals(1, parsedSecondaries.size)
+        assertEquals("en", parsedSecondaries.first().language)
+    }
+
+    @Test
+    fun customLayoutKept() {
+        val prefs = latinIME.prefs()
+        // Setup German with a custom layout, e.g. neo2
+        val customDe = SettingsSubtype(Locale.GERMAN, "KeyboardLayoutSet=MAIN:neo2")
+        val enSubtype = SettingsSubtype(Locale.US, "KeyboardLayoutSet=MAIN:qwerty")
+        prefs.edit {
+            putString(Settings.PREF_ADDITIONAL_SUBTYPES, customDe.toPref())
+            putString(Settings.PREF_ENABLED_SUBTYPES, SubtypeSettings.createPrefSubtypes(listOf(customDe, enSubtype)))
+            putString(Settings.PREF_SELECTED_SUBTYPE, customDe.toPref())
+        }
+        SubtypeSettings.reloadEnabledSubtypes(latinIME)
+
+        val initialDe = SubtypeSettings.getEnabledSubtypes(false).first { it.locale().language == "de" }
+        assertEquals("neo2", initialDe.toSettingsSubtype().mainLayoutName())
+
+        // Apply switcher with German and Spanish as secondary
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = KeyboardPreset.SAMSUNG,
+            mainLocale = Locale.GERMAN,
+            secondLocale = Locale.forLanguageTag("es")
+        )
+
+        // Custom layout neo2 must be preserved on German (not replaced by default qwertz)
+        val updatedDe = SubtypeSettings.getEnabledSubtypes(false).first { it.locale().language == "de" }
+        assertEquals("neo2", updatedDe.toSettingsSubtype().mainLayoutName())
+        val secondaryLocales = getSecondaryLocales(updatedDe.extraValue)
+        assertEquals(1, secondaryLocales.size)
+        assertEquals("es", secondaryLocales.first().language)
+
+        // English remains enabled
+        val languages = SubtypeSettings.getEnabledSubtypes(false).map { it.locale().language }.toSet()
+        assertTrue(languages.contains("de"))
+        assertTrue(languages.contains("en"))
+    }
+
+    @Test
+    fun applyOwnPresetRestoresDefaults() {
+        val prefs = latinIME.prefs()
+        // First apply GBOARD preset
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = KeyboardPreset.GBOARD,
+            mainLocale = null,
+            secondLocale = null
+        )
+        assertEquals("GBOARD", prefs.getString(Settings.PREF_KEYBOARD_PRESET, null))
+        assertTrue(prefs.getBoolean(Settings.PREF_DRAW_KEYS, false))
+
+        // Now apply OWN preset via SwitcherHelper
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = KeyboardPreset.OWN,
+            mainLocale = null,
+            secondLocale = null
+        )
+        assertEquals("OWN", prefs.getString(Settings.PREF_KEYBOARD_PRESET, null))
+        assertFalse(prefs.getBoolean(Settings.PREF_DRAW_KEYS, true))
     }
 
     @Test
@@ -185,29 +282,5 @@ class SwitcherHelperTest {
 
         val displayName = SwitcherHelper.getLocaleDisplayName(latinIME, Locale.GERMANY)
         assertTrue(displayName.isNotBlank())
-    }
-
-    @Test
-    fun applyOwnPresetRestoresDefaults() {
-        val prefs = latinIME.prefs()
-        // First apply GBOARD preset
-        SwitcherHelper.applyAnswers(
-            context = latinIME,
-            preset = KeyboardPreset.GBOARD,
-            mainLocale = null,
-            secondLocale = null
-        )
-        assertEquals("GBOARD", prefs.getString(Settings.PREF_KEYBOARD_PRESET, null))
-        assertTrue(prefs.getBoolean(Settings.PREF_DRAW_KEYS, false))
-
-        // Now apply OWN preset via SwitcherHelper
-        SwitcherHelper.applyAnswers(
-            context = latinIME,
-            preset = KeyboardPreset.OWN,
-            mainLocale = null,
-            secondLocale = null
-        )
-        assertEquals("OWN", prefs.getString(Settings.PREF_KEYBOARD_PRESET, null))
-        assertFalse(prefs.getBoolean(Settings.PREF_DRAW_KEYS, true))
     }
 }

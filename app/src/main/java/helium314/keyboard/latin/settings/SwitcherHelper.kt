@@ -54,8 +54,12 @@ object SwitcherHelper {
         secondLocale: Locale?
     ) {
         val prefs = context.prefs()
-        val mainSubtype = getBestSubtypeForLocale(mainLocale)
-        val baseMainSettings = mainSubtype.toSettingsSubtype()
+
+        val currentEnabledString = prefs.getString(
+            Settings.PREF_ENABLED_SUBTYPES,
+            Defaults.PREF_ENABLED_SUBTYPES
+        )!!
+        val enabledSettings = SubtypeSettings.createSettingsSubtypes(currentEnabledString).toMutableList()
 
         val currentAdditionalString = prefs.getString(
             Settings.PREF_ADDITIONAL_SUBTYPES,
@@ -63,34 +67,67 @@ object SwitcherHelper {
         )!!
         val additionalSubtypes = SubtypeSettings.createSettingsSubtypes(currentAdditionalString).toMutableList()
 
-        // Remove any existing additional subtype for mainLocale (e.g. from previous secondary locale setup)
-        additionalSubtypes.removeAll { it.locale == mainLocale }
+        // 1. Find existing subtype for mainLocale, preserving custom/additional layouts if present
+        val existingMain = enabledSettings.firstOrNull { it.locale == mainLocale }
+            ?: additionalSubtypes.firstOrNull { it.locale == mainLocale }
+            ?: enabledSettings.firstOrNull { it.locale.language == mainLocale.language }
+            ?: additionalSubtypes.firstOrNull { it.locale.language == mainLocale.language }
 
-        val enabledSettings = mutableListOf<SettingsSubtype>()
-        val selectedSettings: SettingsSubtype
+        val baseMainSettings = (existingMain ?: getBestSubtypeForLocale(mainLocale).toSettingsSubtype())
+            .without(Constants.Subtype.ExtraValue.SECONDARY_LOCALES)
 
-        if (secondLocale != null && secondLocale != mainLocale) {
-            val secondSubtype = getBestSubtypeForLocale(secondLocale)
-            val secondSettings = secondSubtype.toSettingsSubtype()
-
-            // Turn on multilingual typing on main language
-            val mainWithMultilingual = baseMainSettings.with(
+        val targetMainSettings = if (secondLocale != null && secondLocale != mainLocale) {
+            baseMainSettings.with(
                 Constants.Subtype.ExtraValue.SECONDARY_LOCALES,
                 secondLocale.toLanguageTag()
             )
-
-            additionalSubtypes.add(mainWithMultilingual)
-            enabledSettings.add(mainWithMultilingual)
-            enabledSettings.add(secondSettings)
-            selectedSettings = mainWithMultilingual
         } else {
-            enabledSettings.add(baseMainSettings)
-            selectedSettings = baseMainSettings
+            baseMainSettings
+        }
+
+        // 2. Update additionalSubtypes:
+        // If targetMainSettings is a custom layout (not default resource) or has SecondaryLocales,
+        // it must be in additionalSubtypes. Otherwise if it's default resource without SecondaryLocales,
+        // it must not be in additionalSubtypes.
+        val existingAddIndex = if (existingMain != null) {
+            additionalSubtypes.indexOfFirst {
+                it == existingMain || (it.locale == existingMain.locale && it.mainLayoutName() == existingMain.mainLayoutName())
+            }
+        } else {
+            additionalSubtypes.indexOfFirst { it.locale.language == mainLocale.language }
+        }
+
+        if (targetMainSettings.isSameAsDefault()) {
+            if (existingAddIndex >= 0) {
+                additionalSubtypes.removeAt(existingAddIndex)
+            }
+        } else {
+            if (existingAddIndex >= 0) {
+                additionalSubtypes[existingAddIndex] = targetMainSettings
+            } else {
+                additionalSubtypes.add(targetMainSettings)
+            }
+        }
+
+        // 3. Update enabledSettings:
+        // Keep every existing enabled subtype. Replace existing main subtype or add targetMainSettings.
+        val existingEnabledIndex = if (existingMain != null) {
+            enabledSettings.indexOfFirst {
+                it == existingMain || (it.locale == existingMain.locale && it.mainLayoutName() == existingMain.mainLayoutName())
+            }
+        } else {
+            enabledSettings.indexOfFirst { it.locale.language == mainLocale.language }
+        }
+
+        if (existingEnabledIndex >= 0) {
+            enabledSettings[existingEnabledIndex] = targetMainSettings
+        } else {
+            enabledSettings.add(targetMainSettings)
         }
 
         val newAdditionalString = SubtypeSettings.createPrefSubtypes(additionalSubtypes)
         val newEnabledString = SubtypeSettings.createPrefSubtypes(enabledSettings)
-        val newSelectedString = selectedSettings.toPref()
+        val newSelectedString = targetMainSettings.toPref()
 
         prefs.edit {
             putString(Settings.PREF_ADDITIONAL_SUBTYPES, newAdditionalString)
