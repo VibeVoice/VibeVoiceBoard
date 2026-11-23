@@ -1,7 +1,6 @@
 package helium314.keyboard.latin.settings
 
 import android.content.Context
-import android.content.SharedPreferences
 import androidx.core.content.edit
 import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.keyboard.internal.keyboard_parser.LayoutParser
@@ -59,14 +58,5 @@ object KeyboardPresets {
         }
         LayoutParser.clearCache()
         KeyboardSwitcher.getInstance().setThemeNeedsReload()
-    }
-
-    fun getPreset(prefs: SharedPreferences): KeyboardPreset {
-        val name = prefs.getString(Settings.PREF_KEYBOARD_PRESET, Defaults.PREF_KEYBOARD_PRESET) ?: Defaults.PREF_KEYBOARD_PRESET
-        return try {
-            KeyboardPreset.valueOf(name)
-        } catch (_: Exception) {
-            KeyboardPreset.OWN
-        }
     }
 }
