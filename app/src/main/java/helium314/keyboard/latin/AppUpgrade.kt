@@ -80,6 +80,13 @@ fun transferOldPinnedClips(context: Context) {
     }
 }
 
+/**
+ * The last versionCode that shipped with vibrate_on defaulting to true and without the draw_keys
+ * switch. Anyone upgrading from it or earlier keeps what they had; later installs, fresh or not,
+ * are already on the new defaults, so a missing value there means "off" and must stay so.
+ */
+internal const val LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS = 600063
+
 private object AppUpgrade {
     fun onUpgrade(context: Context) {
         val prefs = context.prefs()
@@ -707,6 +714,12 @@ private object AppUpgrade {
                 RecentEmojis.set(old)
                 prefs.edit { remove("emoji_recent_keys")  }
             }
+        }
+        if (oldVersion <= LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS) {
+            // vibrate_on used to default to true; fresh installs now start with it off. Whoever never
+            // stored a value had it on, and must keep it.
+            if (!prefs.contains(Settings.PREF_VIBRATE_ON))
+                prefs.edit { putBoolean(Settings.PREF_VIBRATE_ON, true) }
         }
         upgradeToolbarPrefs(prefs)
         LayoutUtilsCustom.onLayoutFileChanged() // just to be sure

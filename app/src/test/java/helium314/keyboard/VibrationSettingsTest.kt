@@ -5,6 +5,8 @@ import android.content.Context
 import android.os.Vibrator
 import androidx.test.core.app.ApplicationProvider
 import helium314.keyboard.latin.AudioAndHapticFeedbackManager
+import helium314.keyboard.latin.LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS
+import helium314.keyboard.latin.checkVersionUpgrade
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.prefs
@@ -41,34 +43,48 @@ class VibrationSettingsTest {
     }
 
     @Test
-    fun existingUserSettingPreserved() {
-        val prefs = context.prefs()
-        // Simulate user who explicitly had vibration enabled previously
-        prefs.edit().putBoolean(Settings.PREF_VIBRATE_ON, true).apply()
-        assertTrue(prefs.getBoolean(Settings.PREF_VIBRATE_ON, Defaults.PREF_VIBRATE_ON))
-        assertTrue(Settings.readVibrationEnabled(prefs))
+    fun freshInstallKeepsVibrationOff() {
+        // no stored version: onUpgrade returns early, so nothing writes vibrate_on
+        checkVersionUpgrade(context)
 
-        // Simulate user who explicitly had vibration disabled previously
-        prefs.edit().putBoolean(Settings.PREF_VIBRATE_ON, false).apply()
-        assertFalse(prefs.getBoolean(Settings.PREF_VIBRATE_ON, Defaults.PREF_VIBRATE_ON))
+        val prefs = context.prefs()
+        assertFalse(prefs.contains(Settings.PREF_VIBRATE_ON))
         assertFalse(Settings.readVibrationEnabled(prefs))
     }
 
     @Test
-    fun wizardAnswerYesEnablesVibration() {
+    fun upgradeKeepsVibrationOnForUserWhoNeverStoredIt() {
         val prefs = context.prefs()
-        // Answering "Yes" in the setup wizard sets PREF_VIBRATE_ON to true
-        prefs.edit().putBoolean(Settings.PREF_VIBRATE_ON, true).apply()
-        assertTrue(prefs.contains(Settings.PREF_VIBRATE_ON))
+        prefs.edit().putInt(Settings.PREF_VERSION_CODE, LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS - 1).apply()
+        assertFalse(prefs.contains(Settings.PREF_VIBRATE_ON))
+
+        checkVersionUpgrade(context)
+
+        assertTrue(prefs.getBoolean(Settings.PREF_VIBRATE_ON, false))
         assertTrue(Settings.readVibrationEnabled(prefs))
     }
 
     @Test
-    fun wizardAnswerNoDisablesVibration() {
+    fun upgradeDoesNotOverrideExplicitChoice() {
         val prefs = context.prefs()
-        // Answering "No" in the setup wizard explicitly sets PREF_VIBRATE_ON to false
-        prefs.edit().putBoolean(Settings.PREF_VIBRATE_ON, false).apply()
-        assertTrue(prefs.contains(Settings.PREF_VIBRATE_ON))
-        assertFalse(Settings.readVibrationEnabled(prefs))
+        prefs.edit()
+            .putInt(Settings.PREF_VERSION_CODE, LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS - 1)
+            .putBoolean(Settings.PREF_VIBRATE_ON, false)
+            .apply()
+
+        checkVersionUpgrade(context)
+
+        assertFalse(prefs.getBoolean(Settings.PREF_VIBRATE_ON, true))
+    }
+
+    @Test
+    fun upgradeFromNewDefaultsDoesNotEnableVibration() {
+        // an install that already ran with vibration off by default must stay off on later upgrades
+        val prefs = context.prefs()
+        prefs.edit().putInt(Settings.PREF_VERSION_CODE, LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS + 1).apply()
+
+        checkVersionUpgrade(context)
+
+        assertFalse(prefs.contains(Settings.PREF_VIBRATE_ON))
     }
 }
