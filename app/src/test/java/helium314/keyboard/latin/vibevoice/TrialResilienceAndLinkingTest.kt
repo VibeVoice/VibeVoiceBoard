@@ -128,6 +128,15 @@ class TrialResilienceAndLinkingTest {
     }
 
     @Test
+    fun trialKeyRequestDoesNotRetryOnRateLimited() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(429).setBody("Slow down"))
+
+        val result = VibeVoiceClient.requestTrialKeyWithRetry(app, maxAttempts = 3, initialDelayMs = 50L)
+        assertTrue(result is TrialResult.RateLimited)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
     fun wizardActiveFlagIsInMemoryOnly() {
         assertFalse(VibeVoiceClient.isSetupWizardActive(app))
 

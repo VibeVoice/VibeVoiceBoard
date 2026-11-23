@@ -1416,15 +1416,15 @@ class VibeVoiceClient(
             }
         }
 
+        @Volatile
+        internal var trialKeyEndpoint: String = "https://vibevoice.net/api/trial/key"
+
         /**
          * Asks for this install's free minutes and stores the key it gets.
          *
          * Returns without asking if an account is already linked -- a linked device spending a
          * trial would burn it for nothing -- or if one has already been stored.
          */
-        @Volatile
-        internal var trialKeyEndpoint: String = "https://vibevoice.net/api/trial/key"
-
         suspend fun requestTrialKey(context: Context): TrialResult = withContext(Dispatchers.IO) {
             val prefs = vibeVoicePrefs(context)
             if (isLinked(context)) return@withContext TrialResult.AlreadyUsed
@@ -1458,7 +1458,8 @@ class VibeVoiceClient(
 
         /**
          * Requests trial key with automatic retry and exponential backoff.
-         * Retries on [TrialResult.Failed] or [TrialResult.RateLimited].
+         * Retries on [TrialResult.Failed] only: a [TrialResult.RateLimited] answer means the server
+         * wants us to stop asking, and asking again within a second is what it is refusing.
          */
         suspend fun requestTrialKeyWithRetry(
             context: Context,
@@ -1469,9 +1470,7 @@ class VibeVoiceClient(
             var lastResult: TrialResult = TrialResult.Failed
             for (attempt in 1..maxAttempts) {
                 lastResult = requestTrialKey(context)
-                if (lastResult is TrialResult.Granted || lastResult is TrialResult.AlreadyUsed) {
-                    return lastResult
-                }
+                if (lastResult !is TrialResult.Failed) return lastResult
                 if (attempt < maxAttempts) {
                     delay(delayMs)
                     delayMs *= 2
