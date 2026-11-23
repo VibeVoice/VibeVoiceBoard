@@ -54,10 +54,12 @@ class KeyboardPresetsTest {
         val gapKey = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
         val paddingKey = createPrefKeyForBooleanSettings(Settings.PREF_SIDE_PADDING_SCALE_PREFIX, 0, 3)
 
-        assertEquals(1.17f, prefs.getFloat(heightKey, 0f), 0.001f)
-        assertEquals(0.99f, prefs.getFloat(gapKey, 0f), 0.001f)
-        assertEquals(0.18f, prefs.getFloat(paddingKey, 0f), 0.001f)
+        assertEquals(1.138f, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(0.925f, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(0.20f, prefs.getFloat(paddingKey, 0f), 0.001f)
         assertEquals("functional_keys_samsung", prefs.getString("layout_FUNCTIONAL", null))
+        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS, null))
+        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS_NIGHT, null))
     }
 
     @Test
@@ -136,5 +138,62 @@ class KeyboardPresetsTest {
         assertEquals(1.2f, prefs.getFloat(heightKey, 0f), 0.001f)
         assertEquals(1.5f, prefs.getFloat(gapKey, 0f), 0.001f)
         assertEquals(0.3f, prefs.getFloat(sideKey, 0f), 0.001f)
+    }
+
+    /** What the previous Samsung preset (sizes already migrated, flag v2 set) stored on a phone. */
+    private fun storePreviousSamsung(preset: KeyboardPreset) {
+        prefs.edit().clear().commit()
+        prefs.edit()
+            .putString(Settings.PREF_KEYBOARD_PRESET, preset.name)
+            .putBoolean(KeyboardPresets.PREF_PRESET_SIZES_V2, true)
+            .putFloat(heightKey, 1.17f).putFloat(gapKey, 0.99f).putFloat(sideKey, 0.18f)
+            .putBoolean(Settings.PREF_SHOW_LANGUAGE_SWITCH_KEY, false)
+            .putBoolean(Settings.PREF_SHOW_NUMBER_ROW, false)
+            .putString("layout_FUNCTIONAL", "functional_keys_gboard")
+            .putInt(Settings.PREF_VERSION_CODE, 600070)
+            .commit()
+    }
+
+    @Test
+    fun upgrade_reappliesTheFullSamsungPresetOnce() {
+        storePreviousSamsung(KeyboardPreset.SAMSUNG)
+        checkVersionUpgrade(context)
+        val now = KeyboardPresets.sizesOf(KeyboardPreset.SAMSUNG)
+        assertEquals(now.height, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(now.gap, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(now.sidePadding, prefs.getFloat(sideKey, 0f), 0.001f)
+        assertTrue(prefs.getBoolean(Settings.PREF_SHOW_LANGUAGE_SWITCH_KEY, false))
+        assertTrue(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, false))
+        assertFalse(prefs.getBoolean(Settings.PREF_SHOW_HINTS, true))
+        assertEquals("functional_keys_samsung", prefs.getString("layout_FUNCTIONAL", null))
+        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS, null))
+        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS_NIGHT, null))
+
+        // the user changes things afterwards; a later upgrade must not take them back
+        prefs.edit().putFloat(heightKey, 0.95f).putBoolean(Settings.PREF_SHOW_NUMBER_ROW, false)
+            .putInt(Settings.PREF_VERSION_CODE, 600071).commit()
+        checkVersionUpgrade(context)
+        assertEquals(0.95f, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertFalse(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, true))
+    }
+
+    @Test
+    fun upgrade_layoutMigrationLeavesGboardAndOwnAlone() {
+        for (preset in listOf(KeyboardPreset.GBOARD, KeyboardPreset.OWN)) {
+            storePreviousSamsung(preset)
+            checkVersionUpgrade(context)
+            assertEquals(1.17f, prefs.getFloat(heightKey, 0f), 0.001f)
+            assertFalse(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, true))
+            assertEquals("functional_keys_gboard", prefs.getString("layout_FUNCTIONAL", null))
+            assertFalse(prefs.contains(Settings.PREF_THEME_COLORS))
+        }
+    }
+
+    @Test
+    fun choosingAnotherPresetDropsTheSamsungTheme() {
+        KeyboardPresets.apply(context, KeyboardPreset.SAMSUNG)
+        KeyboardPresets.apply(context, KeyboardPreset.GBOARD)
+        assertFalse(prefs.contains(Settings.PREF_THEME_COLORS))
+        assertFalse(prefs.contains(Settings.PREF_THEME_COLORS_NIGHT))
     }
 }

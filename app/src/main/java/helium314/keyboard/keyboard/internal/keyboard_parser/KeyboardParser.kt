@@ -16,6 +16,7 @@ import helium314.keyboard.keyboard.internal.keyboard_parser.floris.SimplePopups
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.TextKeyData
 import helium314.keyboard.latin.common.isEmoji
 import helium314.keyboard.latin.define.DebugFlags
+import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.LayoutType
 import helium314.keyboard.latin.utils.POPUP_KEYS_LAYOUT
@@ -85,6 +86,14 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
             keysInRows.forEachIndexed { i, row ->
                 row.forEach { it.mHeight *= if (i == keysInRows.lastIndex) bottomRowScale else otherRowScale }
             }
+        }
+        // the real Samsung keyboard has a flatter number row; the other rows take the height, so the keyboard stays as tall
+        if (params.mId.element.takesFunctionalKeys && params.mId.numberRowEnabled && keysInRows.size == 5
+            && Settings.getValues().mKeyboardPreset == KeyboardPreset.SAMSUNG) {
+            val n = keysInRows.size
+            val numberRowScale = n * SAMSUNG_NUMBER_ROW_RATIO / (n - 1 + SAMSUNG_NUMBER_ROW_RATIO)
+            val otherRowScale = (n - numberRowScale) / (n - 1)
+            keysInRows.forEachIndexed { i, row -> row.forEach { it.mHeight *= if (i == 0) numberRowScale else otherRowScale } }
         }
 
         return keysInRows
@@ -342,3 +351,6 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
     }
 
 }
+
+/** number row pitch relative to a letter row pitch on the real Samsung keyboard (156 px against 180 px, key 116 against 140) */
+private const val SAMSUNG_NUMBER_ROW_RATIO = 0.867f

@@ -190,6 +190,23 @@ class StripScreenshotTest {
                 println("HINT $name row$rowIndex minDistToRightEdge=$minRight minDistToTopEdge=$minTop pixels=$found")
             }
         }
+        run {
+            val sTop2 = stripLoc[1] + strip.height
+            fun px(k: helium314.keyboard.keyboard.Key) = "#%06X".format(bmp.getPixel(k.x + 5, sTop2 + k.y + k.height / 2) and 0xFFFFFF)
+            val keys = kbAll.sortedKeys.filter { !it.isSpacer }
+            val q = keys.first { it.label == "q" }
+            val out = StringBuilder("KEYCOLOR $name bg=#%06X".format(bmp.getPixel(2, sTop2 + 2) and 0xFFFFFF))
+            out.append(" letter=${px(q)}")
+            keys.firstOrNull { it.code == helium314.keyboard.latin.common.Constants.CODE_SPACE }?.let { out.append(" space=${px(it)}") }
+            keys.firstOrNull { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.SHIFT }?.let { out.append(" shift=${px(it)}") }
+            keys.firstOrNull { it.code == helium314.keyboard.latin.common.Constants.CODE_ENTER }?.let { out.append(" enter=${px(it)}") }
+            keys.firstOrNull { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.SYMBOL_ALPHA }?.let { out.append(" symbols=${px(it)}") }
+            keys.firstOrNull { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.LANGUAGE_SWITCH }?.let { out.append(" globe=${px(it)}") }
+            keys.firstOrNull { it.code == ','.code }?.let { out.append(" comma=${px(it)}") }
+            println(out)
+            println("KEYS $name bottom=${keys.filter { it.y == keys.maxOf { k -> k.y } }.sortedBy { it.x }.map { "${it.label ?: it.code}:${it.x}+${it.width}" }}")
+            println("KEYS $name numberRowKeyH=${keys.firstOrNull { it.label == "1" }?.height} qKeyH=${q.height} shiftW=${keys.firstOrNull { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.SHIFT }?.width}")
+        }
         val voice = strip.findViewById<ViewGroup>(R.id.voice_anchor)
         (voice.getChildAt(0) as? android.widget.ImageView)?.let { println("VOICEDBG filter=${it.colorFilter} drawable=${it.drawable} tint=${it.imageTintList} activated=${it.isActivated}") }
         val loc = IntArray(2); voice.getLocationInWindow(loc)

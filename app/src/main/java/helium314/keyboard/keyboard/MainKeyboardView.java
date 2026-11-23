@@ -951,11 +951,9 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         }
 
         final String middleText = subtype.getMiddleDisplayName();
-        final String withArrows = "< " + middleText + " >";
+        // the real Samsung keyboard shows the language name alone
         String result = "";
-        if (fitsTextIntoWidth(width, withArrows, paint)) {
-            result = withArrows;
-        } else if (fitsTextIntoWidth(width, middleText, paint)) {
+        if (fitsTextIntoWidth(width, middleText, paint)) {
             result = middleText;
         }
 

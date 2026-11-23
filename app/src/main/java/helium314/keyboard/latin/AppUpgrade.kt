@@ -727,6 +727,7 @@ private object AppUpgrade {
         }
         // Gboard / Samsung preset sizes were corrected after some phones had stored them
         KeyboardPresets.migrateSizes(prefs)
+        KeyboardPresets.migrateLayout(prefs)
         upgradeToolbarPrefs(prefs)
         LayoutUtilsCustom.onLayoutFileChanged() // just to be sure
         prefs.edit { putInt(Settings.PREF_VERSION_CODE, BuildConfig.VERSION_CODE) }

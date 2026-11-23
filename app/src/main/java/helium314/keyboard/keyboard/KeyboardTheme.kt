@@ -65,6 +65,8 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
         const val THEME_PINK = "pink"
         const val THEME_SAND = "sand"
         const val THEME_VIOLETTE = "violette"
+        /** neutral grays of the real Samsung keyboard, day and night; set by the Samsung preset, not offered in the theme list */
+        const val THEME_SAMSUNG = "samsung"
         fun getAvailableDefaultColors(prefs: SharedPreferences, isNight: Boolean) = listOfNotNull(
             if (!isNight) THEME_LIGHT else null, THEME_DARK,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) THEME_DYNAMIC else null,
@@ -151,6 +153,37 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_DYNAMIC -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) DynamicColors(context, themeStyle, hasBorders, backgroundImage)
                     else getThemeColors(THEME_LIGHT, themeStyle, context, prefs, isNight)
+                }
+                THEME_SAMSUNG -> {
+                    // alpha 0xFE: not 255, so the draw_keys alpha blend leaves the sampled color as it is (to within 1 step)
+                    val blue = "#5090FE".toColorInt()
+                    if (isNight) DefaultColors(
+                        themeStyle, hasBorders,
+                        accent = blue,
+                        background = "#010101".toColorInt(),
+                        keyBackground = "#FE3A3A3C".toColorInt(),
+                        functionalKey = "#FE171719".toColorInt(),
+                        spaceBar = "#FE3A3A3C".toColorInt(),
+                        keyText = Color.WHITE,
+                        keyHintText = "#9A9A9E".toColorInt(),
+                        spaceBarText = Color.WHITE,
+                        actionKey = "#FE171719".toColorInt(),
+                        shiftIcon = blue,
+                        keyboardBackground = backgroundImage
+                    ) else DefaultColors(
+                        themeStyle, hasBorders,
+                        accent = blue,
+                        background = "#E3E3E3".toColorInt(),
+                        keyBackground = "#FEFCFCFC".toColorInt(),
+                        functionalKey = "#FEC8C8C8".toColorInt(),
+                        spaceBar = "#FEFCFCFC".toColorInt(),
+                        keyText = Color.BLACK,
+                        keyHintText = "#6E6E6E".toColorInt(),
+                        spaceBarText = Color.BLACK,
+                        actionKey = "#FEC8C8C8".toColorInt(),
+                        shiftIcon = blue,
+                        keyboardBackground = backgroundImage
+                    )
                 }
                 THEME_LIGHT -> DefaultColors(
                     themeStyle,

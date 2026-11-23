@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shift key of the Samsung preset, caps lock: filled arrow on a bar -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFF"
+        android:strokeColor="#FFF"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round"
+        android:pathData="M12,2.5 L4,11 L8,11 L8,17 L16,17 L16,11 L20,11 Z M8,20 L16,20 L16,21.5 L8,21.5 Z"/>
+</vector>

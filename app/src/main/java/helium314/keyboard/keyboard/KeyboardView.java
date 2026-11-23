@@ -36,7 +36,9 @@ import helium314.keyboard.latin.common.ColorType;
 import helium314.keyboard.latin.common.Colors;
 import helium314.keyboard.latin.common.Constants;
 import helium314.keyboard.latin.common.StringUtilsKt;
+import helium314.keyboard.latin.settings.KeyboardPreset;
 import helium314.keyboard.latin.settings.Settings;
+import helium314.keyboard.latin.settings.SettingsValues;
 import helium314.keyboard.latin.suggestions.MoreSuggestions;
 import helium314.keyboard.latin.suggestions.MoreSuggestionsView;
 import helium314.keyboard.latin.utils.TypefaceUtils;
@@ -381,6 +383,34 @@ public class KeyboardView extends View {
     }
 
     // Draw key top visuals.
+    private Drawable mSamsungShift, mSamsungShifted, mSamsungShiftLocked;
+
+    private boolean isSamsungPreset() {
+        final SettingsValues values = Settings.getValues();
+        return this instanceof MainKeyboardView && values != null && values.mKeyboardPreset == KeyboardPreset.SAMSUNG;
+    }
+
+    /** The Samsung keyboard's shift key: outlined arrow while typing lowercase, filled with capitals, on a bar when locked. */
+    private Drawable samsungShiftIcon(final Key key, final Keyboard keyboard, final Drawable icon) {
+        if (icon == null || !key.isShift() || !isSamsungPreset()) return icon;
+        if (mSamsungShift == null) {
+            mSamsungShift = androidx.core.content.ContextCompat.getDrawable(getContext(), R.drawable.ic_samsung_shift);
+            mSamsungShifted = androidx.core.content.ContextCompat.getDrawable(getContext(), R.drawable.ic_samsung_shift_shifted);
+            mSamsungShiftLocked = androidx.core.content.ContextCompat.getDrawable(getContext(), R.drawable.ic_samsung_shift_locked);
+        }
+        final KeyboardElement element = keyboard.mId.getElement();
+        if (element == KeyboardElement.ALPHABET_SHIFT_LOCKED) return mSamsungShiftLocked;
+        return element.isAlphabetShifted() ? mSamsungShifted : mSamsungShift;
+    }
+
+    /** The real Samsung keyboard shows capital letters on the keys while typing lowercase; only the label changes. */
+    private String samsungUpperCase(final String label) {
+        if (label == null || !(this instanceof MainKeyboardView) || label.codePointCount(0, label.length()) != 1) return label;
+        final SettingsValues values = Settings.getValues();
+        if (values == null || values.mKeyboardPreset != KeyboardPreset.SAMSUNG) return label;
+        return Character.isLetter(label.codePointAt(0)) ? label.toUpperCase(java.util.Locale.ROOT) : label;
+    }
+
     protected void onDrawKeyTopVisuals(@NonNull final Key key, @NonNull final Canvas canvas,
             @NonNull final Paint paint, @NonNull final KeyDrawParams params) {
         final int keyWidth = key.getDrawWidth();
@@ -391,10 +421,10 @@ public class KeyboardView extends View {
         // Draw key label.
         final Keyboard keyboard = getKeyboard();
         final Drawable icon = (keyboard == null) ? null
-                : key.getIcon(keyboard.mIconsSet, params.mAnimAlpha);
+                : samsungShiftIcon(key, keyboard, key.getIcon(keyboard.mIconsSet, params.mAnimAlpha));
         float labelX = centerX;
         float labelBaseline = centerY;
-        final String label = key.getLabel();
+        final String label = samsungUpperCase(key.getLabel());
         if (label != null) {
             paint.setTypeface(KeyboardTypeface.resolve(label, key.selectTypeface(params)));
             paint.setTextSize(key.selectTextSize(params) * mFontSizeMultiplier);
@@ -646,7 +676,7 @@ public class KeyboardView extends View {
         if (key.hasActionKeyBackground()) {
             mColors.setColor(icon, ColorType.ACTION_KEY_ICON);
         } else if (key.isShift() && keyboard != null) {
-            if (keyboard.mId.getElement().isAlphabetShifted())
+            if (keyboard.mId.getElement().isAlphabetShifted() || isSamsungPreset())
                 mColors.setColor(icon, ColorType.SHIFT_KEY_ICON);
             else
                 mColors.setColor(icon, ColorType.KEY_ICON); // normal key if not shifted

@@ -387,6 +387,10 @@ class DefaultColors (
     private val spaceBarText: Int = keyHintText,
     private val gesture: Int = accent,
     private var keyboardBackground: Drawable? = null,
+    /** enter key color, accent if not given */
+    private val actionKey: Int = accent,
+    /** color of the shift key arrow, accent if not given */
+    private val shiftIcon: Int = accent,
 ) : Colors {
     private val navBar: Int
     /** brightened or darkened variant of [background], to be used if exact background color would be
@@ -468,7 +472,7 @@ class DefaultColors (
                 else pressedStateList(brightenOrDarken(capKeyBackground, true), capKeyBackground)
             functionalKeyStateList = pressedStateList(brightenOrDarken(capFunctionalKey, true), capFunctionalKey)
             actionKeyStateList = if (themeStyle == STYLE_HOLO) functionalKeyStateList
-                else pressedStateList(brightenOrDarken(accent, true), accent)
+                else pressedStateList(brightenOrDarken(actionKey, true), actionKey)
             spaceBarStateList = if (themeStyle == STYLE_HOLO) pressedStateList(capSpaceBar, capSpaceBar)
                 else pressedStateList(brightenOrDarken(capSpaceBar, true), capSpaceBar)
         } else {
@@ -477,21 +481,22 @@ class DefaultColors (
             keyStateList = pressedStateList(keyBackground, Color.TRANSPARENT)
             functionalKeyStateList = keyStateList
             actionKeyStateList = if (themeStyle == STYLE_HOLO) functionalKeyStateList
-                else pressedStateList(brightenOrDarken(accent, true), accent)
+                else pressedStateList(brightenOrDarken(actionKey, true), actionKey)
             spaceBarStateList = pressedStateList(brightenOrDarken(spaceBar, true), spaceBar)
         }
         keyTextFilter = colorFilter(keyText)
         actionKeyIconColorFilter = when {
             themeStyle == STYLE_HOLO -> keyTextFilter
             // the white icon may not have enough contrast, and can't be adjusted by the user
-            isBrightColor(accent) -> colorFilter(Color.DKGRAY)
+            isBrightColor(actionKey) -> colorFilter(Color.DKGRAY)
             else -> null
         }
     }
 
     override fun get(color: ColorType): Int = when (color) {
-        TOOL_BAR_KEY_ENABLED_BACKGROUND, EMOJI_CATEGORY_SELECTED, ACTION_KEY_BACKGROUND,
-            CLIPBOARD_PIN, SHIFT_KEY_ICON -> accent
+        TOOL_BAR_KEY_ENABLED_BACKGROUND, EMOJI_CATEGORY_SELECTED, CLIPBOARD_PIN -> accent
+        ACTION_KEY_BACKGROUND -> actionKey
+        SHIFT_KEY_ICON -> shiftIcon
         AUTOFILL_BACKGROUND_CHIP -> if (themeStyle == STYLE_MATERIAL && !hasKeyBorders) background else adjustedBackground
         GESTURE_PREVIEW, POPUP_KEYS_BACKGROUND, MORE_SUGGESTIONS_BACKGROUND, KEY_PREVIEW_BACKGROUND -> adjustedBackground
         TOOL_BAR_EXPAND_KEY_BACKGROUND, CLIPBOARD_SUGGESTION_BACKGROUND -> doubleAdjustedBackground

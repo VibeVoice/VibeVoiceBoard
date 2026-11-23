@@ -6,23 +6,23 @@
   ],
   [
     { "$": "keyboard_state_selector",
-      "alphabet": { "label": "!#1", "code": -10001, "width": 0.135, "type": "function" },
-      "default": { "label": "alpha", "width": 0.135 }
+      "alphabet": { "label": "!#1", "code": -10001, "width": 0.138, "type": "function" },
+      "default": { "label": "alpha", "width": 0.138 }
     },
+    { "$": "keyboard_state_selector", "languageKeyEnabled": { "$": "keyboard_state_selector", "alphabet": { "label": "language_switch", "width": 0.10 }}},
     { "$": "variation_selector",
-      "default":  { "label": "comma", "labelFlags": 1073741824, "width": 0.085 },
-      "email":    { "label": "@", "labelFlags": 1073741824, "groupId": 1, "type": "function", "width": 0.085 },
-      "uri":      { "label": "/", "labelFlags": 1073741824, "groupId": 1, "type": "function", "width": 0.085 }
+      "default":  { "label": "comma", "labelFlags": 1073741824, "type": "character", "width": 0.10 },
+      "email":    { "label": "@", "labelFlags": 1073741824, "groupId": 1, "type": "function", "width": 0.10 },
+      "uri":      { "label": "/", "labelFlags": 1073741824, "groupId": 1, "type": "function", "width": 0.10 }
     },
-    { "$": "keyboard_state_selector", "languageKeyEnabled": { "$": "keyboard_state_selector", "alphabet": { "label": "language_switch", "width": 0.085 }}},
-    { "$": "keyboard_state_selector", "emojiKeyEnabled": { "$": "keyboard_state_selector", "alphabet": { "label": "emoji", "width": 0.085 }}},
-    { "$": "keyboard_state_selector", "symbols": { "label": "numpad", "width": 0.085 } },
+    { "$": "keyboard_state_selector", "emojiKeyEnabled": { "$": "keyboard_state_selector", "alphabet": { "label": "emoji", "width": 0.10 }}},
+    { "$": "keyboard_state_selector", "symbols": { "label": "numpad", "width": 0.10 } },
     { "label": "space" },
     { "$": "keyboard_state_selector",
       "symbols": { "$": "keyboard_state_selector", "dpadKeyEnabled": { "label": "dpad" } },
       "dpad": { "label": "symbol" }
     },
-    { "label": "period", "labelFlags": 1073741824, "width": 0.085 },
-    { "label": "action", "width": 0.135, "labelFlags": 1073741824 }
+    { "label": "period", "labelFlags": 1073741824, "type": "character", "width": 0.10 },
+    { "label": "action", "width": 0.15, "labelFlags": 1073741824 }
   ]
 ]
