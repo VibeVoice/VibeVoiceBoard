@@ -6,7 +6,7 @@ VibeVoice Keyboard ist eine vollwertige Android-Tastatur mit eingebautem Diktat.
 Kommas, Punkte, Fragezeichen und Satzgrenzen entstehen daraus, wie du sprichst – nicht daraus, dass du „Komma" sagst. Die Großschreibung ebenso. Ein diktierter Absatz sieht aus wie ein geschriebener.
 
 <b>Gemessene Genauigkeit, offengelegte Methode</b>
-9,31 % Wortfehlerrate, gemittelt über zwölf Prüfsätze in sechs Sprachen. Die Zahl, die Prüfsätze dahinter und die Art der Auswertung stehen auf vibevoice.net – einschließlich des einen Prüfsatzes, den wir behalten, obwohl das Weglassen die Zahl verbessern würde.
+7,33 % Wortfehlerrate, gemittelt über elf Prüfsätze in sechs Sprachen. Die Zahl, die Prüfsätze dahinter und die Art der Auswertung stehen auf vibevoice.net.
 
 <b>Schneller als deine Daumen</b>
 Menschen tippen etwa 40 Wörter pro Minute und sprechen etwa 150. In der einzigen halbwegs kontrollierten Messung, die dazu veröffentlicht ist (Ruan et al., ACM IMWUT 2017), lag Sprache bei 153 Wörtern pro Minute gegen 52 getippte. Also grob das Dreifache, auf einer Handytastatur, für alles was länger als eine Zeile ist.

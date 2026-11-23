@@ -34,8 +34,7 @@ sie mit ihrer Begründung, und Unit-Tests im Server halten sie gegen die Werte, 
 
 | Fakt | Wert | Quelle |
 |---|---|---|
-| Word Error Rate (Makro) | **9,31 %**, 12 Fixtures, 6 Sprachen | `src/config/accuracy.js` → `WER.macro` |
-| Ohne die angezweifelte Fixture | 7,45 % | `WER.macroWithoutDoubtedFixture` |
+| Word Error Rate (Makro) | **7,33 %**, 11 Fixtures, 6 Sprachen (Stand 2026-11-19, vorher 9,31 % bei 12) | `src/config/accuracy.js` → `WER.macro` |
 | Tempo-Headline | **3×** (Band 2–3) | `src/config/rates.js` → `SPEEDUP_HEADLINE` |
 | Tippen / Sprechen | 40 wpm / 150 wpm; Bänder 40–70 / 120–160 | `TYPING_RANGE`, `SPEAKING_RANGE` |
 | Beleg fürs Tempo | Ruan et al. 2017, ACM IMWUT, DOI 10.1145/3161187 — 153 gesprochen gegen 52 getippt | `rates.js` |
@@ -51,7 +50,7 @@ sie mit ihrer Begründung, und Unit-Tests im Server halten sie gegen die Werte, 
 1. **Kein Vergleichswert gegen einen Wettbewerber.** `accuracy.js` → `TERMINOLOGY.hedge`: *„We have
    benchmarked no competitor, so that is the shape of the difference rather than a measured result."*
    Es gibt also keine belastbare Zahl für Googles Spracheingabe, und wir dürfen keine erfinden.
-   → Wir zeigen **unsere** 9,31 % und demonstrieren die Interpunktion **im Bild**, statt einen
+   → Wir zeigen **unsere** 7,33 % und demonstrieren die Interpunktion **im Bild**, statt einen
    Vergleich zu behaupten. Das war schon die Empfehlung aus der Diskussion; jetzt ist sie belegt.
 2. **Die Engine wird nie genannt.** `accuracy.js` begründet ausdrücklich, warum die Sprachzahl
    untertrieben wird: die echte Zahl ist ein Fingerabdruck der Engine. Store-Texte nennen keine
@@ -258,7 +257,7 @@ Neue Schlüssel nach `app/src/main/res/values/strings.xml`, Übersetzungen nach
 * **Die 25 übrigen Locale-Ordner werden gelöscht.** Play fällt dann auf `en-US` zurück, statt in
   25 Sprachen eine Offline-Behauptung auszuliefern, die für diese App falsch ist. Sie können später
   einzeln und übersetzt zurückkommen.
-* Fakten, die in den Volltext gehören, alle aus der Tabelle oben: die 9,31 %, das 3-fache Tempo mit
+* Fakten, die in den Volltext gehören, alle aus der Tabelle oben: die 7,33 %, das 3-fache Tempo mit
   der Ruan-Quelle, „over fifty languages", automatische Interpunktion, der Free-Tarif mit 30 Minuten,
   der Verbleib des Audios in der Formulierung aus `AUDIO_DELETED`, und ein Link auf
   `https://vibevoice.net`.

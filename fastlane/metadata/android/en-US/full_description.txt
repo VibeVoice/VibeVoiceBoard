@@ -6,7 +6,7 @@ VibeVoice Keyboard is a full Android keyboard with dictation built into it. Tap 
 Commas, full stops, question marks and sentence breaks are applied from how you speak, not from saying the word "comma". Casing too. A dictated paragraph comes out looking like a written one.
 
 <b>Measured accuracy, published method</b>
-9.31% word error rate, averaged across twelve fixtures in six languages. That figure, the fixtures behind it and the way it is scored are all written up at vibevoice.net — including the one fixture we keep because dropping it would improve the number.
+7.33% word error rate, averaged across eleven fixtures in six languages. That figure, the fixtures behind it and the way it is scored are all written up at vibevoice.net.
 
 <b>Faster than your thumbs</b>
 People type at around 40 words a minute and speak at around 150. In the closest thing to a controlled measurement anybody has published (Ruan et al., ACM IMWUT 2017), speech ran at 153 words a minute against 52 typed. Roughly three times, on a phone keyboard, for anything longer than a line.

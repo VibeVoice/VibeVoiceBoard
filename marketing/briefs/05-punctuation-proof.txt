@@ -49,5 +49,5 @@ AUFNAHME
 DANACH
 ------
 Ich setze eine Textzeile darüber, die die Interpunktion benennt, ohne sie zu behaupten —
-etwa „Kommas, Punkte und Fragezeichen kommen von selbst". Die Wortfehlerrate von 9,31 %
+etwa „Kommas, Punkte und Fragezeichen kommen von selbst". Die Wortfehlerrate von 7,33 %
 kommt in die Beschreibung, nicht ins Bild.
