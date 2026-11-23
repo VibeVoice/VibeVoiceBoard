@@ -163,4 +163,9 @@ SPDX-License-Identifier: GPL-3.0-only
     <!-- Draw keys (visible key caps) -->
     <string name="draw_keys">Tasten anzeigen</string>
     <string name="draw_keys_summary">Sichtbare Tastenkappen anzeigen</string>
+    <!-- Keyboard presets -->
+    <string name="keyboard_preset_title">Tastatur wie…</string>
+    <string name="keyboard_preset_own">Eigenes</string>
+    <string name="keyboard_preset_gboard">Wie Gboard</string>
+    <string name="keyboard_preset_samsung">Wie Samsung Keyboard</string>
 </resources>

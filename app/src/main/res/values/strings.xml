@@ -46,6 +46,11 @@
     <string name="settings_screen_correction">Text correction</string>
     <!-- Settings screen title for advanced settings -->
     <string name="settings_screen_advanced">Advanced</string>
+    <!-- Keyboard presets -->
+    <string name="keyboard_preset_title">Keyboard like…</string>
+    <string name="keyboard_preset_own">Own</string>
+    <string name="keyboard_preset_gboard">Like Gboard</string>
+    <string name="keyboard_preset_samsung">Like Samsung Keyboard</string>
     <!-- Settings screen title for VibeVoice integration -->
     <string name="vibevoice_integration_title">VibeVoice typing</string>
     <string name="vibevoice_stop_dictation">Stop dictation</string>

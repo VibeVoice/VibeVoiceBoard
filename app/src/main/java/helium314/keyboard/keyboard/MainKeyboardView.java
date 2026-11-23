@@ -57,7 +57,13 @@ import helium314.keyboard.latin.common.CoordinateUtils;
 import helium314.keyboard.latin.define.DebugFlags;
 import helium314.keyboard.latin.settings.DebugSettings;
 import helium314.keyboard.latin.settings.Defaults;
+import helium314.keyboard.latin.settings.KeyboardPreset;
 import helium314.keyboard.latin.settings.Settings;
+import helium314.keyboard.latin.utils.SubtypeLocaleUtils;
+import helium314.keyboard.latin.utils.SubtypeSettings;
+import helium314.keyboard.latin.utils.SubtypeUtilsKt;
+import android.view.inputmethod.InputMethodSubtype;
+import java.util.LinkedHashSet;
 import helium314.keyboard.latin.utils.KtxKt;
 import helium314.keyboard.latin.utils.LanguageOnSpacebarUtils;
 import helium314.keyboard.latin.utils.Log;
@@ -852,6 +858,71 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         return newLocales;
     }
 
+    private String layoutGboardSpacebar(final Paint paint,
+            final RichInputMethodSubtype subtype, final int width) {
+        if (subtype == null) return "";
+        final List<Locale> secondaryLocales = Settings.getValues().mSecondaryLocales;
+        final List<Locale> secondaryLocalesToUse = withoutDuplicateLanguages(secondaryLocales,
+                subtype.getLocale().getLanguage());
+        final Locale displayLocale = ConfigurationCompatKt.locale(getResources().getConfiguration());
+
+        // Check if multilingual: multiple enabled subtypes or secondary locales
+        final List<InputMethodSubtype> enabledSubtypes = SubtypeSettings.INSTANCE.getEnabledSubtypes(false);
+        final LinkedHashSet<String> languages = new LinkedHashSet<>();
+        final String mainLang = subtype.getLocale().getLanguage();
+        if (!mainLang.isEmpty() && !SubtypeLocaleUtils.NO_LANGUAGE.equals(mainLang)) {
+            languages.add(mainLang);
+        }
+        for (Locale loc : secondaryLocalesToUse) {
+            String l = loc.getLanguage();
+            if (!l.isEmpty() && !SubtypeLocaleUtils.NO_LANGUAGE.equals(l)) {
+                languages.add(l);
+            }
+        }
+        for (InputMethodSubtype sub : enabledSubtypes) {
+            Locale loc = SubtypeUtilsKt.locale(sub);
+            String l = loc.getLanguage();
+            if (!l.isEmpty() && !SubtypeLocaleUtils.NO_LANGUAGE.equals(l)) {
+                languages.add(l);
+            }
+        }
+
+        if (languages.size() > 1) {
+            StringBuilder sb = new StringBuilder();
+            for (String lang : languages) {
+                if (sb.length() > 0) {
+                    sb.append(" • ");
+                }
+                sb.append(lang.toUpperCase(displayLocale));
+            }
+            final String multiText = sb.toString();
+            if (fitsTextIntoWidth(width, multiText, paint)) {
+                return multiText;
+            }
+        }
+
+        final String middleText = subtype.getMiddleDisplayName();
+        if (fitsTextIntoWidth(width, middleText, paint)) {
+            return middleText;
+        }
+
+        return "";
+    }
+
+    private String layoutSamsungSpacebar(final Paint paint,
+            final RichInputMethodSubtype subtype, final int width) {
+        if (subtype == null) return "";
+        final String middleText = subtype.getMiddleDisplayName();
+        final String withArrows = "< " + middleText + " >";
+        if (fitsTextIntoWidth(width, withArrows, paint)) {
+            return withArrows;
+        }
+        if (fitsTextIntoWidth(width, middleText, paint)) {
+            return middleText;
+        }
+        return "";
+    }
+
     /** Repaints the space bar alone, for the dictation clock. */
     public void invalidateSpaceKey() {
         final Keyboard keyboard = getKeyboard();
@@ -884,7 +955,14 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
                         String.format(java.util.Locale.US, "%d:%02d", seconds / 60, seconds % 60));
             }
         } else {
-            spaceText = getContext().getString(R.string.vibevoice_hold_to_transcribe);
+            final KeyboardPreset preset = Settings.getValues() != null ? Settings.getValues().mKeyboardPreset : KeyboardPreset.OWN;
+            if (preset == KeyboardPreset.GBOARD) {
+                spaceText = layoutGboardSpacebar(paint, keyboard.mId.getSubtype(), width);
+            } else if (preset == KeyboardPreset.SAMSUNG) {
+                spaceText = layoutSamsungSpacebar(paint, keyboard.mId.getSubtype(), width);
+            } else {
+                spaceText = getContext().getString(R.string.vibevoice_hold_to_transcribe);
+            }
         }
         paint.setTypeface(KeyboardTypeface.resolve(spaceText, Typeface.DEFAULT));
         // Draw language text with shadow
