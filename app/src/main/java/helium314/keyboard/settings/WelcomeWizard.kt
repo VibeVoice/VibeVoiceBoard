@@ -123,6 +123,7 @@ fun WelcomeWizard(
     val ctx = LocalContext.current
     val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     var step by rememberSaveable { mutableIntStateOf(0) }
+    var inSwitcher by rememberSaveable { mutableStateOf(false) }
 
     // Derived IME states for Step 1
     var isImeEnabled by remember { mutableStateOf(UncachedInputMethodManagerUtils.isThisImeEnabled(ctx, imm)) }
@@ -152,7 +153,10 @@ fun WelcomeWizard(
     }
 
     BackHandler {
-        if (step > 0) {
+        if (inSwitcher) {
+            inSwitcher = false
+            step = 1
+        } else if (step > 0) {
             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
             step--
         } else if (isImeEnabled && isImeCurrent) {
@@ -269,7 +273,7 @@ fun WelcomeWizard(
     LaunchedEffect(isImeCurrent) {
         if (step == 1 && isImeCurrent && !previousImeCurrent) {
             delay(400)
-            step = 2
+            inSwitcher = true
         }
         previousImeCurrent = isImeCurrent
     }
@@ -453,7 +457,7 @@ fun WelcomeWizard(
                                 stringResource(R.string.setup_next_action),
                                 active = true
                             ) {
-                                step = 2
+                                inSwitcher = true
                             }
                         }
                     }
@@ -840,7 +844,7 @@ fun WelcomeWizard(
             // A step starts at its top: the practice field in step 2 scrolls the column down with
             // the keyboard open, and without the reset step 3 opened with its header scrolled away.
             val scrollState = rememberScrollState()
-            LaunchedEffect(step) { scrollState.scrollTo(0) }
+            LaunchedEffect(step, inSwitcher) { scrollState.scrollTo(0) }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -863,13 +867,29 @@ fun WelcomeWizard(
                             bigText()
                         }
                         Box(Modifier.weight(0.6f)) {
-                            steps()
+                            if (inSwitcher) {
+                                SwitcherFlow(
+                                    onFinished = { inSwitcher = false; step = 2 },
+                                    onSkipped = { inSwitcher = false; step = 2 },
+                                    onBack = { inSwitcher = false; step = 1 }
+                                )
+                            } else {
+                                steps()
+                            }
                         }
                     }
                 else
                     Column(Modifier.fillMaxWidth()) {
                         bigText()
-                        steps()
+                        if (inSwitcher) {
+                            SwitcherFlow(
+                                onFinished = { inSwitcher = false; step = 2 },
+                                onSkipped = { inSwitcher = false; step = 2 },
+                                onBack = { inSwitcher = false; step = 1 }
+                            )
+                        } else {
+                            steps()
+                        }
                     }
             }
         }

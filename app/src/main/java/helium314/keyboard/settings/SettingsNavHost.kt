@@ -85,6 +85,7 @@ fun SettingsNavHost(
                 onClickLayouts = { navController.navigate(SettingsDestination.Layouts) },
                 onClickDictionaries = { navController.navigate(SettingsDestination.Dictionaries) },
                 onClickVibeVoice = { navController.navigate(SettingsDestination.VibeVoice) },
+                onClickSwitcher = { navController.navigate(SettingsDestination.Switcher) },
                 onClickBack = ::goBack,
             )
         }
@@ -157,6 +158,9 @@ fun SettingsNavHost(
         composable(SettingsDestination.VibeVoice) {
             VibeVoiceSettingsScreen(onClickBack = ::goBack)
         }
+        composable(SettingsDestination.Switcher) {
+            SwitcherScreen(onClickBack = ::goBack)
+        }
     }
     if (target.value != SettingsDestination.Settings/* && target.value != navController.currentBackStackEntry?.destination?.route*/)
         navController.navigate(route = target.value)
@@ -183,9 +187,10 @@ object SettingsDestination {
     const val Layouts = "layouts"
     const val Dictionaries = "dictionaries"
     const val VibeVoice = "vibevoice"
+    const val Switcher = "switcher"
 
     private val plainRoutes = setOf(Settings, About, TextCorrection, Preferences, Toolbar, GestureTyping, DataGathering,
-        DataReview, Advanced, Debug, Appearance, PersonalDictionaries, Languages, Layouts, Dictionaries, VibeVoice)
+        DataReview, Advanced, Debug, Appearance, PersonalDictionaries, Languages, Layouts, Dictionaries, VibeVoice, Switcher)
     private val routePrefixes = listOf(Colors, ColorsNight, PersonalDictionary, Subtype)
     fun isKnown(route: String) = route in plainRoutes || routePrefixes.any { route.startsWith(it) && route.length > it.length }
 
