@@ -801,34 +801,41 @@ language, hence "No language". -->
     <string name="setup_overlay_guard_keep_off">Keep it off</string>
     <string name="setup_overlay_guard_turn_on">Turn it on</string>
 
-    <string name="setup_vibrate_title">Vibrate when typing?</string>
-    <string name="setup_vibrate_instruction">Feel a subtle vibration with each keypress.</string>
-    <string name="setup_vibrate_no">No</string>
-    <string name="setup_vibrate_yes">Yes</string>
+    <!-- Language step: one step for the previous keyboard and the typing languages. -->
+    <string name="setup_language_title">Your language</string>
+    <string name="setup_language_instruction">Choose the language you type in. You can change it later in settings.</string>
+    <string name="setup_prev_question">Coming from another keyboard?</string>
+    <string name="setup_keyboard_gboard" translatable="false">Gboard</string>
+    <string name="setup_keyboard_samsung" translatable="false">Samsung</string>
+    <string name="setup_prev_other">Something else</string>
+    <string name="setup_prev_first">This is my first</string>
+    <!-- The two language slots as one-line chips; the value is a language name or "None". -->
+    <string name="setup_lang_chip_main">Main: %s</string>
+    <string name="setup_lang_chip_second">Second: %s</string>
+    <string name="setup_lang_none">None</string>
+    <string name="setup_lang_pick_main">Choose your main language</string>
+    <string name="setup_lang_pick_second">Choose a second language, or none</string>
+    <string name="setup_lang_search_hint">Search languages</string>
+    <string name="setup_lang_no_results">No language found</string>
+
+    <!-- Style and feel step: the real keyboard, restyled live. -->
+    <string name="setup_style_title">Style and feel</string>
+    <string name="setup_style_instruction">Try the keyboard below. What you change here applies right away.</string>
+    <string name="setup_style_label">Style</string>
+    <string name="setup_style_own">VibeVoice own</string>
+    <string name="setup_style_gboard" translatable="false">Gboard</string>
+    <string name="setup_style_samsung" translatable="false">Samsung</string>
+    <string name="setup_style_hint">Type here to try the keyboard…</string>
+    <string name="setup_vibrate_switch">Vibrate when typing</string>
 
     <string name="setup_done_slogan_line1" translatable="false">"You're set."</string>
     <string name="setup_done_slogan_line2" translatable="false">Typing will never</string>
     <string name="setup_done_slogan_line3" translatable="false">feel the same.</string>
     <string name="setup_step_progress">Step %1$d of %2$d</string>
 
-    <!-- Switcher wizard (switching from another keyboard) -->
+    <!-- Settings entry for redoing the language and keyboard-style questions -->
     <string name="switcher_settings_title">Switching from another keyboard?</string>
     <string name="switcher_settings_summary">Match presets and set up languages</string>
-    <string name="switcher_step_progress">Question %1$d of %2$d</string>
-    <string name="switcher_skip">Skip</string>
-    <string name="switcher_q1_title">Which keyboard did you use before?</string>
-    <string name="switcher_q1_instruction">We\'ll adjust key spacing and layout to match your muscle memory.</string>
-    <string name="switcher_keyboard_gboard">Gboard</string>
-    <string name="switcher_keyboard_samsung">Samsung Keyboard</string>
-    <string name="switcher_keyboard_other">Something else</string>
-    <string name="switcher_keyboard_other_desc">Keep standard layout (default)</string>
-    <string name="switcher_q2_title">Which language do you mostly type in?</string>
-    <string name="switcher_q2_instruction">Sets your primary typing language.</string>
-    <string name="switcher_system_language_badge">System language</string>
-    <string name="switcher_q3_title">Do you also type in a second language?</string>
-    <string name="switcher_q3_instruction">Enables multilingual typing with predictions in both languages.</string>
-    <string name="switcher_second_lang_no">No, just one language</string>
-    <string name="switcher_second_lang_no_desc">Single language typing (default)</string>
     <string name="debug_open_setup_wizard">Open setup wizard</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
