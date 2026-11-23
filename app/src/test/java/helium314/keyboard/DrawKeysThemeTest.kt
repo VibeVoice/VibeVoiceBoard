@@ -245,19 +245,4 @@ class DrawKeysThemeTest {
         assertEquals(0xCC, helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER)
         assertEquals(0xDB, helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL)
     }
-
-    @Test
-    fun toolbarBandColor_isDarkerAndAsTranslucentAsLetterKeys() {
-        for (bg in intArrayOf(0xFF202124.toInt(), 0xFFF2F2F2.toInt(), 0x80336699.toInt())) {
-            val band = helium314.keyboard.latin.common.toolbarBandColor(bg)
-            assertEquals(helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(band))
-            // 12% towards black: each channel is 88% of the background's, within rounding
-            for (shift in intArrayOf(16, 8, 0)) {
-                val b = (bg shr shift) and 0xFF
-                val d = (band shr shift) and 0xFF
-                assertTrue("channel must not get lighter", d <= b)
-                assertEquals(b * 0.88, d.toDouble(), 1.5)
-            }
-        }
-    }
 }
