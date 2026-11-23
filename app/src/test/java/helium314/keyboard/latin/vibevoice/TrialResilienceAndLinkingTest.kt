@@ -11,7 +11,12 @@ import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.settings.SettingsActivity
 import helium314.keyboard.settings.bringAppToForeground
 import helium314.keyboard.settings.openLinkInBrowser
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -123,52 +128,85 @@ class TrialResilienceAndLinkingTest {
     }
 
     @Test
-    fun wizardActiveTrackingWorksViaFlagAndPreference() {
+    fun wizardActiveFlagIsInMemoryOnly() {
         assertFalse(VibeVoiceClient.isSetupWizardActive(app))
 
-        VibeVoiceClient.isWizardActive = true
+        VibeVoiceClient.setSetupWizardActive(true)
         assertTrue(VibeVoiceClient.isSetupWizardActive(app))
 
-        VibeVoiceClient.isWizardActive = false
+        VibeVoiceClient.setSetupWizardActive(false)
         assertFalse(VibeVoiceClient.isSetupWizardActive(app))
 
+        // a value left behind by a killed process in the old persisted flag must not count
         app.prefs().edit().putBoolean(Settings.PREF_SETUP_WIZARD_ACTIVE, true).apply()
-        assertTrue(VibeVoiceClient.isSetupWizardActive(app))
+        assertFalse(VibeVoiceClient.isSetupWizardActive(app))
     }
 
     @Test
-    fun triggerTrialRetryUpdatesPreferenceAndFlow() = runBlocking {
+    fun triggerTrialRetryEmitsToCollectorAndReportsDelivery() = runBlocking {
+        val received = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(5000) { VibeVoiceClient.trialRetryFlow.first() }
+        }
         assertEquals(0, app.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0))
 
-        VibeVoiceClient.triggerTrialRetry(app)
-        assertEquals(1, app.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0))
+        assertTrue(VibeVoiceClient.triggerTrialRetry(app))
 
-        VibeVoiceClient.triggerTrialRetry(app)
-        assertEquals(2, app.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0))
+        assertEquals(Unit, received.await())
+        assertEquals(1, app.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0))
     }
 
     @Test
-    fun latinIMEHandleVoiceInputDoesNotLaunchSettingsWhenWizardActive() {
+    fun triggerTrialRetryWithoutCollectorReportsNoDelivery() {
+        assertFalse(VibeVoiceClient.triggerTrialRetry(app))
+        assertEquals(0, app.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0))
+    }
+
+    @Test
+    fun latinIMEHandleVoiceInputDoesNotLaunchSettingsWhenWizardActive() = runBlocking {
         val latinIME = Robolectric.setupService(LatinIME::class.java)
-        // Ensure no API key
         VibeVoiceClient.vibeVoicePrefs(latinIME).edit().clear().apply()
         assertNull(VibeVoiceClient.getApiKey(latinIME))
-
-        // Set wizard active
-        VibeVoiceClient.isWizardActive = true
-        val retryCountBefore = latinIME.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0)
+        VibeVoiceClient.setSetupWizardActive(true)
+        // the wizard listens for the retry request
+        val received = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(5000) { VibeVoiceClient.trialRetryFlow.first() }
+        }
 
         latinIME.handleVoiceInput()
 
-        // Verify settings was NOT launched
-        val nextIntent = shadowOf(app).nextStartedActivity
-        assertNull("Settings should not be launched while wizard is active", nextIntent)
-
-        // Verify trial retry was triggered
-        val retryCountAfter = latinIME.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0)
-        assertEquals(retryCountBefore + 1, retryCountAfter)
+        assertNull("Settings should not be launched while wizard is active", shadowOf(app).nextStartedActivity)
+        assertEquals(Unit, received.await())
     }
 
+    @Test
+    fun latinIMEHandleVoiceInputLaunchesSettingsWhenWizardHasNoCollector() {
+        val latinIME = Robolectric.setupService(LatinIME::class.java)
+        VibeVoiceClient.vibeVoicePrefs(latinIME).edit().clear().apply()
+        VibeVoiceClient.setSetupWizardActive(true) // flag set, but nobody collects the retry flow
+
+        latinIME.handleVoiceInput()
+
+        val nextIntent = shadowOf(app).nextStartedActivity
+        assertNotNull("Mic key must not be swallowed", nextIntent)
+        assertEquals("vibevoice", nextIntent?.getStringExtra("startDestination"))
+    }
+
+    @Test
+    fun latinIMEHandleVoiceInputLaunchesSettingsWhenTrialSpentInWizard() = runBlocking {
+        val latinIME = Robolectric.setupService(LatinIME::class.java)
+        VibeVoiceClient.vibeVoicePrefs(latinIME).edit().clear().apply()
+        VibeVoiceClient.markTrialSpent(latinIME)
+        VibeVoiceClient.setSetupWizardActive(true)
+        val collector = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+            VibeVoiceClient.trialRetryFlow.first()
+        }
+
+        latinIME.handleVoiceInput()
+
+        assertNotNull(shadowOf(app).nextStartedActivity)
+        assertFalse(collector.isCompleted)
+        collector.cancel()
+    }
     @Test
     fun latinIMEHandleVoiceInputLaunchesSettingsWhenWizardInactive() {
         val latinIME = Robolectric.setupService(LatinIME::class.java)
@@ -177,8 +215,7 @@ class TrialResilienceAndLinkingTest {
         assertNull(VibeVoiceClient.getApiKey(latinIME))
 
         // Set wizard inactive
-        VibeVoiceClient.isWizardActive = false
-        latinIME.prefs().edit().putBoolean(Settings.PREF_SETUP_WIZARD_ACTIVE, false).apply()
+        VibeVoiceClient.setSetupWizardActive(false)
 
         latinIME.handleVoiceInput()
 

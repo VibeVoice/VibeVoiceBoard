@@ -1480,23 +1480,37 @@ class VibeVoiceClient(
             return lastResult
         }
 
+        /**
+         * Whether the setup wizard is on screen. In memory only: the keyboard service and the
+         * settings activity share one process, and a flag that survives a killed process would
+         * leave the mic key swallowed with nobody to answer it.
+         */
         @JvmStatic
         @Volatile
         var isWizardActive: Boolean = false
 
+        @JvmStatic
+        fun setSetupWizardActive(active: Boolean) {
+            isWizardActive = active
+        }
+
         private val _trialRetryFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val trialRetryFlow = _trialRetryFlow.asSharedFlow()
 
+        @Suppress("UNUSED_PARAMETER")
         @JvmStatic
-        fun isSetupWizardActive(context: Context): Boolean {
-            return isWizardActive || context.prefs().getBoolean(Settings.PREF_SETUP_WIZARD_ACTIVE, false)
-        }
+        fun isSetupWizardActive(context: Context): Boolean = isWizardActive
 
+        /**
+         * Asks the wizard to retry the trial key. Returns false when nobody collects
+         * [trialRetryFlow], i.e. the request went nowhere and the caller must do something else.
+         */
         @JvmStatic
-        fun triggerTrialRetry(context: Context) {
+        fun triggerTrialRetry(context: Context): Boolean {
+            if (_trialRetryFlow.subscriptionCount.value == 0) return false
             val count = context.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0)
             context.prefs().edit().putInt(Settings.PREF_TRIAL_RETRY_TRIGGER, count + 1).apply()
-            _trialRetryFlow.tryEmit(Unit)
+            return _trialRetryFlow.tryEmit(Unit)
         }
 
         /**
