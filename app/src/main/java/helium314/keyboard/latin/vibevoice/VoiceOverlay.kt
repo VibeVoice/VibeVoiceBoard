@@ -187,8 +187,17 @@ class VoiceOverlay(context: Context) : View(context) {
         super.onDetachedFromWindow()
     }
 
-    /** The size [startPreview] draws at, in pixels, before any scaling by the caller. */
-    fun previewSizePx(): Int = requiredSizePx()
+    /**
+     * The size [startPreview] draws at, in pixels, before any scaling by the caller.
+     *
+     * Reads the geometry first. A fresh view has radius, bar length and count at zero, so the size
+     * came out as a few pixels -- the bar width alone -- and the wizard scaled that sliver up to its
+     * box by a factor of twenty or more, which is the mark covering the text next to it.
+     */
+    fun previewSizePx(): Int {
+        readGeometry(context)
+        return requiredSizePx()
+    }
 
     override fun onDraw(canvas: Canvas) {
         if (!running) return

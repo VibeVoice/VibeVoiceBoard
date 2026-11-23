@@ -878,7 +878,7 @@ fun WelcomeWizard(
                         // used to be a capture lifted off a black screen: right for a dark keyboard,
                         // a ghost of pale light on a light one, and never the colours a user with
                         // another theme would actually get.
-                        FloatingMarkPreview(Modifier.size(76.dp))
+                        FloatingMarkPreview(Modifier.size(56.dp))
                         Text(
                             stringResource(R.string.setup_extras_overlay_preview),
                             style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
@@ -1413,11 +1413,11 @@ fun WizardHero(
 }
 
 /**
- * The waves behind the hero, with nothing speaking into them.
+ * The floating mark, live, shrunk to fit [modifier]'s box.
  *
- * The same [VoiceWaveView] the keyboard runs during a session, in its demo mode. Not a second
- * implementation and not a video: it is the one piece of the landing page's hero that this app
- * already had, and it costs a view and a sine to reuse it.
+ * The view is laid out at the size the real window would have and scaled down to the box, so the
+ * drawing is the real one; the box itself stays the layout size, which keeps it from overlapping
+ * the text beside it.
  */
 @Composable
 private fun FloatingMarkPreview(modifier: Modifier) {
@@ -1436,6 +1436,13 @@ private fun FloatingMarkPreview(modifier: Modifier) {
     }
 }
 
+/**
+ * The waves behind the hero, with nothing speaking into them.
+ *
+ * The same [VoiceWaveView] the keyboard runs during a session, in its demo mode. Not a second
+ * implementation and not a video: it is the one piece of the landing page's hero that this app
+ * already had, and it costs a view and a sine to reuse it.
+ */
 @Composable
 private fun HeroWaves(dark: Boolean) {
     // Keyed on the theme, so switching it rebuilds the view with the matching colour.
