@@ -34,6 +34,10 @@
     <fraction name="config_key_caps_horizontal_gap">1.28%p</fraction>
     <fraction name="config_key_caps_vertical_gap">4.8%p</fraction>
     <dimen name="config_key_caps_corner_radius">5.5dp</dimen>
+    <!-- Toolbar band behind the strip when keys are drawn: side margin like the key grid, small gap to the first key row -->
+    <dimen name="config_toolbar_band_margin_horizontal">4dp</dimen>
+    <dimen name="config_toolbar_band_gap_top">2dp</dimen>
+    <dimen name="config_toolbar_band_gap_bottom">4dp</dimen>
     <!-- config_popup_keys_keyboard_key_height x -0.5 -->
     <dimen name="config_popup_keys_keyboard_vertical_correction_holo">-26.4dp</dimen>
     <dimen name="config_key_preview_offset_holo">40.0dp</dimen>

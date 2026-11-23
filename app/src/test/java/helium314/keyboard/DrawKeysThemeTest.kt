@@ -172,9 +172,9 @@ class DrawKeysThemeTest {
         val functionalBg = borderColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)
         val spaceBarBg = borderColors.get(helium314.keyboard.latin.common.ColorType.SPACE_BAR_BACKGROUND)
 
-        assertEquals("Letter keys must have ~60% alpha (153)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
-        assertEquals("Functional keys must have ~72% alpha (184)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(functionalBg))
-        assertEquals("Spacebar must have ~60% alpha (153)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(spaceBarBg))
+        assertEquals("Letter keys must have 80% alpha (204)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
+        assertEquals("Functional keys must have ~86% alpha (219)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(functionalBg))
+        assertEquals("Spacebar must have 80% alpha (204)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(spaceBarBg))
     }
 
     @Test
@@ -210,8 +210,8 @@ class DrawKeysThemeTest {
         )
         val keyBg = allColors.get(helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND)
         val funcBg = allColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)
-        assertEquals("AllColors letter keys must have ~60% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
-        assertEquals("AllColors functional keys must have ~72% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(funcBg))
+        assertEquals("AllColors letter keys must have 80% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
+        assertEquals("AllColors functional keys must have ~86% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(funcBg))
 
         val allColorsNoBorders = helium314.keyboard.latin.common.AllColors(
             colorMap,
@@ -235,8 +235,29 @@ class DrawKeysThemeTest {
         val funcBg = dynamicColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)
         val spaceBarBg = dynamicColors.get(helium314.keyboard.latin.common.ColorType.SPACE_BAR_BACKGROUND)
 
-        assertEquals("Dynamic letter keys must have ~60% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
-        assertEquals("Dynamic functional keys must have ~72% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(funcBg))
-        assertEquals("Dynamic spacebar must have ~60% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(spaceBarBg))
+        assertEquals("Dynamic letter keys must have 80% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
+        assertEquals("Dynamic functional keys must have ~86% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(funcBg))
+        assertEquals("Dynamic spacebar must have 80% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(spaceBarBg))
+    }
+
+    @Test
+    fun alphaConstants_areTheSubtlerValues() {
+        assertEquals(0xCC, helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER)
+        assertEquals(0xDB, helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL)
+    }
+
+    @Test
+    fun toolbarBandColor_isDarkerAndAsTranslucentAsLetterKeys() {
+        for (bg in intArrayOf(0xFF202124.toInt(), 0xFFF2F2F2.toInt(), 0x80336699.toInt())) {
+            val band = helium314.keyboard.latin.common.toolbarBandColor(bg)
+            assertEquals(helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(band))
+            // 12% towards black: each channel is 88% of the background's, within rounding
+            for (shift in intArrayOf(16, 8, 0)) {
+                val b = (bg shr shift) and 0xFF
+                val d = (band shr shift) and 0xFF
+                assertTrue("channel must not get lighter", d <= b)
+                assertEquals(b * 0.88, d.toDouble(), 1.5)
+            }
+        }
     }
 }

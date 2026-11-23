@@ -15,6 +15,8 @@ import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
+import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
 import android.text.TextUtils
@@ -49,6 +51,7 @@ import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.common.Colors
 import helium314.keyboard.latin.common.Constants
+import helium314.keyboard.latin.common.toolbarBandColor
 import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
@@ -104,6 +107,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
         val colors = Settings.getValues().mColors
         colors.setBackground(this, ColorType.STRIP_BACKGROUND)
+        if (colors.hasKeyBorders) addToolbarBand(colors)
         repeat(SuggestedWords.MAX_SUGGESTIONS) {
             val word = TextView(context, null, R.attr.suggestionWordStyle)
             word.contentDescription = resources.getString(R.string.spoken_empty_suggestion)
@@ -120,6 +124,28 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
 
         DEBUG_SUGGESTIONS = context.prefs().getBoolean(DebugSettings.PREF_SHOW_SUGGESTION_INFOS, Defaults.PREF_SHOW_SUGGESTION_INFOS)
+    }
+
+    /**
+     * One continuous rounded band behind the whole row, only when the keys are drawn. It is the
+     * keyboard background a little darker, as translucent as the key caps, with the caps' corner
+     * radius, the key grid's side margin and a small gap to the first key row. Layered on top of
+     * the strip's own background, which stays as it was.
+     */
+    private fun addToolbarBand(colors: Colors) {
+        val band = GradientDrawable().apply {
+            setColor(toolbarBandColor(colors.get(ColorType.MAIN_BACKGROUND)))
+            cornerRadius = resources.getDimension(R.dimen.config_key_caps_corner_radius)
+        }
+        val inset = InsetDrawable(
+            band,
+            resources.getDimensionPixelSize(R.dimen.config_toolbar_band_margin_horizontal),
+            resources.getDimensionPixelSize(R.dimen.config_toolbar_band_gap_top),
+            resources.getDimensionPixelSize(R.dimen.config_toolbar_band_margin_horizontal),
+            resources.getDimensionPixelSize(R.dimen.config_toolbar_band_gap_bottom)
+        )
+        val base = background
+        background = if (base == null) inset else LayerDrawable(arrayOf(base, inset))
     }
 
     // toolbar views, drawables and setup
@@ -793,6 +819,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         (view.layoutParams as LinearLayout.LayoutParams).weight = 1f
         colors.setColor(view, ColorType.TOOL_BAR_KEY)
         colors.setBackground(view, ColorType.STRIP_BACKGROUND)
+        if (colors.hasKeyBorders) {
+            // icons a tenth smaller on the band; the key keeps its size, so nothing else moves
+            view.scaleX = TOOLBAR_ICON_SCALE_WITH_BAND
+            view.scaleY = TOOLBAR_ICON_SCALE_WITH_BAND
+        }
     }
 
     companion object {
@@ -808,6 +839,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
          * on a strip this short, and a key too small to press is worse than one you have to scroll to.
          */
         private const val MIN_KEY_WIDTH_FRACTION = 0.75f
+
+        const val TOOLBAR_ICON_SCALE_WITH_BAND = 0.9f
 
         private const val VOICE_GLOW_BOX_DP = 40f
     }

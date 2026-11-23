@@ -35,8 +35,19 @@ import helium314.keyboard.latin.utils.isDarkColor
 import java.util.EnumMap
 import androidx.core.graphics.drawable.toDrawable
 
-const val DRAW_KEYS_ALPHA_LETTER = 0x99 // ~60% alpha (153 / 255)
-const val DRAW_KEYS_ALPHA_FUNCTIONAL = 0xB8 // ~72% alpha (184 / 255)
+const val DRAW_KEYS_ALPHA_LETTER = 0xCC // 80% alpha (204 / 255)
+const val DRAW_KEYS_ALPHA_FUNCTIONAL = 0xDB // ~86% alpha (219 / 255)
+
+/** How far the toolbar band behind the strip is darkened from the keyboard background (draw keys on). */
+const val TOOLBAR_BAND_DARKEN = 0.12f
+
+/** The band behind the toolbar row: the keyboard background, 12% darker, as translucent as the key caps. */
+@ColorInt
+fun toolbarBandColor(@ColorInt background: Int): Int {
+    val opaque = ColorUtils.setAlphaComponent(background, 0xFF)
+    val darker = ColorUtils.blendARGB(opaque, Color.BLACK, TOOLBAR_BAND_DARKEN)
+    return ColorUtils.setAlphaComponent(darker, DRAW_KEYS_ALPHA_LETTER)
+}
 
 interface Colors {
     // these theme parameters should no be in here, but are still used
