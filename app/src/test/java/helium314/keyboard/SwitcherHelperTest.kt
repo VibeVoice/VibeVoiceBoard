@@ -39,6 +39,7 @@ class SwitcherHelperTest {
 
     @BeforeTest
     fun setUp() {
+        latinIME.prefs().edit().clear().commit()
         SubtypeSettings.init(latinIME)
     }
 
@@ -184,5 +185,29 @@ class SwitcherHelperTest {
 
         val displayName = SwitcherHelper.getLocaleDisplayName(latinIME, Locale.GERMANY)
         assertTrue(displayName.isNotBlank())
+    }
+
+    @Test
+    fun applyOwnPresetRestoresDefaults() {
+        val prefs = latinIME.prefs()
+        // First apply GBOARD preset
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = KeyboardPreset.GBOARD,
+            mainLocale = null,
+            secondLocale = null
+        )
+        assertEquals("GBOARD", prefs.getString(Settings.PREF_KEYBOARD_PRESET, null))
+        assertTrue(prefs.getBoolean(Settings.PREF_DRAW_KEYS, false))
+
+        // Now apply OWN preset via SwitcherHelper
+        SwitcherHelper.applyAnswers(
+            context = latinIME,
+            preset = KeyboardPreset.OWN,
+            mainLocale = null,
+            secondLocale = null
+        )
+        assertEquals("OWN", prefs.getString(Settings.PREF_KEYBOARD_PRESET, null))
+        assertFalse(prefs.getBoolean(Settings.PREF_DRAW_KEYS, true))
     }
 }

@@ -35,7 +35,7 @@ object SwitcherHelper {
         secondLocale: Locale?
     ) {
         // 1. Keyboard Preset
-        if (preset == KeyboardPreset.GBOARD || preset == KeyboardPreset.SAMSUNG) {
+        if (preset != null) {
             KeyboardPresets.apply(context, preset)
         }
 
