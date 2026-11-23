@@ -247,6 +247,23 @@ class TrialResilienceAndLinkingTest {
     }
 
     @Test
+    fun openLinkInBrowserFromActivityDoesNotStartNewTask() {
+        val activity = Robolectric.buildActivity(SettingsActivity::class.java).get()
+        openLinkInBrowser(activity, "https://vibevoice.net/link?code=TEST-1234")
+
+        val startedIntent = shadowOf(activity).nextStartedActivity
+        assertNotNull(startedIntent)
+        assertEquals(0, startedIntent.flags and Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    @Test
+    fun openLinkInBrowserFromApplicationStartsNewTask() {
+        openLinkInBrowser(app, "https://vibevoice.net/link?code=TEST-1234")
+
+        assertTrue(shadowOf(app).nextStartedActivity.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+    }
+
+    @Test
     fun bringAppToForegroundLaunchesSettingsActivityWithReorderFlag() {
         bringAppToForeground(app)
 

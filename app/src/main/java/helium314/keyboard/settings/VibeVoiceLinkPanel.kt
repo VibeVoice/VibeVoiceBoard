@@ -229,7 +229,9 @@ fun VibeVoiceLinkPanel(
 internal fun openLinkInBrowser(context: android.content.Context, url: String) {
     val uri = Uri.parse(url)
     val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // An activity context keeps the tab in the wizard's task; only a service or application
+        // context has no task to start in and needs the flag.
+        if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val bundle = android.os.Bundle()
         BundleCompat.putBinder(bundle, "android.support.customtabs.extra.SESSION", null)
         putExtras(bundle)
