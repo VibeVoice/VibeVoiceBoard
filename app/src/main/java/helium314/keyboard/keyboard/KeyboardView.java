@@ -383,24 +383,9 @@ public class KeyboardView extends View {
     }
 
     // Draw key top visuals.
-    private Drawable mSamsungShift, mSamsungShifted, mSamsungShiftLocked;
-
     private boolean isSamsungPreset() {
         final SettingsValues values = Settings.getValues();
         return this instanceof MainKeyboardView && values != null && values.mKeyboardPreset == KeyboardPreset.SAMSUNG;
-    }
-
-    /** The Samsung keyboard's shift key: outlined arrow while typing lowercase, filled with capitals, on a bar when locked. */
-    private Drawable samsungShiftIcon(final Key key, final Keyboard keyboard, final Drawable icon) {
-        if (icon == null || !key.isShift() || !isSamsungPreset()) return icon;
-        if (mSamsungShift == null) {
-            mSamsungShift = androidx.core.content.ContextCompat.getDrawable(getContext(), R.drawable.ic_samsung_shift);
-            mSamsungShifted = androidx.core.content.ContextCompat.getDrawable(getContext(), R.drawable.ic_samsung_shift_shifted);
-            mSamsungShiftLocked = androidx.core.content.ContextCompat.getDrawable(getContext(), R.drawable.ic_samsung_shift_locked);
-        }
-        final KeyboardElement element = keyboard.mId.getElement();
-        if (element == KeyboardElement.ALPHABET_SHIFT_LOCKED) return mSamsungShiftLocked;
-        return element.isAlphabetShifted() ? mSamsungShifted : mSamsungShift;
     }
 
     /** The real Samsung keyboard shows capital letters on the keys while typing lowercase; only the label changes. */
@@ -421,7 +406,7 @@ public class KeyboardView extends View {
         // Draw key label.
         final Keyboard keyboard = getKeyboard();
         final Drawable icon = (keyboard == null) ? null
-                : samsungShiftIcon(key, keyboard, key.getIcon(keyboard.mIconsSet, params.mAnimAlpha));
+                : key.getIcon(keyboard.mIconsSet, params.mAnimAlpha);
         float labelX = centerX;
         float labelBaseline = centerY;
         final String label = samsungUpperCase(key.getLabel());
@@ -676,7 +661,7 @@ public class KeyboardView extends View {
         if (key.hasActionKeyBackground()) {
             mColors.setColor(icon, ColorType.ACTION_KEY_ICON);
         } else if (key.isShift() && keyboard != null) {
-            if (keyboard.mId.getElement().isAlphabetShifted() || isSamsungPreset())
+            if (keyboard.mId.getElement().isAlphabetShifted())
                 mColors.setColor(icon, ColorType.SHIFT_KEY_ICON);
             else
                 mColors.setColor(icon, ColorType.KEY_ICON); // normal key if not shifted

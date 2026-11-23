@@ -38,9 +38,12 @@ data class StripCapGrid(
          * Strip height that gives a cap of [capHeight] (at least [minCapHeight]) with half a row gap above
          * it and a full row gap between it and the first key row.
          */
-        fun stripHeightFor(keyHeight: Int, vGap: Int, firstRowTop: Int, minCapHeight: Int): Int {
-            val cap = maxOf((keyHeight * CAP_TO_KEY_HEIGHT).toInt(), minCapHeight)
-            return vGap / 2 + cap + (vGap - firstRowTop).coerceAtLeast(0)
+        fun stripHeightFor(
+            keyHeight: Int, vGap: Int, firstRowTop: Int, minCapHeight: Int,
+            topMargin: Int = vGap / 2, bottomGap: Int = vGap, capFromKey: Boolean = true,
+        ): Int {
+            val cap = if (capFromKey) maxOf((keyHeight * CAP_TO_KEY_HEIGHT).toInt(), minCapHeight) else minCapHeight
+            return topMargin + cap + (bottomGap - firstRowTop).coerceAtLeast(0)
         }
 
         /**
@@ -52,9 +55,10 @@ data class StripCapGrid(
          */
         fun from(
             boxLeft: Int, boxRight: Int, hGap: Int, firstRowTop: Int, vGap: Int, stripHeight: Int, minCapHeight: Int, slots: Int = SLOTS,
+            topMargin: Int = vGap / 2, bottomGap: Int = vGap,
         ): StripCapGrid {
-            val top = (vGap / 2).coerceAtLeast(0)
-            var bottom = (stripHeight + firstRowTop - vGap).coerceAtMost(stripHeight)
+            val top = topMargin.coerceAtLeast(0)
+            var bottom = (stripHeight + firstRowTop - bottomGap).coerceAtMost(stripHeight)
             val capTop = if (bottom - top < minCapHeight) (bottom - minCapHeight).coerceAtLeast(0) else top
             bottom = bottom.coerceAtLeast(capTop + 1)
             return StripCapGrid(boxLeft, boxRight, capTop, bottom, hGap, slots)
@@ -64,7 +68,10 @@ data class StripCapGrid(
          * The grid of [keyboard]'s top key row, or null if there is no usable row. The strip is made as
          * tall as [stripHeight] says: pass [stripHeightOf] for the height the caps need.
          */
-        fun fromKeyboard(keyboard: Keyboard, stripHeight: Int, minCapHeight: Int, slots: Int = SLOTS): StripCapGrid? {
+        fun fromKeyboard(
+            keyboard: Keyboard, stripHeight: Int, minCapHeight: Int, slots: Int = SLOTS,
+            topMargin: Int? = null, bottomGap: Int? = null,
+        ): StripCapGrid? {
             val keys = keyboard.sortedKeys.filter { !it.isSpacer && it.width > 0 }
             if (keys.isEmpty()) return null
             val firstRowTop = keys.minOf { it.y }
@@ -75,16 +82,18 @@ data class StripCapGrid(
             val boxLeft = first.x - hGap / 2
             val boxRight = last.x + last.width + hGap / 2
             if (boxRight <= boxLeft) return null
-            return from(boxLeft, boxRight, hGap, firstRowTop, first.verticalGap, stripHeight, minCapHeight, slots)
+            val vGap = first.verticalGap
+            return from(boxLeft, boxRight, hGap, firstRowTop, vGap, stripHeight, minCapHeight, slots, topMargin ?: (vGap / 2), bottomGap ?: vGap)
         }
 
         /** The strip height that fits the caps above [keyboard]'s top key row, or null if there is no usable row. */
-        fun stripHeightOf(keyboard: Keyboard, minCapHeight: Int): Int? {
+        fun stripHeightOf(keyboard: Keyboard, minCapHeight: Int, topMargin: Int? = null, bottomGap: Int? = null, capFromKey: Boolean = true): Int? {
             val keys = keyboard.sortedKeys.filter { !it.isSpacer && it.width > 0 }
             if (keys.isEmpty()) return null
             val firstRowTop = keys.minOf { it.y }
             val first = keys.filter { it.y == firstRowTop }.minBy { it.x }
-            return stripHeightFor(first.height, first.verticalGap, firstRowTop, minCapHeight)
+            val vGap = first.verticalGap
+            return stripHeightFor(first.height, vGap, firstRowTop, minCapHeight, topMargin ?: (vGap / 2), bottomGap ?: vGap, capFromKey)
         }
     }
 }

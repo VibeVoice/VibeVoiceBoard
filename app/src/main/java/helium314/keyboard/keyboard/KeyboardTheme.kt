@@ -65,8 +65,10 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
         const val THEME_PINK = "pink"
         const val THEME_SAND = "sand"
         const val THEME_VIOLETTE = "violette"
-        /** neutral grays of the real Samsung keyboard, day and night; set by the Samsung preset, not offered in the theme list */
-        const val THEME_SAMSUNG = "samsung"
+        /** the palette of the Gboard and Samsung presets, day and night; set by the presets, not offered in the theme list */
+        const val THEME_VIBEVOICE = "vibevoice"
+        /** name the first Samsung palette was stored under: still understood, see [THEME_VIBEVOICE] */
+        const val THEME_SAMSUNG_LEGACY = "samsung"
         fun getAvailableDefaultColors(prefs: SharedPreferences, isNight: Boolean) = listOfNotNull(
             if (!isNight) THEME_LIGHT else null, THEME_DARK,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) THEME_DYNAMIC else null,
@@ -154,34 +156,31 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) DynamicColors(context, themeStyle, hasBorders, backgroundImage)
                     else getThemeColors(THEME_LIGHT, themeStyle, context, prefs, isNight)
                 }
-                THEME_SAMSUNG -> {
-                    // alpha 0xFE: not 255, so the draw_keys alpha blend leaves the sampled color as it is (to within 1 step)
-                    val blue = "#5090FE".toColorInt()
+                THEME_VIBEVOICE, "samsung" -> {
+                    // our own palette for the Gboard and Samsung presets: a warm violet-tinted gray and the violet of our wave.
+                    // alpha 0xFE: not 255, so the draw_keys alpha blend leaves the color as it is (to within 1 step)
+                    val violet = "#8B5CF6".toColorInt()
                     if (isNight) DefaultColors(
                         themeStyle, hasBorders,
-                        accent = blue,
-                        background = "#010101".toColorInt(),
-                        keyBackground = "#FE3A3A3C".toColorInt(),
-                        functionalKey = "#FE171719".toColorInt(),
-                        spaceBar = "#FE3A3A3C".toColorInt(),
+                        accent = violet,
+                        background = "#16141A".toColorInt(),
+                        keyBackground = "#FE37333D".toColorInt(),
+                        functionalKey = "#FE25222B".toColorInt(),
+                        spaceBar = "#FE37333D".toColorInt(),
                         keyText = Color.WHITE,
-                        keyHintText = "#9A9A9E".toColorInt(),
-                        spaceBarText = Color.WHITE,
-                        actionKey = "#FE171719".toColorInt(),
-                        shiftIcon = blue,
+                        keyHintText = "#A59FB0".toColorInt(),
+                        spaceBarText = "#CFC9D8".toColorInt(),
                         keyboardBackground = backgroundImage
                     ) else DefaultColors(
                         themeStyle, hasBorders,
-                        accent = blue,
-                        background = "#E3E3E3".toColorInt(),
-                        keyBackground = "#FEFCFCFC".toColorInt(),
-                        functionalKey = "#FEC8C8C8".toColorInt(),
-                        spaceBar = "#FEFCFCFC".toColorInt(),
-                        keyText = Color.BLACK,
-                        keyHintText = "#6E6E6E".toColorInt(),
-                        spaceBarText = Color.BLACK,
-                        actionKey = "#FEC8C8C8".toColorInt(),
-                        shiftIcon = blue,
+                        accent = violet,
+                        background = "#ECE8F0".toColorInt(),
+                        keyBackground = "#FEFBFAFC".toColorInt(),
+                        functionalKey = "#FED9D4DF".toColorInt(),
+                        spaceBar = "#FEFBFAFC".toColorInt(),
+                        keyText = "#1F1B24".toColorInt(),
+                        keyHintText = "#6F6878".toColorInt(),
+                        spaceBarText = "#4A4452".toColorInt(),
                         keyboardBackground = backgroundImage
                     )
                 }

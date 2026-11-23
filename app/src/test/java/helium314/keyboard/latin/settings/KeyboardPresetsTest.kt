@@ -36,6 +36,7 @@ class KeyboardPresetsTest {
         assertEquals(1.03f, prefs.getFloat(gapKey, 0f), 0.001f)
         assertEquals(0.06f, prefs.getFloat(paddingKey, 0f), 0.001f)
         assertEquals("functional_keys_gboard", prefs.getString("layout_FUNCTIONAL", null))
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS, null))
     }
 
     @Test
@@ -54,12 +55,12 @@ class KeyboardPresetsTest {
         val gapKey = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
         val paddingKey = createPrefKeyForBooleanSettings(Settings.PREF_SIDE_PADDING_SCALE_PREFIX, 0, 3)
 
-        assertEquals(1.138f, prefs.getFloat(heightKey, 0f), 0.001f)
-        assertEquals(0.925f, prefs.getFloat(gapKey, 0f), 0.001f)
-        assertEquals(0.20f, prefs.getFloat(paddingKey, 0f), 0.001f)
+        assertEquals(1.063f, prefs.getFloat(heightKey, 0f), 0.001f)
+        assertEquals(0.928f, prefs.getFloat(gapKey, 0f), 0.001f)
+        assertEquals(0.188f, prefs.getFloat(paddingKey, 0f), 0.001f)
         assertEquals("functional_keys_samsung", prefs.getString("layout_FUNCTIONAL", null))
-        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS, null))
-        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS_NIGHT, null))
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS, null))
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS_NIGHT, null))
     }
 
     @Test
@@ -166,8 +167,8 @@ class KeyboardPresetsTest {
         assertTrue(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, false))
         assertFalse(prefs.getBoolean(Settings.PREF_SHOW_HINTS, true))
         assertEquals("functional_keys_samsung", prefs.getString("layout_FUNCTIONAL", null))
-        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS, null))
-        assertEquals("samsung", prefs.getString(Settings.PREF_THEME_COLORS_NIGHT, null))
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS, null))
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS_NIGHT, null))
 
         // the user changes things afterwards; a later upgrade must not take them back
         prefs.edit().putFloat(heightKey, 0.95f).putBoolean(Settings.PREF_SHOW_NUMBER_ROW, false)
@@ -178,21 +179,36 @@ class KeyboardPresetsTest {
     }
 
     @Test
-    fun upgrade_layoutMigrationLeavesGboardAndOwnAlone() {
+    fun upgrade_layoutMigrationGivesGboardOnlyTheThemeAndLeavesOwnAlone() {
         for (preset in listOf(KeyboardPreset.GBOARD, KeyboardPreset.OWN)) {
             storePreviousSamsung(preset)
             checkVersionUpgrade(context)
             assertEquals(1.17f, prefs.getFloat(heightKey, 0f), 0.001f)
             assertFalse(prefs.getBoolean(Settings.PREF_SHOW_NUMBER_ROW, true))
             assertEquals("functional_keys_gboard", prefs.getString("layout_FUNCTIONAL", null))
-            assertFalse(prefs.contains(Settings.PREF_THEME_COLORS))
+            if (preset == KeyboardPreset.GBOARD) assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS, null))
+            else assertFalse(prefs.contains(Settings.PREF_THEME_COLORS))
         }
     }
 
     @Test
-    fun choosingAnotherPresetDropsTheSamsungTheme() {
+    fun upgrade_movesTheFirstSamsungPaletteOverToOurOwn() {
+        // a phone that got the v3 migration: Samsung preset, old palette name, v3 flag set, v4 not yet
+        storePreviousSamsung(KeyboardPreset.SAMSUNG)
+        prefs.edit().putBoolean(KeyboardPresets.PREF_PRESET_LAYOUT_V3, true).putString(Settings.PREF_THEME_COLORS, "samsung")
+            .putString(Settings.PREF_THEME_COLORS_NIGHT, "samsung").putFloat(heightKey, 1.138f).commit()
+        checkVersionUpgrade(context)
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS, null))
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS_NIGHT, null))
+        assertEquals(1.063f, prefs.getFloat(heightKey, 0f), 0.001f)
+    }
+
+    @Test
+    fun choosingOwnDropsThePresetTheme() {
         KeyboardPresets.apply(context, KeyboardPreset.SAMSUNG)
         KeyboardPresets.apply(context, KeyboardPreset.GBOARD)
+        assertEquals("vibevoice", prefs.getString(Settings.PREF_THEME_COLORS, null))
+        KeyboardPresets.apply(context, KeyboardPreset.OWN)
         assertFalse(prefs.contains(Settings.PREF_THEME_COLORS))
         assertFalse(prefs.contains(Settings.PREF_THEME_COLORS_NIGHT))
     }

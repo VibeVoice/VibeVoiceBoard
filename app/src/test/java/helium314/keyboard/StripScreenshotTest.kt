@@ -52,9 +52,13 @@ class StripScreenshotTest {
     @Test @Config(qualifiers = "w411dp-h891dp-notnight-560dpi") fun gboard_1440_light() = render("gboard_1440_light", KeyboardPreset.GBOARD)
 
     /** A phone that chose Gboard before the sizes were corrected: old stored values, then the upgrade runs, then we render at 1182 px. */
-    @Test @Config(qualifiers = "w411dp-h891dp-night-460dpi") fun gboard_1182_migrated() = render("gboard_1182_migrated", null, oldGboard = true)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun gboard_1182_migrated() = render("gboard_1182_migrated", null, oldGboard = true)
 
-    @Test @Config(qualifiers = "w411dp-h891dp-night-460dpi") fun samsung_1182_migrated() = render("samsung_1182_migrated", null, oldSamsung = true)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun samsung_1182_migrated() = render("samsung_1182_migrated", null, oldSamsung = true)
+
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun gboard_phone_light() = render("gboard_phone_light", null, oldGboard = true)
+
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun samsung_phone_light() = render("samsung_phone_light", null, oldSamsung = true)
 
     @Test @Config(qualifiers = "w411dp-h891dp-night-560dpi") fun samsung_1440() = render("samsung_1440", KeyboardPreset.SAMSUNG)
 

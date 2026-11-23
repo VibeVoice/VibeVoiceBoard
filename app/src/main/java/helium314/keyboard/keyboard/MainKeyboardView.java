@@ -746,6 +746,8 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             drawLanguageOnSpacebar(key, canvas, paint);
             // No "..." popup hint here: long-pressing space starts voice input and never opens a
             // popup panel or the IME switcher, see PointerTracker#onLongPressed.
+        } else if (isSamsungPresetView()) {
+            // the Samsung layout has its own globe key: a plain one, without the switcher badge
         } else if (code == KeyCode.LANGUAGE_SWITCH
                 || ((code == KeyCode.SYMBOL || code == KeyCode.ALPHA) && mHasMultipleEnabledIMEsOrSubtypes)) {
             // The symbol and alpha keys only carry the switcher badge when there is a switcher to
@@ -754,6 +756,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             // release -- the badge promised a dialog and delivered a layout switch.
             drawImeSwitcherIconOnKey(key, canvas);
         }
+    }
+
+    private boolean isSamsungPresetView() {
+        final KeyboardPreset preset = Settings.getValues() != null ? Settings.getValues().mKeyboardPreset : KeyboardPreset.OWN;
+        return preset == KeyboardPreset.SAMSUNG;
     }
 
     private void drawImeSwitcherIconOnKey(final Key key, final Canvas canvas) {
@@ -951,9 +958,16 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         }
 
         final String middleText = subtype.getMiddleDisplayName();
-        // the real Samsung keyboard shows the language name alone
+        // the language name alone; with the region ("English (UK)") only where the region says something
+        final java.util.Locale locale = subtype.getLocale();
+        final String country = locale.getCountry();
+        final boolean homeRegion = country.isEmpty() || country.equalsIgnoreCase(locale.getLanguage())
+                || (locale.getLanguage().equals("en") && country.equals("US"));
+        final String fullText = subtype.getFullDisplayName();
         String result = "";
-        if (fitsTextIntoWidth(width, middleText, paint)) {
+        if (!homeRegion && fitsTextIntoWidth(width, fullText, paint)) {
+            result = fullText;
+        } else if (fitsTextIntoWidth(width, middleText, paint)) {
             result = middleText;
         }
 

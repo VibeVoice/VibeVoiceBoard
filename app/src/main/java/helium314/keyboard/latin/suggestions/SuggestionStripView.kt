@@ -56,6 +56,7 @@ import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.utils.ToolbarKey
@@ -154,9 +155,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun computeGrid(): Pair<StripCapGrid, Int>? {
         if (height <= 0 || width <= 0) return null
         val keyboard = KeyboardSwitcher.getInstance().keyboard ?: return null
-        val minCap = MIN_CAP_HEIGHT_DP.dpToPx(resources)
-        val stripHeight = StripCapGrid.stripHeightOf(keyboard, minCap) ?: return null
-        return StripCapGrid.fromKeyboard(keyboard, stripHeight, minCap, slotCount())?.let { it to stripHeight }
+        // Samsung look: the real keyboard has no strip at all, so ours is as small as the icons allow
+        val compact = Settings.getValues().mKeyboardPreset == KeyboardPreset.SAMSUNG
+        val minCap = (if (compact) COMPACT_CAP_HEIGHT_DP else MIN_CAP_HEIGHT_DP).dpToPx(resources)
+        val vGap = keyboard.sortedKeys.firstOrNull { !it.isSpacer }?.verticalGap ?: 0
+        val top = if (compact) COMPACT_TOP_MARGIN_DP.dpToPx(resources) else null
+        val bottom = if (compact) vGap / 2 else null
+        val stripHeight = StripCapGrid.stripHeightOf(keyboard, minCap, top, bottom, !compact) ?: return null
+        return StripCapGrid.fromKeyboard(keyboard, stripHeight, minCap, slotCount(), top, bottom)?.let { it to stripHeight }
     }
 
     /** One slot for the expand key, one per toolbar key, one for the VibeVoice key: all of them share the width evenly. */
@@ -1017,6 +1023,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
         /** A cap never gets thinner than this, however small the strip. */
         private const val MIN_CAP_HEIGHT_DP = 34
+        private const val COMPACT_CAP_HEIGHT_DP = 32
+        private const val COMPACT_TOP_MARGIN_DP = 2
 
         /** Padding between the cap's edge and the outermost icon's visible edge, on both sides. */
         private const val EDGE_PADDING_DP = 10
