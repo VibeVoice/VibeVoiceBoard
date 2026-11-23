@@ -246,13 +246,12 @@ object SubtypeSettings {
         additionalSubtypes.addAll(subtypes)
     }
 
-    // requires loadResourceSubtypes to be called before
     /**
      * German (Germany) and German (Switzerland) used to default to `qwertz+`, which puts ü, ö, ä and ß
      * on keys of their own and squeezes every other key. They now default to plain `qwertz`, with the
-     * umlauts on long-press as on Gboard. Enabled and selected subtypes are stored with their layout,
-     * so a stored built-in `qwertz+` would no longer match a resource subtype and the language would
-     * silently drop out. Rewrite it once; a later deliberate choice of `qwertz+` is left alone.
+     * umlauts on long-press as on Gboard; `qwertz+` stays available as a second layout. Enabled and
+     * selected subtypes are stored with their layout, so existing installs would keep `qwertz+` only
+     * because it used to be the default. Rewrite it once; a later deliberate choice is left alone.
      */
     private fun migrateGermanToPlainQwertz(prefs: SharedPreferences) {
         if (prefs.getBoolean(PREF_GERMAN_PLAIN_QWERTZ_MIGRATED, false)) return
@@ -274,6 +273,7 @@ object SubtypeSettings {
 
     private const val PREF_GERMAN_PLAIN_QWERTZ_MIGRATED = "vibevoice_german_plain_qwertz_migrated"
 
+    // requires loadResourceSubtypes to be called before
     private fun loadEnabledSubtypes(context: Context) {
         val prefs = context.prefs()
         migrateGermanToPlainQwertz(prefs)

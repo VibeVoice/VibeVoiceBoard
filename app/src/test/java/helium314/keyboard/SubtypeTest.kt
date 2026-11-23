@@ -91,5 +91,6 @@ class SubtypeTest {
         prefs.edit().putString(Settings.PREF_ENABLED_SUBTYPES, chosen.toPref()).apply()
         SubtypeSettings.reloadEnabledSubtypes(latinIME)
         assertEquals(chosen.toPref(), prefs.getString(Settings.PREF_ENABLED_SUBTYPES, ""))
+        assertEquals("qwertz+", SubtypeSettings.getEnabledSubtypes(false).single().toSettingsSubtype().mainLayoutName())
     }
 }
