@@ -51,7 +51,9 @@ public class KeyboardView extends View {
     // Default keyLabelFlags from {@link KeyboardTheme}.
     // Currently only "alignHintLabelToBottom" is supported.
     private final int mDefaultKeyLabelFlags;
+    private static final float HINT_INSET_DP = 3f;
     private final float mKeyHintLetterPadding;
+    private final float mKeyHintTopInset;
     private final String mKeyPopupHintLetter;
     private final float mKeyPopupHintLetterPadding;
     private final float mKeyShiftedLetterHintPadding;
@@ -125,8 +127,11 @@ public class KeyboardView extends View {
 
         mSpacebarIconWidthRatio = keyboardViewAttr.getFloat(
                 R.styleable.KeyboardView_spacebarIconWidthRatio, 1.0f);
+        // Draw keys: hint letters sit a little further in, clear of the cap's right and top edge.
         mKeyHintLetterPadding = keyboardViewAttr.getDimension(
-                R.styleable.KeyboardView_keyHintLetterPadding, 0.0f);
+                R.styleable.KeyboardView_keyHintLetterPadding, 0.0f)
+                + (mColors.getHasKeyBorders() ? HINT_INSET_DP * getResources().getDisplayMetrics().density : 0f);
+        mKeyHintTopInset = mColors.getHasKeyBorders() ? HINT_INSET_DP * getResources().getDisplayMetrics().density : 0f;
         mKeyPopupHintLetter = Settings.getValues().mShowsPopupHints
                 ? keyboardViewAttr.getString(R.styleable.KeyboardView_keyPopupHintLetter)
                 : "";
@@ -494,7 +499,7 @@ public class KeyboardView extends View {
                 // The hint letter is placed at top-right corner of the key. Used mainly on phone.
                 final float hintDigitWidth = TypefaceUtils.getReferenceDigitWidth(paint);
                 final float hintLabelWidth = TypefaceUtils.getStringWidth(hintLabel, paint);
-                hintBaseline = -paint.ascent();
+                hintBaseline = -paint.ascent() + mKeyHintTopInset;
                 hintX = isFunctionalKeyAndRoundedStyle
                         ? keyWidth - hintBaseline
                         : keyWidth - mKeyHintLetterPadding - Math.max(hintDigitWidth, hintLabelWidth) / 2.0f;

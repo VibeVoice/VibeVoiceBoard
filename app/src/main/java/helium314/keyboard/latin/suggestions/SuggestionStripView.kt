@@ -26,8 +26,6 @@ import android.util.StateSet
 import android.util.TypedValue
 import android.view.Gravity
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.ColorUtils
-import androidx.core.graphics.drawable.DrawableCompat
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.LayoutInflater
@@ -883,11 +881,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // right one.
             button.background = plainKeyBackground()
             val colors = Settings.getValues().mColors
-            if (useCaps && ColorUtils.calculateLuminance(colors.get(ColorType.MAIN_BACKGROUND)) <= 0.5) {
-                // The mark is white artwork. The toolbar tint (the key text colour, then multiplied) leaves it a shade
-                // off white, so on a dark keyboard it is drawn untinted: pure white, full alpha.
-                button.drawable?.let { DrawableCompat.setTintList(it, null); it.colorFilter = null }
-                button.setColorFilter(Color.WHITE)
+            if (useCaps) {
+                // the same colour source as the key glyphs, so the mark and the keys can never drift apart
+                colors.setColor(button, ColorType.KEY_ICON)
             } else {
                 button.clearColorFilter()
                 colors.setColor(button, ColorType.TOOL_BAR_KEY)
@@ -999,7 +995,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         view.setOnClickListener(this)
         view.setOnLongClickListener(this)
         (view.layoutParams as LinearLayout.LayoutParams).weight = 1f
-        colors.setColor(view, ColorType.TOOL_BAR_KEY)
+        if (useCaps) colors.setColor(view, ColorType.KEY_ICON) // exactly the key glyphs' colour, not the dimmer toolbar tint
+        else colors.setColor(view, ColorType.TOOL_BAR_KEY)
         if (useCaps) view.background = ColorDrawable(Color.TRANSPARENT)
         else colors.setBackground(view, ColorType.STRIP_BACKGROUND)
     }

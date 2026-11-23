@@ -47,6 +47,8 @@ class StripScreenshotTest {
 
     @Test @Config(qualifiers = "w411dp-h891dp-night-560dpi") fun gboard_1440() = render("gboard_1440", KeyboardPreset.GBOARD)
 
+    @Test @Config(qualifiers = "w411dp-h891dp-notnight-560dpi") fun gboard_1440_light() = render("gboard_1440_light", KeyboardPreset.GBOARD)
+
     @Test @Config(qualifiers = "w411dp-h891dp-night-560dpi") fun samsung_1440() = render("samsung_1440", KeyboardPreset.SAMSUNG)
 
     private fun render(name: String, preset: KeyboardPreset? = null) {
@@ -98,7 +100,9 @@ class StripScreenshotTest {
         val bright = BooleanArray(bmp.width)
         for (x in cap.left + 2 until cap.right - 2) for (y in stripLoc[1] + cap.top + 2 until stripLoc[1] + cap.bottom - 2) {
             val c = bmp.getPixel(x, y)
-            if (minOf(android.graphics.Color.red(c), android.graphics.Color.green(c), android.graphics.Color.blue(c)) > 170) { bright[x] = true; break }
+            val ref = bmp.getPixel(cap.left + 3, stripLoc[1] + (cap.top + cap.bottom) / 2)
+            val dd = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(ref)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(ref)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(ref))
+            if (dd > 250) { bright[x] = true; break }
         }
         val boxes = ArrayList<IntArray>()
         var x = cap.left
@@ -132,14 +136,49 @@ class StripScreenshotTest {
                 "pitch=${tops.zipWithNext { a, b -> b - a }} lastRowBottom=${tops.last() + heights.last() + sTop + stripH} bmpH=${bmp.height} kbH=${kb.mOccupiedHeight} " +
                 "bottomRowKeyW=${rows.values.last().sortedBy { it.x }.map { "%.3f".format(it.width / bmp.width.toFloat()) }} keyW=${rows.values.first().first().width} hGap=${rows.values.first().first().horizontalGap} vGap=${rows.values.first().first().verticalGap} sideL=${rows.values.first().minOf { it.x }}")
         }
+        // colour: brightest pixel of a toolbar icon (the gear, box 2) against the brightest key glyph (a letter)
+        // the pixel farthest from the background colour (so it works for white-on-dark and dark-on-white)
+        fun brightest(x0: Int, x1: Int, y0: Int, y1: Int, bgPixel: Int): Int {
+            var best = bgPixel
+            fun d(c: Int) = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(bgPixel)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(bgPixel)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(bgPixel))
+            for (x in x0 until x1) for (y in y0 until y1) { val c = bmp.getPixel(x, y); if (d(c) > d(best)) best = c }
+            return best and 0xFFFFFF
+        }
+        val gear = boxes[1]
+        val capBg = bmp.getPixel(cap.left + 3, stripLoc[1] + (cap.top + cap.bottom) / 2)
+        val iconColor = brightest(gear[0], gear[1] + 1, stripLoc[1] + cap.top, stripLoc[1] + cap.bottom, capBg)
+        val kbAll = switcher.keyboard!!
+        val sTopAll = stripLoc[1] + strip.height
+        val letterKey = kbAll.sortedKeys.first { it.label == "q" || it.label == "Q" || it.label == "a" }
+        val glyphColor = brightest(letterKey.x + letterKey.width / 4, letterKey.x + letterKey.width * 3 / 4, sTopAll + letterKey.y + letterKey.height / 4, sTopAll + letterKey.y + letterKey.height * 3 / 4, bmp.getPixel(letterKey.x + 6, sTopAll + letterKey.y + letterKey.height - 6))
+        println("COLOR $name toolbarIcon=#${"%06X".format(iconColor)} keyGlyph=#${"%06X".format(glyphColor)} logo=#${"%06X".format(brightest(boxes.last()[0], boxes.last()[1] + 1, stripLoc[1] + cap.top, stripLoc[1] + cap.bottom, capBg))}")
+        assertTrue("toolbar icons must have the key glyph colour", iconColor == glyphColor)
+        // hints: distance of hint pixels (top right quadrant, differing from the cap colour) to the key's right and top edge
+        run {
+            val rowsByY = kbAll.sortedKeys.filter { !it.isSpacer && it.label?.length == 1 }.groupBy { it.y }.toSortedMap().values.toList()
+            rowsByY.take(2).forEachIndexed { rowIndex, row ->
+                var minRight = Int.MAX_VALUE; var minTop = Int.MAX_VALUE; var found = 0
+                for (k in row) {
+                    val bg = bmp.getPixel(k.x + 6, sTopAll + k.y + k.height - 6)
+                    val outside = bmp.getPixel(k.x + k.width + 2, sTopAll + k.y + k.height / 2) // the gap beside the key: what the rounded corners show
+                    fun diffTo(c: Int, ref: Int) = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(ref)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(ref)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(ref))
+                    fun diff(c: Int) = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(bg)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(bg)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(bg))
+                    for (x in k.x + k.width * 6 / 10 until k.x + k.width) for (y in sTopAll + k.y until sTopAll + k.y + k.height * 4 / 10) {
+                        if (diff(bmp.getPixel(x, y)) > 90 && diffTo(bmp.getPixel(x, y), outside) > 40) { found++; minRight = minOf(minRight, k.x + k.width - 1 - x); minTop = minOf(minTop, y - (sTopAll + k.y)) }
+                    }
+                }
+                println("HINT $name row$rowIndex minDistToRightEdge=$minRight minDistToTopEdge=$minTop pixels=$found")
+            }
+        }
         val voice = strip.findViewById<ViewGroup>(R.id.voice_anchor)
+        (voice.getChildAt(0) as? android.widget.ImageView)?.let { println("VOICEDBG filter=${it.colorFilter} drawable=${it.drawable} tint=${it.imageTintList} activated=${it.isActivated}") }
         val loc = IntArray(2); voice.getLocationInWindow(loc)
         var brightest = 0
         for (y in loc[1] until loc[1] + voice.height) for (x in loc[0] until (loc[0] + voice.width).coerceAtMost(bmp.width)) {
             val c = bmp.getPixel(x, y); brightest = maxOf(brightest, minOf(android.graphics.Color.red(c), android.graphics.Color.green(c), android.graphics.Color.blue(c)))
         }
         println("LOGO brightest pixel min-channel=$brightest")
-        assertTrue("logo must be pure white, was $brightest", brightest >= 254)
+        if (!name.contains("light")) assertTrue("logo must be pure white, was $brightest", brightest >= 254)
         assertFalse("toolbar must not scroll with draw keys on", scroll.isScrollingEnabled)
         assertTrue(toolbar.width <= scroll.width)
     }
