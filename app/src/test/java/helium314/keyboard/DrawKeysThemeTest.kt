@@ -149,4 +149,94 @@ class DrawKeysThemeTest {
         assertFalse(prefs.contains(Settings.PREF_DRAW_KEYS))
         assertFalse(Settings.readDrawKeys(prefs))
     }
+
+    @Test
+    fun keyCaps_defaultOff_alphaIsOpaque() {
+        val defaultColors = KeyboardTheme.getColorsForCurrentTheme(context)
+        assertFalse("Default must have hasKeyBorders=false", defaultColors.hasKeyBorders)
+        assertEquals("Default letter key color must have full alpha 255", 255, android.graphics.Color.alpha(defaultColors.get(helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND)))
+        assertEquals("Default functional key color must have full alpha 255", 255, android.graphics.Color.alpha(defaultColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)))
+    }
+
+    @Test
+    fun keyCaps_drawKeysOn_translucentAlphas() {
+        val prefs = context.prefs()
+        prefs.edit {
+            putBoolean(Settings.PREF_DRAW_KEYS, true)
+        }
+
+        val borderColors = KeyboardTheme.getColorsForCurrentTheme(context)
+        assertTrue(borderColors.hasKeyBorders)
+
+        val keyBg = borderColors.get(helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND)
+        val functionalBg = borderColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)
+        val spaceBarBg = borderColors.get(helium314.keyboard.latin.common.ColorType.SPACE_BAR_BACKGROUND)
+
+        assertEquals("Letter keys must have ~60% alpha (153)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
+        assertEquals("Functional keys must have ~72% alpha (184)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(functionalBg))
+        assertEquals("Spacebar must have ~60% alpha (153)", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(spaceBarBg))
+    }
+
+    @Test
+    fun keyCaps_darkTheme_translucentAndReadable() {
+        val prefs = context.prefs()
+        prefs.edit {
+            putBoolean(Settings.PREF_DRAW_KEYS, true)
+            putString(Settings.PREF_THEME_COLORS, KeyboardTheme.THEME_DARK)
+        }
+
+        val darkColors = KeyboardTheme.getColorsForCurrentTheme(context)
+        val keyBg = darkColors.get(helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND)
+        val funcBg = darkColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)
+
+        assertEquals(helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
+        assertEquals(helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(funcBg))
+
+        val keyText = darkColors.get(helium314.keyboard.latin.common.ColorType.KEY_TEXT)
+        assertEquals("Dark theme text is white", android.graphics.Color.WHITE, keyText)
+    }
+
+    @Test
+    fun keyCaps_allColors_translucentAlphas() {
+        val colorMap = java.util.EnumMap<helium314.keyboard.latin.common.ColorType, Int>(helium314.keyboard.latin.common.ColorType::class.java)
+        colorMap[helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND] = android.graphics.Color.WHITE
+        colorMap[helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND] = android.graphics.Color.LTGRAY
+
+        val allColors = helium314.keyboard.latin.common.AllColors(
+            colorMap,
+            KeyboardTheme.STYLE_MATERIAL,
+            hasKeyBorders = true,
+            backgroundImage = null
+        )
+        val keyBg = allColors.get(helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND)
+        val funcBg = allColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)
+        assertEquals("AllColors letter keys must have ~60% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
+        assertEquals("AllColors functional keys must have ~72% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(funcBg))
+
+        val allColorsNoBorders = helium314.keyboard.latin.common.AllColors(
+            colorMap,
+            KeyboardTheme.STYLE_MATERIAL,
+            hasKeyBorders = false,
+            backgroundImage = null
+        )
+        assertEquals(255, android.graphics.Color.alpha(allColorsNoBorders.get(helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND)))
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(sdk = [31])
+    fun keyCaps_dynamicColors_translucentAlphas() {
+        val dynamicColors = helium314.keyboard.latin.common.DynamicColors(
+            context,
+            KeyboardTheme.STYLE_MATERIAL,
+            hasKeyBorders = true,
+            keyboardBackground = null
+        )
+        val keyBg = dynamicColors.get(helium314.keyboard.latin.common.ColorType.KEY_BACKGROUND)
+        val funcBg = dynamicColors.get(helium314.keyboard.latin.common.ColorType.FUNCTIONAL_KEY_BACKGROUND)
+        val spaceBarBg = dynamicColors.get(helium314.keyboard.latin.common.ColorType.SPACE_BAR_BACKGROUND)
+
+        assertEquals("Dynamic letter keys must have ~60% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(keyBg))
+        assertEquals("Dynamic functional keys must have ~72% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_FUNCTIONAL, android.graphics.Color.alpha(funcBg))
+        assertEquals("Dynamic spacebar must have ~60% alpha", helium314.keyboard.latin.common.DRAW_KEYS_ALPHA_LETTER, android.graphics.Color.alpha(spaceBarBg))
+    }
 }
