@@ -246,9 +246,37 @@ object SubtypeSettings {
         additionalSubtypes.addAll(subtypes)
     }
 
+    /**
+     * German (Germany) and German (Switzerland) used to default to `qwertz+`, which puts ü, ö, ä and ß
+     * on keys of their own and squeezes every other key. They now default to plain `qwertz`, with the
+     * umlauts on long-press as on Gboard; `qwertz+` stays available as a second layout. Enabled and
+     * selected subtypes are stored with their layout, so existing installs would keep `qwertz+` only
+     * because it used to be the default. Rewrite it once; a later deliberate choice is left alone.
+     */
+    private fun migrateGermanToPlainQwertz(prefs: SharedPreferences) {
+        if (prefs.getBoolean(PREF_GERMAN_PLAIN_QWERTZ_MIGRATED, false)) return
+        val germanTags = setOf("de-DE", "de-CH")
+        listOf(Settings.PREF_ENABLED_SUBTYPES, Settings.PREF_SELECTED_SUBTYPE).forEach { key ->
+            val stored = prefs.getString(key, null) ?: return@forEach
+            val migrated = stored.split(Separators.SETS).joinToString(Separators.SETS) { pref ->
+                if (pref.isEmpty()) return@joinToString pref
+                val subtype = pref.toSettingsSubtype()
+                if (subtype.locale.toLanguageTag() in germanTags && subtype.mainLayoutName() == "qwertz+"
+                    && !subtype.isAdditionalSubtype(prefs))
+                    subtype.withLayout(LayoutType.MAIN, "qwertz").toPref()
+                else pref
+            }
+            if (migrated != stored) prefs.edit { putString(key, migrated) }
+        }
+        prefs.edit { putBoolean(PREF_GERMAN_PLAIN_QWERTZ_MIGRATED, true) }
+    }
+
+    private const val PREF_GERMAN_PLAIN_QWERTZ_MIGRATED = "vibevoice_german_plain_qwertz_migrated"
+
     // requires loadResourceSubtypes to be called before
     private fun loadEnabledSubtypes(context: Context) {
         val prefs = context.prefs()
+        migrateGermanToPlainQwertz(prefs)
         val settingsSubtypes = createSettingsSubtypes(prefs.getString(Settings.PREF_ENABLED_SUBTYPES, Defaults.PREF_ENABLED_SUBTYPES)!!)
         for (settingsSubtype in settingsSubtypes) {
             if (settingsSubtype.isAdditionalSubtype(prefs)) {
