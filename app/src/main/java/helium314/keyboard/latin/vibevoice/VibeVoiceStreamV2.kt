@@ -29,7 +29,7 @@ import okio.ByteString.Companion.toByteString
  * Segments are final text. Each is handed to the keyboard as a piece of its own, the way v1's
  * numbered pieces are, so text insertion in LatinIME is the same for both protocols.
  *
- * Kept from v1: the 30 s rolling buffer (audio is sent from it after any reconnect), keeping the
+ * Kept from v1: the 120 s rolling buffer (audio is sent from it after any reconnect), keeping the
  * audio through a slow or failed first connection, and the microphone recovery ([AudioCapture]).
  */
 class VibeVoiceStreamV2(
@@ -39,6 +39,9 @@ class VibeVoiceStreamV2(
     private val url: String = StreamV2Wire.URL,
     /** A linked account, not a trial key: decides what a bare 4002 close means. */
     private val linked: Boolean = false,
+    /** How long an outage may last, and while the server says it is restarting; tests shorten them. */
+    private val outageWindowMs: Long = OUTAGE_WINDOW_MS,
+    private val restartWindowMs: Long = RESTART_OUTAGE_WINDOW_MS,
     private val newCapture: (CoroutineScope, (ByteArray, Int) -> Unit, (String) -> Unit) -> AudioSource =
         { scope, onAudio, onLost -> AudioCapture(scope, onAudio, onLost) },
 ) : VoiceSession {
@@ -51,6 +54,8 @@ class VibeVoiceStreamV2(
     override val micSilenceSeen: Boolean get() = capture?.silenceSeen ?: false
     @Volatile override var isLinkDegraded = false
         private set
+    override val serverUnavailable: Boolean
+        get() = synchronized(lock) { segmentsApplied == 0 && (gaveUp || (!everReady && attemptFailed)) }
 
     // Capture, in bytes since the session's first sample, and the last 30 s of it.
     private val ring = ByteArray(RING_BYTES)
@@ -62,6 +67,14 @@ class VibeVoiceStreamV2(
     /** The current socket has had `ready`: audio goes out live. */
     private var ready = false
     private var everReady = false
+    /** When `ready` came on the current socket; the stop hard limit measures from this if stopped earlier. */
+    private var readyAt = 0L
+    /** A connection attempt of this session failed or was refused, and no `ready` has come since. */
+    private var attemptFailed = false
+    /** The server said it is restarting (drain mode): the outage may be minutes, so wait longer. */
+    private var serverRestarting = false
+    /** The outage window ran out. */
+    private var gaveUp = false
 
     // The server's stream.
     private var token: String? = null
@@ -131,12 +144,17 @@ class VibeVoiceStreamV2(
     }
 
     override fun cancel() {
+        synchronized(lock) {
+            if (!finished.get() && !everReady && totalRead > 0)
+                VibeVoiceDebugLogger.log("[V2] cancelled; ${totalRead / BYTES_PER_MS}ms captured were never delivered")
+        }
         streaming = false
         finished.set(true)
         capture?.stop()
         synchronized(lock) {
             gen++
             ready = false
+            readyAt = 0L
             endSent = false
             val old = ws
             ws = null
@@ -212,8 +230,10 @@ class VibeVoiceStreamV2(
     }
 
     private fun dropSocketLocked() {
+        attemptFailed = true
         gen++
         ready = false
+        readyAt = 0L
         endSent = false
         val old = ws
         ws = null
@@ -228,6 +248,9 @@ class VibeVoiceStreamV2(
     private inline fun quietly(block: () -> Unit) {
         try { block() } catch (e: Exception) { VibeVoiceDebugLogger.log("[V2] ignored on a dead socket: ${e.javaClass.simpleName}") }
     }
+
+    /** How long an outage may last: far longer when the server itself says it is restarting. */
+    private fun outageWindowLocked() = if (serverRestarting) restartWindowMs else outageWindowMs
 
     private fun scheduleReconnectLocked(delayMs: Long) {
         reconnectJob?.cancel()
@@ -257,16 +280,19 @@ class VibeVoiceStreamV2(
                     lost = "no ready after ${now - connectStartedAt}ms"
                 }
                 val outage = if (outageStartedAt > 0) now - outageStartedAt else 0L
-                degraded = outage > if (everReady) DEGRADED_AFTER_MS else HANDSHAKE_DEGRADED_MS
-                if (outage > OUTAGE_WINDOW_MS) giveUp = true
+                degraded = if (everReady) outage > DEGRADED_AFTER_MS
+                else attemptFailed || outage > NOT_READY_DEGRADED_MS
+                if (outage > outageWindowLocked()) giveUp = true
             }
             if (degraded != isLinkDegraded) {
                 isLinkDegraded = degraded
                 listener.onLinkQualityChanged(degraded)
             }
+            // Only while the link is up: with no `ready` the end is deferred and the outage window
+            // decides how long to keep trying, not the 15 s a live stream needs to answer.
             val stopTimedOut = synchronized(lock) {
-                stopRequested && !endReceived && stoppedAt > 0 &&
-                    (now - maxOf(stoppedAt, lastProgressAt) > STOP_WAIT_MS || now - stoppedAt > STOP_HARD_LIMIT_MS)
+                ready && stopRequested && !endReceived && stoppedAt > 0 &&
+                    (now - maxOf(stoppedAt, lastProgressAt) > STOP_WAIT_MS || now - maxOf(stoppedAt, readyAt) > STOP_HARD_LIMIT_MS)
             }
             if (stopTimedOut) {
                 VibeVoiceDebugLogger.log("[V2] no end ${now - stoppedAt}ms after the stop")
@@ -274,7 +300,9 @@ class VibeVoiceStreamV2(
                 return
             }
             if (giveUp) {
-                VibeVoiceDebugLogger.log("[V2] outage longer than ${OUTAGE_WINDOW_MS}ms, giving up")
+                val window = synchronized(lock) { gaveUp = true; outageWindowLocked() }
+                VibeVoiceDebugLogger.log("[V2] outage longer than ${window}ms, giving up; ${totalRead / BYTES_PER_MS}ms captured" +
+                    if (everReady) "" else ", none of it delivered")
                 if (stopRequested) finish() else fail(VibeVoiceClient.ERR_LINK_LOST)
                 return
             }
@@ -288,6 +316,9 @@ class VibeVoiceStreamV2(
         val socket = ws ?: return@synchronized
         val now = SystemClock.elapsedRealtime()
         everReady = true
+        readyAt = now
+        attemptFailed = false
+        serverRestarting = false
         outageStartedAt = 0L
         retry = 0
         lastProgressAt = now
@@ -358,7 +389,8 @@ class VibeVoiceStreamV2(
         val retryAfter = f.retryAfterMs
         val remainingOutage = synchronized(lock) {
             val elapsed = if (outageStartedAt > 0) SystemClock.elapsedRealtime() - outageStartedAt else 0L
-            maxOf(0L, OUTAGE_WINDOW_MS - elapsed)
+            if (f.code == "server_restarting") serverRestarting = true
+            maxOf(0L, outageWindowLocked() - elapsed)
         }
         if (f.retryable && retryAfter != null && retryAfter > remainingOutage) {
             fail(f.message.ifBlank { "Rate limited" })
@@ -385,6 +417,7 @@ class VibeVoiceStreamV2(
     private fun onRestarting(f: StreamV2Wire.Restarting) = synchronized(lock) {
         VibeVoiceDebugLogger.log("[V2] server restarting, new stream in ${f.reconnectAfterMs}ms")
         token = null // a session does not survive a restart
+        serverRestarting = true
         dropSocketLocked()
         if (outageStartedAt == 0L) outageStartedAt = SystemClock.elapsedRealtime()
         scheduleReconnectLocked(f.reconnectAfterMs)
@@ -403,7 +436,7 @@ class VibeVoiceStreamV2(
         if (!finished.compareAndSet(false, true)) return
         teardown()
         synchronized(lock) {
-            if (stopRequested && !endReceived) {
+            if (stopRequested && !endReceived && !serverUnavailable) {
                 val unanswered = (stoppedAt - lastSegmentAt).coerceAtLeast(0L)
                 VibeVoiceDebugLogger.log("[V2] [TAIL_MISSING] ended without end frame; ${unanswered}ms before the stop unanswered")
                 listener.onTailMissing(unanswered)
@@ -435,6 +468,7 @@ class VibeVoiceStreamV2(
         synchronized(lock) {
             gen++
             ready = false
+            readyAt = 0L
             endSent = false
             val old = ws
             ws = null
@@ -520,7 +554,7 @@ class VibeVoiceStreamV2(
         @Volatile @JvmStatic var v2Unavailable = false
 
         private const val BYTES_PER_MS = 32L
-        private const val RING_BYTES = 30 * 32000
+        private const val RING_BYTES = 120 * 32000
         private const val CHUNK_BYTES = 3200
         private const val RESUME_TTL_S = 120
         private const val WATCHDOG_MS = 250L
@@ -535,9 +569,12 @@ class VibeVoiceStreamV2(
         private const val END_SILENCE_MS = 11_000L
         private const val HANDSHAKE_RETRY_MS = 10_000L
         private const val DEGRADED_AFTER_MS = 2_000L
-        private const val HANDSHAKE_DEGRADED_MS = 8_000L
-        /** The rolling buffer's length: past this, unsent speech is being overwritten. */
+        /** Before the first `ready`, "waiting for connection" shows after this, or at the first failed attempt. */
+        private const val NOT_READY_DEGRADED_MS = 1_500L
+        /** An ordinary outage's limit; the buffer holds more, see [RESTART_OUTAGE_WINDOW_MS]. */
         private const val OUTAGE_WINDOW_MS = 30_000L
+        /** While the server answers `server_restarting`; the ring holds this much audio, so none is lost. */
+        private const val RESTART_OUTAGE_WINDOW_MS = 120_000L
         private const val STOP_WAIT_MS = 15_000L
         private const val STOP_HARD_LIMIT_MS = 60_000L
         private val BACKOFF_MS = longArrayOf(500, 1000, 2000, 3000)

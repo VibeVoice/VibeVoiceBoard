@@ -2425,6 +2425,16 @@ public class LatinIME extends InputMethodService implements
         verifyVoiceCommit(held);
     }
 
+    /**
+     * Ends the voice composing region without inserting anything. A plain commitText("") with no
+     * composing region replaces the user's selection, so the composing text is only removed when
+     * this session actually has some, and the rest is just finishing composition.
+     */
+    private void clearVoiceComposingRegion() {
+        if (!mVoiceComposingText.isEmpty()) mInputLogic.mConnection.setComposingText("", 1);
+        mInputLogic.mConnection.finishComposingText();
+    }
+
     private void finishVoiceSession(String text, boolean addNewline) {
         if (mVibeVoiceClient == null)
             return;
@@ -2443,17 +2453,18 @@ public class LatinIME extends InputMethodService implements
             // Dropped on the X. What reached a field stays there -- it is already typed -- but
             // nothing further is written, copied or kept in the history. That is what the target says.
             VibeVoiceDebugLogger.log("Session discarded on the X; dropping " + (mVoicePendingText.length() + commitText.length()) + " characters");
-            mInputLogic.mConnection.commitText("", 1); // clear the composing region, insert nothing
+            clearVoiceComposingRegion();
         } else if (mVoiceFinishToClipboard || (noField && mVoiceSessionText.length() + commitText.length() > 0)) {
             // Dropped on the clipboard target. Everything this session produced goes there, not into
             // whatever field happens to have focus -- there may well be none, which is the reason the
             // target exists.
+            clearVoiceComposingRegion();
             mVoiceSessionText.append(commitText);
             final String all = mVoiceSessionText.toString().trim();
             copyVoiceSessionToClipboard(all);
         } else if (commitText.trim().isEmpty()) {
             VibeVoiceDebugLogger.log("[EMPTY_RESULT] finishVoiceSession: skipping empty commit");
-            mInputLogic.mConnection.commitText("", 1); // clear any composing text, insert nothing
+            clearVoiceComposingRegion();
             // The final is empty by protocol whenever every segment was already committed on the way;
             // the session still said something, and the clipboard entry is where it can be found again.
             if (mVoiceSessionText.length() > 0)
@@ -2463,15 +2474,17 @@ public class LatinIME extends InputMethodService implements
             // server, and ending quietly made the user find out by reading an empty field.
             final long recordedMs = mVoiceSessionStartedAt == 0L
                     ? 0L : android.os.SystemClock.elapsedRealtime() - mVoiceSessionStartedAt;
-            if (mVoiceSessionText.length() == 0 && recordedMs >= EMPTY_RESULT_WARN_MS
+            final boolean serverUnavailable = mVibeVoiceClient.getServerUnavailable();
+            if (mVoiceSessionText.length() == 0 && (recordedMs >= EMPTY_RESULT_WARN_MS || serverUnavailable)
                     && !mVoiceEndExplained && mVoiceTailMissingMs < 0) {
                 // A microphone that sent exact zeros is the likelier cause, and the one the user
                 // can do something about: another app is holding it.
                 final boolean micSilent = mVibeVoiceClient.getMicSilenceSeen();
                 VibeVoiceDebugLogger.log("[EMPTY_RESULT] told the user nothing was recognized (" + recordedMs
-                        + "ms session, micSilent=" + micSilent + ")");
+                        + "ms session, micSilent=" + micSilent + ", serverUnavailable=" + serverUnavailable + ")");
                 final String message = micSilent
                         ? getString(R.string.vibevoice_mic_silent)
+                        : serverUnavailable ? getString(R.string.vibevoice_server_unavailable)
                         : getString(R.string.vibevoice_nothing_recognized, (int) Math.round(recordedMs / 1000.0));
                 android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
             }
