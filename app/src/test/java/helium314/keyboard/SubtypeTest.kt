@@ -5,6 +5,7 @@ import helium314.keyboard.keyboard.KeyboardLayoutSet
 import helium314.keyboard.keyboard.internal.KeyboardParams
 import helium314.keyboard.keyboard.internal.keyboard_parser.LocaleKeyboardInfos
 import helium314.keyboard.latin.LatinIME
+import helium314.keyboard.latin.common.Constants.Separators
 import helium314.keyboard.latin.common.LocaleUtils.constructLocale
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.settings.SettingsSubtype.Companion.toSettingsSubtype
@@ -67,5 +68,28 @@ class SubtypeTest {
         SubtypeUtilsAdditional.changeAdditionalSubtype(to, toNew, latinIME)
         assertEquals(emptyList(), SubtypeSettings.getAdditionalSubtypes().map { it.toSettingsSubtype() })
         assertEquals(from.toSettingsSubtype(), SubtypeSettings.getEnabledSubtypes(false).single().toSettingsSubtype())
+    }
+
+    @Test fun storedGermanQwertzPlusMovesToPlainQwertzAndStaysEnabled() {
+        val prefs = latinIME.prefs()
+        val old = "de-DE" + Separators.SET + "KeyboardLayoutSet=MAIN:qwertz+,SupportTouchPositionCorrection"
+        prefs.edit()
+            .putString(Settings.PREF_ADDITIONAL_SUBTYPES, "")
+            .putString(Settings.PREF_ENABLED_SUBTYPES, old)
+            .putString(Settings.PREF_SELECTED_SUBTYPE, old)
+            .remove("vibevoice_german_plain_qwertz_migrated")
+            .apply()
+        SubtypeSettings.reloadEnabledSubtypes(latinIME)
+
+        val enabled = SubtypeSettings.getEnabledSubtypes(false).single().toSettingsSubtype()
+        assertEquals("de-DE", enabled.locale.toLanguageTag())
+        assertEquals("qwertz", enabled.mainLayoutName())
+        assertEquals("qwertz", prefs.getString(Settings.PREF_SELECTED_SUBTYPE, "")!!.toSettingsSubtype().mainLayoutName())
+
+        // once migrated, a later deliberate qwertz+ is not rewritten again
+        val chosen = enabled.withLayout(LayoutType.MAIN, "qwertz+")
+        prefs.edit().putString(Settings.PREF_ENABLED_SUBTYPES, chosen.toPref()).apply()
+        SubtypeSettings.reloadEnabledSubtypes(latinIME)
+        assertEquals(chosen.toPref(), prefs.getString(Settings.PREF_ENABLED_SUBTYPES, ""))
     }
 }
