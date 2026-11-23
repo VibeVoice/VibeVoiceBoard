@@ -799,6 +799,11 @@ language, hence "No language". -->
     <string name="setup_overlay_guard_keep_off">Keep it off</string>
     <string name="setup_overlay_guard_turn_on">Turn it on</string>
 
+    <string name="setup_vibrate_title">Vibrate when typing?</string>
+    <string name="setup_vibrate_instruction">Feel a subtle vibration with each keypress.</string>
+    <string name="setup_vibrate_no">No</string>
+    <string name="setup_vibrate_yes">Yes</string>
+
     <string name="setup_done_slogan_line1" translatable="false">"You're set."</string>
     <string name="setup_done_slogan_line2" translatable="false">Typing will never</string>
     <string name="setup_done_slogan_line3" translatable="false">feel the same.</string>

@@ -141,6 +141,10 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_overlay_guard_message">Ohne dies endet das Diktat, sobald die Tastatur schließt.</string>
     <string name="setup_overlay_guard_keep_off">Auslassen</string>
     <string name="setup_overlay_guard_turn_on">Aktivieren</string>
+    <string name="setup_vibrate_title">Beim Tippen vibrieren?</string>
+    <string name="setup_vibrate_instruction">Spüre eine sanfte Vibration bei jedem Tastendruck.</string>
+    <string name="setup_vibrate_no">Nein</string>
+    <string name="setup_vibrate_yes">Ja</string>
     <!-- "VibeVoice typing" is the feature's name, not a description, so it stays as it is. The
          slogan on the last setup page is the brand's own wording and stays English for the same
          reason the wordmark does. -->
