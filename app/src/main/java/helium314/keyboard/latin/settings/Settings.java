@@ -89,6 +89,8 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_KEY_USE_PERSONALIZED_DICTS = "use_personalized_dicts";
     public static final String PREF_KEY_USE_DOUBLE_SPACE_PERIOD = "use_double_space_period";
     public static final String PREF_BLOCK_POTENTIALLY_OFFENSIVE = "block_potentially_offensive";
+    public static final String PREF_KEYBOARD_PRESET = "keyboard_preset";
+    public static final String PREF_DRAW_KEYS = "draw_keys";
     public static final String PREF_SHOW_LANGUAGE_SWITCH_KEY = "show_language_switch_key";
     public static final String PREF_LANGUAGE_SWITCH_KEY = "language_switch_key";
     public static final String PREF_SHOW_EMOJI_KEY = "show_emoji_key";
@@ -508,6 +510,15 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
         int index = SettingsKt.findIndexOfDefaultSetting(landscape, folded);
         float defaultValue = Defaults.PREF_KEY_GAP_SCALE[index];
         return prefs.getFloat(SettingsKt.createPrefKeyForBooleanSettings(PREF_KEY_GAP_SCALE_PREFIX, index, 2), defaultValue);
+    }
+
+    public static KeyboardPreset readKeyboardPreset(final SharedPreferences prefs) {
+        final String name = prefs.getString(PREF_KEYBOARD_PRESET, Defaults.PREF_KEYBOARD_PRESET);
+        try {
+            return KeyboardPreset.valueOf(name);
+        } catch (Exception e) {
+            return KeyboardPreset.OWN;
+        }
     }
 
     public static boolean readHasHardwareKeyboard(final Configuration conf) {

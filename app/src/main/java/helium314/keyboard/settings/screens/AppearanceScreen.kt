@@ -42,6 +42,8 @@ import helium314.keyboard.settings.preferences.KeyboardScalePreference
 import helium314.keyboard.settings.preferences.TextInputPreference
 import helium314.keyboard.latin.utils.previewDark
 import androidx.core.content.edit
+import helium314.keyboard.latin.settings.KeyboardPreset
+import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.FoldableUtils
 import helium314.keyboard.settings.dialogs.ThreeButtonAlertDialog
@@ -58,6 +60,7 @@ fun AppearanceScreen(
     val dayNightMode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && prefs.getBoolean(Settings.PREF_THEME_DAY_NIGHT, Defaults.PREF_THEME_DAY_NIGHT)
     val items = listOf(
         R.string.settings_screen_theme,
+        Settings.PREF_KEYBOARD_PRESET,
         Settings.PREF_THEME_STYLE,
         Settings.PREF_ICON_STYLE,
         Settings.PREF_CUSTOM_ICON_NAMES,
@@ -101,6 +104,27 @@ fun AppearanceScreen(
 }
 
 fun createAppearanceSettings(context: Context) = listOf(
+    Setting(context, Settings.PREF_KEYBOARD_PRESET, R.string.keyboard_preset_title) { setting ->
+        val ctx = LocalContext.current
+        val items = listOf(
+            stringResource(R.string.keyboard_preset_own) to KeyboardPreset.OWN.name,
+            stringResource(R.string.keyboard_preset_gboard) to KeyboardPreset.GBOARD.name,
+            stringResource(R.string.keyboard_preset_samsung) to KeyboardPreset.SAMSUNG.name,
+        )
+        ListPreference(
+            setting = setting,
+            items = items,
+            default = Defaults.PREF_KEYBOARD_PRESET
+        ) { selectedValue ->
+            val preset = try {
+                KeyboardPreset.valueOf(selectedValue)
+            } catch (e: Exception) {
+                KeyboardPreset.OWN
+            }
+            KeyboardPresets.apply(ctx, preset)
+            (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+        }
+    },
     Setting(context, Settings.PREF_THEME_STYLE, R.string.theme_style) { setting ->
         val ctx = LocalContext.current
         val prefs = ctx.prefs()
