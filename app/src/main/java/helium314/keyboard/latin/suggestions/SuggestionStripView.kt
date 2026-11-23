@@ -164,24 +164,114 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     /** One slot for the expand key, one per toolbar key, one for the VibeVoice key: all of them share the width evenly. */
     private fun slotCount() = (1 + toolbar.childCount + voiceAnchor.childCount).coerceAtLeast(MIN_SLOTS)
 
-    /** The slot width: an even share of the grid, but never so narrow that a key is hard to hit (then the toolbar scrolls). */
-    private fun slotWidthOf(g: StripCapGrid) =
-        max((g.right - g.left - rightInset()) / g.slots, (toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION).toInt())
+    private var capsOverflow = false
+
+    /** True when an icon was swapped (incognito, pinned) so its visible width, and with it the gaps, may have changed. */
+    private fun iconsChanged(): Boolean {
+        val g = grid ?: return false
+        val key = listOf(toolbarExpandKey.drawable, toolbar.childCount, voiceAnchor.childCount, g)
+        if (key == lastIconKey) return false
+        lastIconKey = key
+        return true
+    }
+    private var lastIconKey: List<Any?>? = null
+    private var lastIconLayout: List<Int>? = null
+    private val inkCache = HashMap<Any, IntArray>()
 
     /**
-     * Extra room kept free on the right so the padding between the cap's edge and the outermost icons is the same on
-     * both sides: the expand arrow's ink is narrow, the VibeVoice mark's is wide, and centres stay evenly spaced.
+     * The visible part of [view]'s icon as (left offset in the drawable, visible width, drawable width), found by
+     * drawing the drawable and looking for the pixels that are not transparent. Icons have very different amounts of
+     * empty margin (a chevron is a third as wide as a gear), and the gaps between icons must be the visible ones.
      */
-    private fun rightInset() = ((VOICE_INK_DP - EXPAND_INK_DP) / 2f * resources.displayMetrics.density).toInt()
+    private fun inkOf(view: ImageView): IntArray {
+        val drawable = view.drawable
+        val dw = drawable?.intrinsicWidth ?: 0
+        val dh = drawable?.intrinsicHeight ?: 0
+        if (drawable == null || dw <= 0 || dh <= 0) {
+            val w = toolbarKeyWidth / 2
+            return intArrayOf((toolbarKeyWidth - w) / 2, w, toolbarKeyWidth)
+        }
+        val key = Triple(view.tag, drawable.javaClass, dw to dh)
+        inkCache[key]?.let { if (view.tag != null || drawable === toolbarArrowIcon) return it }
+        val copy = drawable.constantState?.newDrawable()?.mutate() ?: drawable
+        val old = copy.bounds
+        copy.setBounds(0, 0, dw, dh)
+        val bmp = android.graphics.Bitmap.createBitmap(dw, dh, android.graphics.Bitmap.Config.ARGB_8888)
+        copy.draw(Canvas(bmp))
+        var minX = dw
+        var maxX = -1
+        for (x in 0 until dw) for (y in 0 until dh) {
+            if (android.graphics.Color.alpha(bmp.getPixel(x, y)) > 40) { minX = min(minX, x); maxX = max(maxX, x); break }
+        }
+        bmp.recycle()
+        copy.bounds = old
+        val ink = if (maxX < minX) intArrayOf(0, dw, dw) else intArrayOf(minX, maxX - minX + 1, dw)
+        inkCache[key] = ink
+        return ink
+    }
 
     /**
-     * Lays the strip out on the key grid: the ten slots of the toolbar (expand key, eight tools,
-     * voice) sit exactly above the ten keys of the top row. Only with draw keys on.
+     * Places the icons so the VISIBLE gaps between neighbours are all the same: one common gap
+     * = (cap's inner width - the sum of the icons' visible widths) / (icons - 1), and the same padding
+     * between the cap's edge and the outermost icons on both sides. Each icon's view is its visible width
+     * plus that gap, with the ink centred in it. Nothing scrolls unless the gap would drop below [MIN_ICON_GAP_DP].
+     */
+    private fun layoutIcons(g: StripCapGrid) {
+        val views = ArrayList<ImageView>()
+        views.add(toolbarExpandKey)
+        for (i in 0 until toolbar.childCount) (toolbar.getChildAt(i) as? ImageView)?.let { views.add(it) }
+        for (i in 0 until voiceAnchor.childCount) (voiceAnchor.getChildAt(i) as? ImageView)?.let { views.add(it) }
+        val n = views.size
+        if (n < 2) return
+        val inks = views.map { inkOf(it) }
+        val density = resources.displayMetrics.density
+        val capLeft = g.left + g.hGap / 2
+        val capRight = g.right - g.hGap / 2
+        val edgePad = (EDGE_PADDING_DP * density).toInt()
+        val inner = capRight - capLeft - 2 * edgePad
+        val visibleSum = inks.sumOf { it[1] }
+        val minGap = (MIN_ICON_GAP_DP * density).toInt()
+        val rawGap = (inner - visibleSum) / (n - 1)
+        val gap = max(rawGap, minGap)
+        val remainder = if (rawGap >= minGap) (inner - visibleSum) - rawGap * (n - 1) else 0
+        capsOverflow = rawGap < minGap
+
+        val widths = ArrayList<Int>()
+        val shifts = ArrayList<Int>()
+        for (i in 0 until n) {
+            val w = inks[i][1] + gap + (if (i < remainder) 1 else 0)
+            widths.add(w)
+            // ink off-centre within its drawable: nudge with padding so the visible part is centred
+            // (a mirrored expand key flips the padding with the drawing, so no sign change is needed)
+            shifts.add(inks[i][0] - (inks[i][2] - inks[i][1]) / 2)
+        }
+        val spec = widths + shifts + listOf(capLeft, capRight, width)
+        if (spec == lastIconLayout) return
+        lastIconLayout = spec
+
+        val leftPad = (capLeft + edgePad - gap / 2).coerceAtLeast(0)
+        val rightPad = (width - leftPad - widths.sum()).coerceAtLeast(0) // exact, so nothing overflows by a rounding pixel
+        stripWrapper.setPadding(leftPad, 0, rightPad, 0)
+        views.forEachIndexed { i, v ->
+            val lp = v.layoutParams as? LinearLayout.LayoutParams ?: return@forEachIndexed
+            lp.width = widths[i]
+            lp.height = LinearLayout.LayoutParams.MATCH_PARENT
+            lp.weight = 0f
+            lp.marginStart = 0
+            lp.gravity = Gravity.NO_GRAVITY
+            v.layoutParams = lp
+            val e = shifts[i]
+            v.setPadding(if (e < 0) -2 * e else 0, 0, if (e > 0) 2 * e else 0, 0)
+            v.scaleType = ImageView.ScaleType.CENTER
+        }
+    }
+
+    /**
+     * Lays the strip out under one wide cap: icons with equal visible gaps, see [layoutIcons]. Only with draw keys on.
      */
     private fun applyKeyGrid() {
         if (!useCaps) return
         val (g, stripHeight) = computeGrid() ?: return
-        if (g == grid) return
         grid = g
         // the strip is as tall as the caps need: a cap taller than the icons, the gap to the first key row like the row gaps
         (parent as? View)?.let { container ->
@@ -189,20 +279,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 container.layoutParams = container.layoutParams.also { it.height = stripHeight }
             }
         }
-        stripWrapper.setPadding(g.left, 0, (width - g.right).coerceAtLeast(0) + rightInset(), 0)
-        (toolbarExpandKey.layoutParams as? LinearLayout.LayoutParams)?.let {
-            it.width = slotWidthOf(g)
-            it.height = LinearLayout.LayoutParams.MATCH_PARENT
-            it.marginStart = 0
-            it.gravity = Gravity.NO_GRAVITY
-            toolbarExpandKey.layoutParams = it
-        }
-        for (i in 0 until voiceAnchor.childCount) {
-            val child = voiceAnchor.getChildAt(i)
-            child.layoutParams = child.layoutParams.also { it.width = slotWidthOf(g) }
-        }
-        fitToolbarKeys()
-        updateVoiceKey() // its mark is sized from the slot
+        layoutIcons(g)
+        toolbarContainer.isScrollingEnabled = capsOverflow
+        updateVoiceKey()
         requestLayout()
         invalidate()
     }
@@ -210,7 +289,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     override fun dispatchDraw(canvas: Canvas) {
         if (useCaps) {
             val computed = computeGrid()?.first
-            if (computed != null && computed != grid) post { applyKeyGrid() }
+            if (computed != null && (computed != grid || iconsChanged())) post { applyKeyGrid() }
             val g = grid
             if (g != null) { // one wide cap behind the whole row, toolbar and suggestions alike
                 wideCap.bounds = g.wideCapRect()
@@ -813,16 +892,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 button.clearColorFilter()
                 colors.setColor(button, ColorType.TOOL_BAR_KEY)
             }
-            val slotGrid = grid
-            if (useCaps && slotGrid != null) {
-                // drawn at a fixed ink width inside its slot so it keeps the same padding to the cap's edge as the arrow on the left
-                val pad = ((slotWidthOf(slotGrid) - (VOICE_INK_DP * resources.displayMetrics.density).toInt()) / 2).coerceAtLeast(0)
-                button.setPadding(pad, 0, pad, 0)
-                button.scaleType = ImageView.ScaleType.FIT_CENTER
-            } else {
-                button.setPadding(0, 0, 0, 0)
-                button.scaleType = ImageView.ScaleType.CENTER
-            }
+            button.setPadding(0, 0, 0, 0)
+            button.scaleType = ImageView.ScaleType.CENTER
             view.rotation = 0f // an older build left the key tilted; clear it once
         }
     }
@@ -894,15 +965,17 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      * appears only when dragging it actually brings a key into view.
      */
     private fun fitToolbarKeys() {
+        if (useCaps) { // the cap layout sizes the icons itself, see layoutIcons
+            toolbarContainer.isScrollingEnabled = capsOverflow
+            return
+        }
         val count = toolbar.childCount
         if (count == 0) return
         val viewport = toolbarContainer.width - toolbarContainer.paddingLeft - toolbarContainer.paddingRight
         val forKeys = viewport - toolbar.paddingLeft - toolbar.paddingRight
         if (forKeys <= 0) return
 
-        val slot = grid?.let { slotWidthOf(it) }?.takeIf { useCaps && it > 0 }
-        val target = if (slot != null) slot // an even share of the cap each, so everything fits without scrolling
-            else if (count * toolbarKeyWidth <= forKeys) toolbarKeyWidth
+        val target = if (count * toolbarKeyWidth <= forKeys) toolbarKeyWidth
             else (forKeys / count).takeIf { it >= toolbarKeyWidth * MIN_KEY_WIDTH_FRACTION }
                 ?: toolbarKeyWidth
 
@@ -948,9 +1021,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         /** A cap never gets thinner than this, however small the strip. */
         private const val MIN_CAP_HEIGHT_DP = 34
 
-        /** Visible width of the expand arrow and of the VibeVoice mark, to balance the padding at the cap's two ends. */
-        private const val EXPAND_INK_DP = 7f
-        private const val VOICE_INK_DP = 22f
+        /** Padding between the cap's edge and the outermost icon's visible edge, on both sides. */
+        private const val EDGE_PADDING_DP = 10
+
+        /** Below this gap between visible icons the toolbar scrolls instead of squeezing further. */
+        private const val MIN_ICON_GAP_DP = 6
 
         /** The caps' slots never get fewer than this, so a toolbar of a few keys is not spread thin. */
         private const val MIN_SLOTS = 8

@@ -115,6 +115,12 @@ class StripScreenshotTest {
         println("MEASURE center-to-center=${centers.zipWithNext { a, b -> b - a }}")
         println("MEASURE edge gaps=${boxes.zipWithNext { a, b -> b[0] - a[1] }}")
         println("MEASURE padLeft=${boxes.first()[0] - cap.left} padRight=${cap.right - boxes.last()[1]}")
+        val gaps = boxes.zipWithNext { a, b -> b[0] - a[1] }
+        println("MEASURE logoW=${boxes.last()[1] - boxes.last()[0] + 1}")
+        if (name.startsWith("strip")) {
+            assertTrue("visible gaps must be equal: $gaps", gaps.max() - gaps.min() <= 3)
+            assertTrue("edge paddings must be equal", Math.abs((boxes.first()[0] - cap.left) - (cap.right - boxes.last()[1])) <= 3)
+        }
         run {
             val kb = switcher.keyboard!!
             val rows = kb.sortedKeys.filter { !it.isSpacer }.groupBy { it.y }.toSortedMap()
