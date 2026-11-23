@@ -169,9 +169,9 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                     hasBorders,
                     ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark),
                     "#263238".toColorInt(),
-                    "#364248".toColorInt(),
-                    if (hasBorders) "#45525b".toColorInt() else "#2d393f".toColorInt(),
-                    "#364248".toColorInt(),
+                    if (hasBorders) "#485862".toColorInt() else "#364248".toColorInt(),
+                    if (hasBorders) "#566570".toColorInt() else "#2d393f".toColorInt(),
+                    if (hasBorders) "#485862".toColorInt() else "#364248".toColorInt(),
                     ContextCompat.getColor(context, R.color.key_text_color_lxx_dark),
                     ContextCompat.getColor(context, R.color.key_hint_letter_color_lxx_dark),
                     keyboardBackground = backgroundImage
