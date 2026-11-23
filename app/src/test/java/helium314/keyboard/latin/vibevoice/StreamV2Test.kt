@@ -67,9 +67,19 @@ class StreamV2Test {
     // ---------------------------------------------------------------- session against a fake server
 
     private lateinit var server: MockWebServer
+    private val sessions = Collections.synchronizedList(mutableListOf<VoiceSession>())
 
     @Before fun setUp() { org.robolectric.shadows.ShadowLog.stream = System.out; server = MockWebServer().apply { start() } }
-    @After fun tearDown() { server.shutdown() }
+    @After fun tearDown() {
+        sessions.forEach { s -> try { s.cancel() } catch (_: Throwable) {} }
+        sessions.clear()
+        VibeVoiceClient.sharedHttpClient.dispatcher.cancelAll()
+        VibeVoiceClient.sharedHttpClient.connectionPool.evictAll()
+        try {
+            server.shutdown()
+        } catch (_: Throwable) {
+        }
+    }
 
     /** 100 ms of audio every 20 ms of wall time, a distinct byte per chunk. */
     private class FakeMic(private val scope: CoroutineScope, private val onAudio: (ByteArray, Int) -> Unit) : AudioSource {
@@ -127,7 +137,7 @@ class StreamV2Test {
 
     private fun session(rec: Recorder, mic: Array<FakeMic?>) = VibeVoiceStreamV2(
         "key", "test", rec, server.url("/api/v2/stream").toString(),
-    ) { scope, onAudio, _ -> FakeMic(scope, onAudio).also { mic[0] = it } }
+    ) { scope, onAudio, _ -> FakeMic(scope, onAudio).also { mic[0] = it } }.also { sessions.add(it) }
 
     private fun waitFor(what: String, timeoutMs: Long = 5000, cond: () -> Boolean) {
         val until = System.currentTimeMillis() + timeoutMs
@@ -395,7 +405,7 @@ class StreamV2Test {
         // Ordinary window 1.5 s; restart window 6 s: still alive after the ordinary one.
         val s = VibeVoiceStreamV2("key", "test", rec, server.url("/api/v2/stream").toString(), false, 1_500L, 6_000L) { scope, onAudio, _ ->
             FakeMic(scope, onAudio)
-        }
+        }.also { sessions.add(it) }
         s.startStreaming()
         waitFor("degraded before ready", 1_400) { s.isLinkDegraded }
         assertTrue(rec.degradedSeen)
@@ -409,7 +419,7 @@ class StreamV2Test {
         val rec = Recorder()
         val s = VibeVoiceStreamV2("key", "test", rec, server.url("/api/v2/stream").toString(), false, 1_500L, 2_500L) { scope, onAudio, _ ->
             FakeMic(scope, onAudio)
-        }
+        }.also { sessions.add(it) }
         s.startStreaming()
         Thread.sleep(300)
         s.stopStreaming() // not ready: the end is deferred and the session keeps retrying
@@ -422,6 +432,32 @@ class StreamV2Test {
         assertTrue("session never closed", rec.closed.count == 0L)
         assertTrue(s.serverUnavailable)
         assertFalse("no misleading tail warning", rec.tailMissing)
+        s.cancel()
+    }
+
+    @Test fun stopWhileRestartingDoesNotTriggerStopHardLimitWhenReadyArrivesAfterSixtySeconds() {
+        refusingServer(1)
+        server.enqueue(MockResponse().withWebSocketUpgrade(object : FakeServer() {
+            override fun onStart(ws: WebSocket, o: JSONObject) {
+                ws.send("""{"type":"ready","session":"abc"}""")
+            }
+            override fun onEnd(ws: WebSocket) {
+                ws.send("""{"type":"segment","idx":1,"text":"Restart survived","ack_ms":1000}""")
+                ws.send("""{"type":"end","last_idx":1,"billed_ms":1000}""")
+            }
+        }))
+        val rec = Recorder()
+        val s = VibeVoiceStreamV2("key", "test", rec, server.url("/api/v2/stream").toString(), false, 1_500L, 120_000L) { scope, onAudio, _ ->
+            FakeMic(scope, onAudio)
+        }.also { sessions.add(it) }
+        s.startStreaming()
+        Thread.sleep(200)
+        s.stopStreaming() // stop while server is refusing
+        // Advance clock past 65 s (past the 60 s STOP_HARD_LIMIT_MS, but within 120 s restart outage)
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(65))
+        waitFor("session finished after reconnect", 10_000) { rec.closed.count == 0L }
+        assertFalse("no misleading tail warning", rec.tailMissing)
+        assertTrue(rec.pieces.any { it.first == "Restart survived" })
         s.cancel()
     }
 }

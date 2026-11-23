@@ -2458,6 +2458,7 @@ public class LatinIME extends InputMethodService implements
             // Dropped on the clipboard target. Everything this session produced goes there, not into
             // whatever field happens to have focus -- there may well be none, which is the reason the
             // target exists.
+            clearVoiceComposingRegion();
             mVoiceSessionText.append(commitText);
             final String all = mVoiceSessionText.toString().trim();
             copyVoiceSessionToClipboard(all);

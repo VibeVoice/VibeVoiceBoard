@@ -67,6 +67,8 @@ class VibeVoiceStreamV2(
     /** The current socket has had `ready`: audio goes out live. */
     private var ready = false
     private var everReady = false
+    /** When `ready` came on the current socket; the stop hard limit measures from this if stopped earlier. */
+    private var readyAt = 0L
     /** A connection attempt of this session failed or was refused, and no `ready` has come since. */
     private var attemptFailed = false
     /** The server said it is restarting (drain mode): the outage may be minutes, so wait longer. */
@@ -152,6 +154,7 @@ class VibeVoiceStreamV2(
         synchronized(lock) {
             gen++
             ready = false
+            readyAt = 0L
             endSent = false
             val old = ws
             ws = null
@@ -230,6 +233,7 @@ class VibeVoiceStreamV2(
         attemptFailed = true
         gen++
         ready = false
+        readyAt = 0L
         endSent = false
         val old = ws
         ws = null
@@ -288,7 +292,7 @@ class VibeVoiceStreamV2(
             // decides how long to keep trying, not the 15 s a live stream needs to answer.
             val stopTimedOut = synchronized(lock) {
                 ready && stopRequested && !endReceived && stoppedAt > 0 &&
-                    (now - maxOf(stoppedAt, lastProgressAt) > STOP_WAIT_MS || now - stoppedAt > STOP_HARD_LIMIT_MS)
+                    (now - maxOf(stoppedAt, lastProgressAt) > STOP_WAIT_MS || now - maxOf(stoppedAt, readyAt) > STOP_HARD_LIMIT_MS)
             }
             if (stopTimedOut) {
                 VibeVoiceDebugLogger.log("[V2] no end ${now - stoppedAt}ms after the stop")
@@ -312,6 +316,7 @@ class VibeVoiceStreamV2(
         val socket = ws ?: return@synchronized
         val now = SystemClock.elapsedRealtime()
         everReady = true
+        readyAt = now
         attemptFailed = false
         serverRestarting = false
         outageStartedAt = 0L
@@ -463,6 +468,7 @@ class VibeVoiceStreamV2(
         synchronized(lock) {
             gen++
             ready = false
+            readyAt = 0L
             endSent = false
             val old = ws
             ws = null
