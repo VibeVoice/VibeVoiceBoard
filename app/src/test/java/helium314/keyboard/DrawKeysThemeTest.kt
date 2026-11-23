@@ -1,0 +1,111 @@
+package helium314.keyboard
+
+import android.content.Context
+import androidx.core.content.edit
+import androidx.test.core.app.ApplicationProvider
+import helium314.keyboard.keyboard.KeyboardTheme
+import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.Settings
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+@RunWith(RobolectricTestRunner::class)
+class DrawKeysThemeTest {
+    private val context: Context = ApplicationProvider.getApplicationContext()
+
+    @Before
+    fun setUp() {
+        context.prefs().edit().clear().commit()
+    }
+
+    @Test
+    fun defaultsContract() {
+        assertFalse("PREF_DRAW_KEYS default must remain false", Defaults.PREF_DRAW_KEYS)
+        assertEquals("Preference key must be draw_keys", "draw_keys", Settings.PREF_DRAW_KEYS)
+    }
+
+    @Test
+    fun settingsReadDrawKeys_defaultIsFalse() {
+        val prefs = context.prefs()
+        assertFalse(Settings.readDrawKeys(prefs))
+    }
+
+    @Test
+    fun settingsReadDrawKeys_legacyKeyBordersFallback() {
+        val prefs = context.prefs()
+        prefs.edit {
+            putBoolean(Settings.PREF_THEME_KEY_BORDERS, true)
+        }
+        assertTrue(Settings.readDrawKeys(prefs))
+    }
+
+    @Test
+    fun settingsReadDrawKeys_explicitValuePrecedence() {
+        val prefs = context.prefs()
+        // When draw_keys is true, returns true
+        prefs.edit {
+            putBoolean(Settings.PREF_DRAW_KEYS, true)
+        }
+        assertTrue(Settings.readDrawKeys(prefs))
+
+        // When draw_keys is false, returns false even if legacy key borders was true
+        prefs.edit {
+            putBoolean(Settings.PREF_THEME_KEY_BORDERS, true)
+            putBoolean(Settings.PREF_DRAW_KEYS, false)
+        }
+        assertFalse(Settings.readDrawKeys(prefs))
+    }
+
+    @Test
+    fun keyboardTheme_switchesOnDrawKeys() {
+        val prefs = context.prefs()
+
+        // Default: draw_keys is false -> THEME_ID_LXX_BASE
+        val defaultTheme = KeyboardTheme.getKeyboardTheme(context)
+        assertEquals(1, defaultTheme.themeId)
+
+        // draw_keys is true -> THEME_ID_LXX_BASE_BORDER
+        prefs.edit {
+            putBoolean(Settings.PREF_DRAW_KEYS, true)
+        }
+        val borderTheme = KeyboardTheme.getKeyboardTheme(context)
+        assertEquals(2, borderTheme.themeId)
+    }
+
+    @Test
+    fun keyboardTheme_roundedStyleSwitchesOnDrawKeys() {
+        val prefs = context.prefs()
+        prefs.edit {
+            putString(Settings.PREF_THEME_STYLE, KeyboardTheme.STYLE_ROUNDED)
+        }
+
+        val roundedDefaultTheme = KeyboardTheme.getKeyboardTheme(context)
+        assertEquals(3, roundedDefaultTheme.themeId) // THEME_ID_ROUNDED_BASE
+
+        prefs.edit {
+            putBoolean(Settings.PREF_DRAW_KEYS, true)
+        }
+        val roundedBorderTheme = KeyboardTheme.getKeyboardTheme(context)
+        assertEquals(4, roundedBorderTheme.themeId) // THEME_ID_ROUNDED_BASE_BORDER
+    }
+
+    @Test
+    fun colors_hasKeyBordersReflectsDrawKeys() {
+        val prefs = context.prefs()
+
+        val defaultColors = KeyboardTheme.getColorsForCurrentTheme(context)
+        assertFalse(defaultColors.hasKeyBorders)
+
+        prefs.edit {
+            putBoolean(Settings.PREF_DRAW_KEYS, true)
+        }
+        val borderColors = KeyboardTheme.getColorsForCurrentTheme(context)
+        assertTrue(borderColors.hasKeyBorders)
+    }
+}
