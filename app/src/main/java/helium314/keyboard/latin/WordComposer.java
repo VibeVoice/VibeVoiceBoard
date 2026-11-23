@@ -82,7 +82,10 @@ public final class WordComposer {
     @SuppressWarnings("CopyConstructorMissesField")
     private WordComposer(WordComposer other) {
         mEvents = null;
-        mInputPointers = other.mInputPointers; // ideally we would have an actual copy, but for current use it should be ok
+        mInputPointers = new InputPointers(MAX_WORD_LENGTH);
+        if (other.mInputPointers != null) {
+            mInputPointers.copy(other.mInputPointers);
+        }
         mAutoCorrection = other.mAutoCorrection;
         mIsResumed = other.mIsResumed;
         mIsBatchMode = other.mIsBatchMode;

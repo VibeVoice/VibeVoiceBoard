@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Build-type override, the same one src/debug carries: debugNoMinify also has the ".debug"
+    applicationIdSuffix, and a provider authority that does not follow the package id collides with
+    whatever else is installed (INSTALL_FAILED_CONFLICTING_PROVIDER) or hands FileProvider an
+    authority it does not own.
+-->
+<resources>
+    <string name="log_provider_authority" translatable="false">org.vibevoice.board.debug.logprovider</string>
+</resources>

@@ -83,7 +83,6 @@ fun AppearanceScreen(
         Settings.PREF_BOTTOM_ROW_SCALE_PREFIX,
         Settings.PREF_BOTTOM_PADDING_SCALE_PREFIX,
         Settings.PREF_SIDE_PADDING_SCALE_PREFIX,
-        Settings.PREF_SPACE_BAR_TEXT,
         SettingsWithoutKey.CUSTOM_FONT,
         Settings.PREF_FONT_SCALE,
         if (prefs.getBoolean(Settings.PREF_SHOW_HINTS, Defaults.PREF_SHOW_HINTS)) Settings.PREF_HINT_FONT_SCALE else null,
@@ -298,9 +297,6 @@ fun createAppearanceSettings(context: Context) = listOf(
             range = 0f..3f,
             description = { "${(100 * it).toInt()}%" }
         ) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
-    },
-    Setting(context, Settings.PREF_SPACE_BAR_TEXT, R.string.prefs_space_bar_text) {
-        TextInputPreference(it, Defaults.PREF_SPACE_BAR_TEXT)
     },
     Setting(context, SettingsWithoutKey.CUSTOM_FONT, R.string.custom_font) {
         CustomFontPreference(it, Settings.getCustomFontFile(LocalContext.current), R.string.custom_font)
