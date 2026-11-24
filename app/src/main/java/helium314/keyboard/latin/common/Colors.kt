@@ -26,7 +26,11 @@ import helium314.keyboard.keyboard.KeyboardTheme.Companion.STYLE_HOLO
 import helium314.keyboard.keyboard.KeyboardTheme.Companion.STYLE_MATERIAL
 import helium314.keyboard.latin.common.ColorType.*
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.utils.GLYPH_MIN_CONTRAST
+import helium314.keyboard.latin.utils.SHIFT_ICON_MIN_CONTRAST
+import helium314.keyboard.latin.utils.accentGlyphColor
 import helium314.keyboard.latin.utils.adjustLuminosityAndKeepAlpha
+import helium314.keyboard.latin.utils.contrastRatio
 import helium314.keyboard.latin.utils.brighten
 import helium314.keyboard.latin.utils.brightenOrDarken
 import helium314.keyboard.latin.utils.darken
@@ -403,7 +407,12 @@ class DefaultColors (
     private val accentColorFilter = colorFilter(accent)
 
     /** color filter for the white action key icons in material theme, switches to gray if necessary for contrast */
-    private val actionKeyIconColorFilter: ColorFilter?
+    private var actionKeyIconColorFilter: ColorFilter?
+    /** the glyph / label color on the action key background; white unless [useLuminanceGlyphs] found it too weak */
+    private var actionGlyph = Color.WHITE
+    /** the color of the active shift glyph, which sits on a key and is the accent unless that is hard to see there */
+    private var shiftIconColor = accent
+    private var shiftIconFilter: ColorFilter = accentColorFilter
 
     private val backgroundStateList: ColorStateList
     private val keyStateList: ColorStateList
@@ -489,9 +498,25 @@ class DefaultColors (
         }
     }
 
+    /**
+     * For an accent the user chose: the glyph on the action key is white or near-black by the accent's luminance,
+     * and the active shift glyph falls back to the key text color when the accent would hardly show on the key.
+     */
+    fun useLuminanceGlyphs() {
+        if (themeStyle == STYLE_HOLO) return
+        actionGlyph = accentGlyphColor(accent)
+        actionKeyIconColorFilter = if (actionGlyph == Color.WHITE) null else colorFilter(actionGlyph)
+        val shiftKeyBackground = if (hasKeyBorders) functionalKey else background
+        if (contrastRatio(accent, shiftKeyBackground) < SHIFT_ICON_MIN_CONTRAST) {
+            shiftIconColor = keyText
+            shiftIconFilter = keyTextFilter
+        }
+    }
+
     override fun get(color: ColorType): Int = when (color) {
+        SHIFT_KEY_ICON -> shiftIconColor
         TOOL_BAR_KEY_ENABLED_BACKGROUND, EMOJI_CATEGORY_SELECTED, ACTION_KEY_BACKGROUND,
-            CLIPBOARD_PIN, SHIFT_KEY_ICON -> accent
+            CLIPBOARD_PIN -> accent
         AUTOFILL_BACKGROUND_CHIP -> if (themeStyle == STYLE_MATERIAL && !hasKeyBorders) background else adjustedBackground
         GESTURE_PREVIEW, POPUP_KEYS_BACKGROUND, MORE_SUGGESTIONS_BACKGROUND, KEY_PREVIEW_BACKGROUND -> adjustedBackground
         TOOL_BAR_EXPAND_KEY_BACKGROUND, CLIPBOARD_SUGGESTION_BACKGROUND -> doubleAdjustedBackground
@@ -518,7 +543,7 @@ class DefaultColors (
         NAVIGATION_BAR -> navBar
         SUGGESTION_AUTO_CORRECT, EMOJI_CATEGORY, TOOL_BAR_KEY, TOOL_BAR_EXPAND_KEY, ONE_HANDED_MODE_BUTTON -> suggestionText
         MORE_SUGGESTIONS_HINT, SUGGESTED_WORD, SUGGESTION_TYPED_WORD, SUGGESTION_VALID_WORD -> adjustedSuggestionText
-        ACTION_KEY_ICON -> Color.WHITE
+        ACTION_KEY_ICON -> actionGlyph
     }
 
     override fun setColor(drawable: Drawable, color: ColorType) {
@@ -575,7 +600,8 @@ class DefaultColors (
     }
 
     private fun getColorFilter(color: ColorType): ColorFilter? = when (color) {
-        EMOJI_CATEGORY_SELECTED, CLIPBOARD_PIN, SHIFT_KEY_ICON -> accentColorFilter
+        SHIFT_KEY_ICON -> shiftIconFilter
+        EMOJI_CATEGORY_SELECTED, CLIPBOARD_PIN -> accentColorFilter
         KEY_TEXT, KEY_ICON -> keyTextFilter
         REMOVE_SUGGESTION_ICON, EMOJI_CATEGORY, ONE_HANDED_MODE_BUTTON, TOOL_BAR_KEY, TOOL_BAR_EXPAND_KEY -> suggestionTextFilter
         KEY_PREVIEW_BACKGROUND -> adjustedBackgroundFilter

@@ -141,7 +141,7 @@ fun createAppearanceSettings(context: Context) = listOf(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(setting.title, style = MaterialTheme.typography.bodyLarge)
+            Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             AccentDots()
         }
     },

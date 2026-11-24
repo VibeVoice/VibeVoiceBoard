@@ -226,10 +226,10 @@ class KeyboardPresetsTest {
             KeyboardPresets.apply(context, preset)
             assertEquals(0xFF8B5CF6.toInt(), actionColor())
             assertEquals(0xFF8B5CF6.toInt(), shiftColor())
-            for (accent in KeyboardAccent.entries) {
+            for (accent in KeyboardAccent.PALETTE) {
                 KeyboardPresets.setAccent(context, accent)
                 assertEquals(accent.color, actionColor())
-                assertEquals(accent.color, shiftColor())
+                if (accent != KeyboardAccent.VIBEVOICE) assertEquals(accent.color, shiftColor()) // light blue hardly shows on a light key: see the glyph test
             }
         }
     }
@@ -286,5 +286,96 @@ class KeyboardPresetsTest {
         assertEquals(null, KeyboardPresets.readAccent(prefs))
         KeyboardPresets.apply(context, KeyboardPreset.GBOARD)
         assertEquals(KeyboardAccent.VIOLET.color, actionColor())
+    }
+
+    private fun themeColors() = helium314.keyboard.keyboard.KeyboardTheme.getColorsForCurrentTheme(context)
+    private val actionIcon = helium314.keyboard.latin.common.ColorType.ACTION_KEY_ICON
+
+    @Test
+    fun accent_vibevoiceBlueIsSelectableForEveryPreset() {
+        assertEquals(0xFFB0C6FF.toInt(), KeyboardAccent.VIBEVOICE.color)
+        assertEquals(KeyboardAccent.VIBEVOICE, KeyboardAccent.PALETTE.first())
+        for (preset in KeyboardPreset.entries) {
+            prefs.edit().clear().commit()
+            KeyboardPresets.apply(context, preset)
+            KeyboardPresets.setAccent(context, KeyboardAccent.VIBEVOICE)
+            assertEquals(0xFFB0C6FF.toInt(), actionColor())
+        }
+    }
+
+    @Test
+    fun accent_customColorPerPresetSurvivesPresetSwitchAndUpgrade() {
+        prefs.edit().clear().commit()
+        KeyboardPresets.setCustomAccent(context, 0x00FFD60A) // alpha is forced opaque
+        assertEquals(KeyboardAccent.CUSTOM, KeyboardPresets.readAccent(prefs))
+        assertEquals(0xFFFFD60A.toInt(), KeyboardPresets.readAccentColor(prefs))
+        for (preset in listOf(KeyboardPreset.SAMSUNG, KeyboardPreset.GBOARD, KeyboardPreset.OWN)) {
+            KeyboardPresets.apply(context, preset)
+            assertEquals(0xFFFFD60A.toInt(), actionColor())
+            assertEquals(KeyboardAccent.CUSTOM, KeyboardPresets.readAccent(prefs))
+        }
+        storePreviousSamsung(KeyboardPreset.SAMSUNG)
+        KeyboardPresets.setCustomAccent(context, 0xFF1E3A8A.toInt())
+        checkVersionUpgrade(context)
+        assertEquals(0xFF1E3A8A.toInt(), KeyboardPresets.readAccentColor(prefs))
+        assertEquals(0xFF1E3A8A.toInt(), actionColor())
+    }
+
+    @Test
+    fun accent_customValuesAreValidated() {
+        // CUSTOM selected, no color stored: unset
+        prefs.edit().clear().putString(Settings.PREF_KEYBOARD_ACCENT, "CUSTOM").commit()
+        assertEquals(null, KeyboardPresets.readAccent(prefs))
+        assertEquals(null, KeyboardPresets.readAccentColor(prefs))
+        KeyboardPresets.apply(context, KeyboardPreset.GBOARD)
+        assertEquals(KeyboardAccent.VIOLET.color, actionColor())
+        // a stored color of the wrong type: unset
+        prefs.edit().putString(Settings.PREF_KEYBOARD_ACCENT_CUSTOM, "red").commit()
+        assertEquals(null, KeyboardPresets.readAccentColor(prefs))
+        // choosing CUSTOM without a stored color does nothing
+        prefs.edit().clear().commit()
+        KeyboardPresets.setAccent(context, KeyboardAccent.CUSTOM)
+        assertFalse(prefs.contains(Settings.PREF_KEYBOARD_ACCENT))
+        // a stored color without alpha still comes out opaque
+        prefs.edit().putInt(Settings.PREF_KEYBOARD_ACCENT_CUSTOM, 0x00123456).putString(Settings.PREF_KEYBOARD_ACCENT, "CUSTOM").commit()
+        assertEquals(0xFF123456.toInt(), KeyboardPresets.readAccentColor(prefs))
+    }
+
+    @Test
+    fun accent_glyphIsWhiteOrNearBlackByLuminance() {
+        for (accent in listOf(KeyboardAccent.VIOLET, KeyboardAccent.GREEN, KeyboardAccent.ORANGE, KeyboardAccent.PINK, KeyboardAccent.GRAPHITE))
+            assertEquals("${accent.name} keeps white", android.graphics.Color.WHITE, helium314.keyboard.latin.utils.accentGlyphColor(accent.color))
+        for (light in listOf(KeyboardAccent.VIBEVOICE.color, 0xFFFFD60A.toInt(), 0xFFA7F3D0.toInt()))
+            assertEquals(helium314.keyboard.latin.utils.GLYPH_DARK, helium314.keyboard.latin.utils.accentGlyphColor(light))
+        assertEquals(android.graphics.Color.WHITE, helium314.keyboard.latin.utils.accentGlyphColor(0xFF1E3A8A.toInt()))
+        // and the theme uses it for the label / icon on the action key
+        prefs.edit().clear().commit()
+        KeyboardPresets.apply(context, KeyboardPreset.SAMSUNG)
+        KeyboardPresets.setAccent(context, KeyboardAccent.VIBEVOICE)
+        assertEquals(helium314.keyboard.latin.utils.GLYPH_DARK, themeColors().get(actionIcon))
+        KeyboardPresets.setCustomAccent(context, 0xFFFFD60A.toInt())
+        assertEquals(helium314.keyboard.latin.utils.GLYPH_DARK, themeColors().get(actionIcon))
+        KeyboardPresets.setCustomAccent(context, 0xFF1E3A8A.toInt())
+        assertEquals(android.graphics.Color.WHITE, themeColors().get(actionIcon))
+        KeyboardPresets.setAccent(context, KeyboardAccent.GREEN)
+        assertEquals(android.graphics.Color.WHITE, themeColors().get(actionIcon))
+        // Own without a choice keeps the old white glyph
+        prefs.edit().clear().commit()
+        assertEquals(android.graphics.Color.WHITE, themeColors().get(actionIcon))
+    }
+
+    @Test
+    fun accent_activeShiftGlyphStaysReadable() {
+        val shift = helium314.keyboard.latin.common.ColorType.SHIFT_KEY_ICON
+        val text = helium314.keyboard.latin.common.ColorType.KEY_TEXT
+        for (preset in listOf(KeyboardPreset.SAMSUNG, KeyboardPreset.GBOARD)) {
+            prefs.edit().clear().commit()
+            KeyboardPresets.apply(context, preset)
+            for (accent in KeyboardAccent.PALETTE) {
+                KeyboardPresets.setAccent(context, accent)
+                val c = themeColors()
+                assertTrue("${accent.name}: shift is the accent or the key text", c.get(shift) == accent.color || c.get(shift) == c.get(text))
+            }
+        }
     }
 }

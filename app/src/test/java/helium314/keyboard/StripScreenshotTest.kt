@@ -76,7 +76,16 @@ class StripScreenshotTest {
     @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_own_pink_light() = render("accent_own_pink_light", KeyboardPreset.OWN, accent = KeyboardAccent.PINK)
     @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_own_unset_dark() = render("accent_own_unset_dark", KeyboardPreset.OWN)
 
-    private fun render(name: String, preset: KeyboardPreset? = null, oldGboard: Boolean = false, oldSamsung: Boolean = false, accent: KeyboardAccent? = null) {
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_vibevoice_dark() = render("accent_samsung_vibevoice_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.VIBEVOICE)
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_vibevoice_light() = render("accent_gboard_vibevoice_light", KeyboardPreset.GBOARD, accent = KeyboardAccent.VIBEVOICE)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_customyellow_dark() = render("accent_samsung_customyellow_dark", KeyboardPreset.SAMSUNG, custom = 0xFFFFD60A.toInt())
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_customyellow_light() = render("accent_gboard_customyellow_light", KeyboardPreset.GBOARD, custom = 0xFFFFD60A.toInt())
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_customnavy_dark() = render("accent_samsung_customnavy_dark", KeyboardPreset.SAMSUNG, custom = 0xFF1E3A8A.toInt())
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_customnavy_light() = render("accent_gboard_customnavy_light", KeyboardPreset.GBOARD, custom = 0xFF1E3A8A.toInt())
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_own_vibevoice_dark() = render("accent_own_vibevoice_dark", KeyboardPreset.OWN, accent = KeyboardAccent.VIBEVOICE)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_own_customyellow_dark() = render("accent_own_customyellow_dark", KeyboardPreset.OWN, custom = 0xFFFFD60A.toInt())
+
+    private fun render(name: String, preset: KeyboardPreset? = null, oldGboard: Boolean = false, oldSamsung: Boolean = false, accent: KeyboardAccent? = null, custom: Int? = null) {
         ShadowLog.setupLogging()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         context.prefs().edit(commit = true) {
@@ -85,6 +94,7 @@ class StripScreenshotTest {
         }
         if (preset != null) KeyboardPresets.apply(context, preset)
         if (accent != null) KeyboardPresets.setAccent(context, accent)
+        if (custom != null) KeyboardPresets.setCustomAccent(context, custom)
         if (oldGboard || oldSamsung) {
             val h = createPrefKeyForBooleanSettings(Settings.PREF_KEYBOARD_HEIGHT_SCALE_PREFIX, 0, 2)
             val g = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
@@ -141,6 +151,18 @@ class StripScreenshotTest {
                 val c = bmp.getPixel(x, y)
                 val d = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(edge)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(edge)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(edge))
                 if (d > bestD) { bestD = d; shiftGlyph = c and 0xFFFFFF }
+            }
+            run {
+                // glyph: pixel farthest from the circle color within the circle's middle
+                val ecx = enter.x + enter.width / 2; val ecy = sTop + enter.y + enter.height / 2
+                val circle = bmp.getPixel(ecx, ecy - 45)
+                var best = circle; var bd = 0
+                for (x in ecx - 30 until ecx + 30) for (y in ecy - 20 until ecy + 20) {
+                    val c = bmp.getPixel(x, y)
+                    val d = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(circle)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(circle)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(circle))
+                    if (d > bd) { bd = d; best = c }
+                }
+                println("OWNGLYPH $name enterGlyph=#%06X".format(best and 0xFFFFFF))
             }
             println("OWNCOLOR $name bg=#%06X enter=#%06X shiftKey=#%06X shiftGlyph=#%06X".format(bmp.getPixel(2, sTop + 2) and 0xFFFFFF, bmp.getPixel(enter.x + enter.width / 2, sTop + enter.y + enter.height / 2 - 45) and 0xFFFFFF, px(shift, 5), shiftGlyph))
             return

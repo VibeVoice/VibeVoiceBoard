@@ -152,11 +152,19 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
         }
 
         private fun getThemeColors(themeName: String, themeStyle: String, context: Context, prefs: SharedPreferences, isNight: Boolean): Colors {
+            val colors = buildThemeColors(themeName, themeStyle, context, prefs, isNight)
+            // a chosen accent (any preset) gets a glyph by luminance; Own without a choice keeps its old look
+            val chosen = KeyboardPresets.readAccentColor(prefs) != null || Settings.readKeyboardPreset(prefs) != KeyboardPreset.OWN
+            if (chosen && colors is DefaultColors) colors.useLuminanceGlyphs()
+            return colors
+        }
+
+        private fun buildThemeColors(themeName: String, themeStyle: String, context: Context, prefs: SharedPreferences, isNight: Boolean): Colors {
             val hasBorders = Settings.readDrawKeys(prefs)
             val backgroundImage = Settings.readUserBackgroundImage(context, isNight)
             // the accent the user picked; the Own preset only recolors the accent of its theme, the others carry it in their palette
-            val accentChoice = KeyboardPresets.readAccent(prefs)
-            val ownAccent = if (Settings.readKeyboardPreset(prefs) == KeyboardPreset.OWN) accentChoice?.color else null
+            val accentColor = KeyboardPresets.readAccentColor(prefs)
+            val ownAccent = if (Settings.readKeyboardPreset(prefs) == KeyboardPreset.OWN) accentColor else null
             fun acc(default: Int) = ownAccent ?: default
             return when (themeName) {
                 THEME_DYNAMIC -> {
@@ -166,7 +174,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_VIBEVOICE, "samsung" -> {
                     // our own palette for the Gboard and Samsung presets: a warm violet-tinted gray and the violet of our wave.
                     // alpha 0xFE: not 255, so the draw_keys alpha blend leaves the color as it is (to within 1 step)
-                    val violet = accentChoice?.color ?: KeyboardAccent.VIOLET.color
+                    val violet = accentColor ?: KeyboardAccent.VIOLET.color
                     if (isNight) DefaultColors(
                         themeStyle, hasBorders,
                         accent = violet,

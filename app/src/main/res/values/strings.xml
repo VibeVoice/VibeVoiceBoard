@@ -52,6 +52,12 @@
     <string name="keyboard_preset_gboard">Google style</string>
     <string name="keyboard_preset_samsung">Samsung style</string>
     <string name="keyboard_accent_title">Accent color</string>
+    <string name="keyboard_accent_vibevoice">VibeVoice</string>
+    <string name="keyboard_accent_custom">Custom</string>
+    <string name="keyboard_accent_custom_title">Custom accent color</string>
+    <string name="keyboard_accent_hue">Hue</string>
+    <string name="keyboard_accent_saturation">Saturation</string>
+    <string name="keyboard_accent_brightness">Brightness</string>
     <string name="keyboard_accent_violet">Violet</string>
     <string name="keyboard_accent_green">Green</string>
     <string name="keyboard_accent_orange">Orange</string>

@@ -16,13 +16,20 @@ enum class KeyboardPreset { OWN, GBOARD, SAMSUNG }
  * All of them carry a white glyph with enough contrast and sit well on both the dark and the light palette.
  */
 enum class KeyboardAccent(val color: Int) {
+    /** the light blue the Own preset always had */
+    VIBEVOICE(0xFFB0C6FF.toInt()),
     VIOLET(0xFF8B5CF6.toInt()),
     GREEN(0xFF16A34A.toInt()),
     ORANGE(0xFFEA580C.toInt()),
     PINK(0xFFDB2777.toInt()),
-    GRAPHITE(0xFF5B6472.toInt());
+    GRAPHITE(0xFF5B6472.toInt()),
+    /** the color the user mixed himself, stored in [Settings.PREF_KEYBOARD_ACCENT_CUSTOM]; [color] is not used */
+    CUSTOM(0);
 
     companion object {
+        /** The fixed colors, in the order the dots show them (the custom color follows as the last dot). */
+        val PALETTE: List<KeyboardAccent> = entries.filter { it != CUSTOM }
+
         /** The stored choice, or null if the user never picked one (or the value is unknown). */
         fun fromName(name: String?): KeyboardAccent? = entries.firstOrNull { it.name == name }
     }
@@ -40,13 +47,42 @@ object KeyboardPresets {
     /** Stored once the Samsung preset was re-applied with sizes for a 384 dp wide phone and our own palette, and Gboard got the palette. */
     const val PREF_PRESET_LAYOUT_V4 = "preset_layout_v4"
 
-    /** The user's accent choice, or null while none was made. */
-    fun readAccent(prefs: SharedPreferences): KeyboardAccent? =
-        KeyboardAccent.fromName(prefs.getString(Settings.PREF_KEYBOARD_ACCENT, null))
+    /** The stored custom color as an opaque ARGB int, or null when none is stored or the stored value is not an int. */
+    fun readCustomColor(prefs: SharedPreferences): Int? =
+        try {
+            if (prefs.contains(Settings.PREF_KEYBOARD_ACCENT_CUSTOM)) prefs.getInt(Settings.PREF_KEYBOARD_ACCENT_CUSTOM, 0) or 0xFF000000.toInt()
+            else null
+        } catch (_: ClassCastException) { null }
+
+    /**
+     * The user's accent choice, or null while none was made. An unknown name is unset; CUSTOM without a valid
+     * stored color is unset too.
+     */
+    fun readAccent(prefs: SharedPreferences): KeyboardAccent? {
+        val accent = KeyboardAccent.fromName(prefs.getString(Settings.PREF_KEYBOARD_ACCENT, null)) ?: return null
+        return if (accent == KeyboardAccent.CUSTOM && readCustomColor(prefs) == null) null else accent
+    }
+
+    /** The color of the chosen accent (also the custom one), or null while none was made. */
+    fun readAccentColor(prefs: SharedPreferences): Int? = when (val accent = readAccent(prefs)) {
+        null -> null
+        KeyboardAccent.CUSTOM -> readCustomColor(prefs)
+        else -> accent.color
+    }
 
     /** Stores the accent and restyles the keyboard. Presets never touch this value, so the choice survives a preset switch. */
     fun setAccent(context: Context, accent: KeyboardAccent) {
+        if (accent == KeyboardAccent.CUSTOM && readCustomColor(context.prefs()) == null) return // nothing to select
         context.prefs().edit { putString(Settings.PREF_KEYBOARD_ACCENT, accent.name) }
+        KeyboardSwitcher.getInstance().setThemeNeedsReload()
+    }
+
+    /** Stores [color] (alpha is forced opaque) as the custom accent and selects it. */
+    fun setCustomAccent(context: Context, color: Int) {
+        context.prefs().edit {
+            putInt(Settings.PREF_KEYBOARD_ACCENT_CUSTOM, color or 0xFF000000.toInt())
+            putString(Settings.PREF_KEYBOARD_ACCENT, KeyboardAccent.CUSTOM.name)
+        }
         KeyboardSwitcher.getInstance().setThemeNeedsReload()
     }
 

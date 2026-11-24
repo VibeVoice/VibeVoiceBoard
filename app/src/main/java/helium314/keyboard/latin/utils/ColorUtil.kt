@@ -56,3 +56,23 @@ fun brighten(@ColorInt color: Int) =
 
 @ColorInt
 fun darken(@ColorInt color: Int) = adjustLuminosityAndKeepAlpha(color, -0.06f)
+
+/** The least contrast (WCAG non-text, large glyphs) a glyph needs against the color it sits on. */
+const val GLYPH_MIN_CONTRAST = 3.0
+/** The least contrast the accent colored shift glyph needs against its key; lower than [GLYPH_MIN_CONTRAST] because the hue itself still shows. */
+const val SHIFT_ICON_MIN_CONTRAST = 2.0
+/** The near-black glyph color used on light accent colors. */
+const val GLYPH_DARK = 0xFF1F1B24.toInt()
+
+private fun opaque(@ColorInt color: Int) = ColorUtils.setAlphaComponent(color, 255)
+
+fun contrastRatio(@ColorInt foreground: Int, @ColorInt background: Int): Double =
+    ColorUtils.calculateContrast(opaque(foreground), opaque(background))
+
+/**
+ * Glyph color on an accent colored key: white while white has at least [GLYPH_MIN_CONTRAST] against the accent,
+ * else near-black. (The violet, green, orange, pink and graphite accents all stay white; light blue and yellow go dark.)
+ */
+@ColorInt
+fun accentGlyphColor(@ColorInt accent: Int): Int =
+    if (contrastRatio(Color.WHITE, accent) >= GLYPH_MIN_CONTRAST) Color.WHITE else GLYPH_DARK
