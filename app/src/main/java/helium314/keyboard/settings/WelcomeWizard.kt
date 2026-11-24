@@ -113,6 +113,7 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.KeyboardPresets
+import helium314.keyboard.settings.preferences.AccentDots
 import helium314.keyboard.latin.settings.PreviousKeyboard
 import helium314.keyboard.latin.settings.SwitcherHelper
 import helium314.keyboard.latin.settings.Settings as KeySettings
@@ -1208,6 +1209,24 @@ private fun StyleStep(
                         )
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(fill)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    stringResource(R.string.keyboard_accent_title),
+                    style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                    modifier = Modifier.weight(1f)
+                )
+                // keyed on the preset: choosing a preset changes what "no choice yet" shows
+                androidx.compose.runtime.key(selectedPreset) { AccentDots(ringColor = textColor) }
             }
 
             Row(

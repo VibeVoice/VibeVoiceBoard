@@ -11,6 +11,7 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.checkVersionUpgrade
+import helium314.keyboard.latin.settings.KeyboardAccent
 import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.createPrefKeyForBooleanSettings
 import helium314.keyboard.latin.settings.KeyboardPresets
@@ -62,7 +63,20 @@ class StripScreenshotTest {
 
     @Test @Config(qualifiers = "w411dp-h891dp-night-560dpi") fun samsung_1440() = render("samsung_1440", KeyboardPreset.SAMSUNG)
 
-    private fun render(name: String, preset: KeyboardPreset? = null, oldGboard: Boolean = false, oldSamsung: Boolean = false) {
+    // the accent colors, on the real phone config (384 dp, 600 dpi = 1440 px wide scale of the Samsung / Gboard presets)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_violet_dark() = render("accent_samsung_violet_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.VIOLET)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_green_dark() = render("accent_samsung_green_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.GREEN)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_orange_dark() = render("accent_samsung_orange_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.ORANGE)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_pink_dark() = render("accent_samsung_pink_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.PINK)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_graphite_dark() = render("accent_samsung_graphite_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.GRAPHITE)
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_green_light() = render("accent_gboard_green_light", KeyboardPreset.GBOARD, accent = KeyboardAccent.GREEN)
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_orange_light() = render("accent_gboard_orange_light", KeyboardPreset.GBOARD, accent = KeyboardAccent.ORANGE)
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_graphite_light() = render("accent_gboard_graphite_light", KeyboardPreset.GBOARD, accent = KeyboardAccent.GRAPHITE)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_own_orange_dark() = render("accent_own_orange_dark", KeyboardPreset.OWN, accent = KeyboardAccent.ORANGE)
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_own_pink_light() = render("accent_own_pink_light", KeyboardPreset.OWN, accent = KeyboardAccent.PINK)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_own_unset_dark() = render("accent_own_unset_dark", KeyboardPreset.OWN)
+
+    private fun render(name: String, preset: KeyboardPreset? = null, oldGboard: Boolean = false, oldSamsung: Boolean = false, accent: KeyboardAccent? = null) {
         ShadowLog.setupLogging()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         context.prefs().edit(commit = true) {
@@ -70,6 +84,7 @@ class StripScreenshotTest {
             putBoolean(Settings.PREF_DRAW_KEYS, true)
         }
         if (preset != null) KeyboardPresets.apply(context, preset)
+        if (accent != null) KeyboardPresets.setAccent(context, accent)
         if (oldGboard || oldSamsung) {
             val h = createPrefKeyForBooleanSettings(Settings.PREF_KEYBOARD_HEIGHT_SCALE_PREFIX, 0, 2)
             val g = createPrefKeyForBooleanSettings(Settings.PREF_KEY_GAP_SCALE_PREFIX, 0, 2)
@@ -111,6 +126,24 @@ class StripScreenshotTest {
         System.getenv("STRIP_SHOT_DIR")?.let {
             File(it).mkdirs()
             File(it, "$name.png").outputStream().use { o -> bmp.compress(Bitmap.CompressFormat.PNG, 100, o) }
+        }
+        if (preset == KeyboardPreset.OWN) {
+            // the Own preset has no cap grid (draw keys off): only sample the accent keys
+            val sTop = IntArray(2).also { strip.getLocationInWindow(it) }[1] + strip.height
+            val keys = switcher.keyboard!!.sortedKeys.filter { !it.isSpacer }
+            val enter = keys.first { it.code == helium314.keyboard.latin.common.Constants.CODE_ENTER }
+            val shift = keys.first { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.SHIFT }
+            fun px(k: helium314.keyboard.keyboard.Key, dx: Int) = bmp.getPixel(k.x + dx, sTop + k.y + k.height / 2) and 0xFFFFFF
+            // the shift glyph is the accent: take the pixel farthest from the key's own edge color
+            var shiftGlyph = px(shift, 5); var bestD = 0
+            val edge = bmp.getPixel(shift.x + 5, sTop + shift.y + shift.height / 2)
+            for (x in shift.x + shift.width / 4 until shift.x + shift.width * 3 / 4) for (y in sTop + shift.y + shift.height / 4 until sTop + shift.y + shift.height * 3 / 4) {
+                val c = bmp.getPixel(x, y)
+                val d = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(edge)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(edge)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(edge))
+                if (d > bestD) { bestD = d; shiftGlyph = c and 0xFFFFFF }
+            }
+            println("OWNCOLOR $name bg=#%06X enter=#%06X shiftKey=#%06X shiftGlyph=#%06X".format(bmp.getPixel(2, sTop + 2) and 0xFFFFFF, bmp.getPixel(enter.x + enter.width / 2, sTop + enter.y + enter.height / 2 - 45) and 0xFFFFFF, px(shift, 5), shiftGlyph))
+            return
         }
         for (f in listOf("grid", "useCaps")) { val fld = SuggestionStripView::class.java.getDeclaredField(f); fld.isAccessible = true; println("FIELD $f=${fld.get(strip)}") }
         val scroll = strip.findViewById<ToolbarScrollView>(R.id.toolbar_container)
@@ -207,6 +240,20 @@ class StripScreenshotTest {
             keys.firstOrNull { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.SYMBOL_ALPHA }?.let { out.append(" symbols=${px(it)}") }
             keys.firstOrNull { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.LANGUAGE_SWITCH }?.let { out.append(" globe=${px(it)}") }
             keys.firstOrNull { it.code == ','.code }?.let { out.append(" comma=${px(it)}") }
+            keys.firstOrNull { it.code == helium314.keyboard.latin.common.Constants.CODE_ENTER }?.let { k ->
+                // glyph: the pixel farthest from the key color inside the key's middle third; its distance to the key color is the contrast cue
+                val bgPx = bmp.getPixel(k.x + 5, sTop2 + k.y + k.height / 2)
+                var best = bgPx; var bestD = 0
+                for (x in k.x + k.width / 3 until k.x + k.width * 2 / 3) for (y in sTop2 + k.y + k.height / 3 until sTop2 + k.y + k.height * 2 / 3) {
+                    val c = bmp.getPixel(x, y)
+                    val d = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(bgPx)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(bgPx)) + Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(bgPx))
+                    if (d > bestD) { bestD = d; best = c }
+                }
+                fun lum(c: Int): Double { fun f(v: Int): Double { val x = v / 255.0; return if (x <= 0.03928) x / 12.92 else Math.pow((x + 0.055) / 1.055, 2.4) }
+                    return 0.2126 * f(android.graphics.Color.red(c)) + 0.7152 * f(android.graphics.Color.green(c)) + 0.0722 * f(android.graphics.Color.blue(c)) }
+                val l1 = lum(best); val l2 = lum(bgPx)
+                println("ENTERGLYPH $name key=#%06X glyph=#%06X contrast=%.2f".format(bgPx and 0xFFFFFF, best and 0xFFFFFF, (maxOf(l1, l2) + 0.05) / (minOf(l1, l2) + 0.05)))
+            }
             println(out)
             println("KEYS $name bottom=${keys.filter { it.y == keys.maxOf { k -> k.y } }.sortedBy { it.x }.map { "${it.label ?: it.code}:${it.x}+${it.width}" }}")
             println("KEYS $name numberRowKeyH=${keys.firstOrNull { it.label == "1" }?.height} qKeyH=${q.height} shiftW=${keys.firstOrNull { it.code == helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode.SHIFT }?.width}")

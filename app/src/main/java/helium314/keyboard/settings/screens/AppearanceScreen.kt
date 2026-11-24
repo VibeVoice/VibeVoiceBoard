@@ -3,7 +3,16 @@ package helium314.keyboard.settings.screens
 
 import android.content.Context
 import android.os.Build
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import helium314.keyboard.settings.preferences.AccentDots
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -61,6 +70,7 @@ fun AppearanceScreen(
     val items = listOf(
         R.string.settings_screen_theme,
         Settings.PREF_KEYBOARD_PRESET,
+        Settings.PREF_KEYBOARD_ACCENT,
         Settings.PREF_THEME_STYLE,
         Settings.PREF_ICON_STYLE,
         Settings.PREF_CUSTOM_ICON_NAMES,
@@ -123,6 +133,16 @@ fun createAppearanceSettings(context: Context) = listOf(
             }
             KeyboardPresets.apply(ctx, preset)
             (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+        }
+    },
+    Setting(context, Settings.PREF_KEYBOARD_ACCENT, R.string.keyboard_accent_title) { setting ->
+        androidx.compose.foundation.layout.Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(setting.title, style = MaterialTheme.typography.bodyLarge)
+            AccentDots()
         }
     },
     Setting(context, Settings.PREF_THEME_STYLE, R.string.theme_style) { setting ->

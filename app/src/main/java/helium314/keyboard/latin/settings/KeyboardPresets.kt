@@ -11,6 +11,23 @@ import helium314.keyboard.latin.utils.prefs
 
 enum class KeyboardPreset { OWN, GBOARD, SAMSUNG }
 
+/**
+ * The accent colors the user can choose from (enter key, active shift). No blue on purpose.
+ * All of them carry a white glyph with enough contrast and sit well on both the dark and the light palette.
+ */
+enum class KeyboardAccent(val color: Int) {
+    VIOLET(0xFF8B5CF6.toInt()),
+    GREEN(0xFF16A34A.toInt()),
+    ORANGE(0xFFEA580C.toInt()),
+    PINK(0xFFDB2777.toInt()),
+    GRAPHITE(0xFF5B6472.toInt());
+
+    companion object {
+        /** The stored choice, or null if the user never picked one (or the value is unknown). */
+        fun fromName(name: String?): KeyboardAccent? = entries.firstOrNull { it.name == name }
+    }
+}
+
 /** The size related values a preset stores (portrait, not split): one place, used when a preset is chosen and when it is migrated. */
 data class PresetSizes(val height: Float, val gap: Float, val bottomPadding: Float, val sidePadding: Float, val bottomRow: Float)
 
@@ -22,6 +39,16 @@ object KeyboardPresets {
     const val PREF_PRESET_LAYOUT_V3 = "preset_layout_v3"
     /** Stored once the Samsung preset was re-applied with sizes for a 384 dp wide phone and our own palette, and Gboard got the palette. */
     const val PREF_PRESET_LAYOUT_V4 = "preset_layout_v4"
+
+    /** The user's accent choice, or null while none was made. */
+    fun readAccent(prefs: SharedPreferences): KeyboardAccent? =
+        KeyboardAccent.fromName(prefs.getString(Settings.PREF_KEYBOARD_ACCENT, null))
+
+    /** Stores the accent and restyles the keyboard. Presets never touch this value, so the choice survives a preset switch. */
+    fun setAccent(context: Context, accent: KeyboardAccent) {
+        context.prefs().edit { putString(Settings.PREF_KEYBOARD_ACCENT, accent.name) }
+        KeyboardSwitcher.getInstance().setThemeNeedsReload()
+    }
 
     fun sizesOf(preset: KeyboardPreset): PresetSizes = when (preset) {
         KeyboardPreset.OWN -> PresetSizes(

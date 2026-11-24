@@ -49,8 +49,14 @@
     <!-- Keyboard presets -->
     <string name="keyboard_preset_title">Keyboard style</string>
     <string name="keyboard_preset_own">VibeVoice</string>
-    <string name="keyboard_preset_gboard">Compact</string>
-    <string name="keyboard_preset_samsung">Spacious</string>
+    <string name="keyboard_preset_gboard">Google style</string>
+    <string name="keyboard_preset_samsung">Samsung style</string>
+    <string name="keyboard_accent_title">Accent color</string>
+    <string name="keyboard_accent_violet">Violet</string>
+    <string name="keyboard_accent_green">Green</string>
+    <string name="keyboard_accent_orange">Orange</string>
+    <string name="keyboard_accent_pink">Pink</string>
+    <string name="keyboard_accent_graphite">Graphite</string>
     <!-- Settings screen title for VibeVoice integration -->
     <string name="vibevoice_integration_title">VibeVoice typing</string>
     <string name="vibevoice_stop_dictation">Stop dictation</string>
@@ -823,8 +829,8 @@ language, hence "No language". -->
     <string name="setup_style_instruction">Try the keyboard below. What you change here applies right away.</string>
     <string name="setup_style_label">Style</string>
     <string name="setup_style_own">VibeVoice</string>
-    <string name="setup_style_gboard">Compact</string>
-    <string name="setup_style_samsung">Spacious</string>
+    <string name="setup_style_gboard">Google style</string>
+    <string name="setup_style_samsung">Samsung style</string>
     <string name="setup_style_hint">Type here to try the keyboard…</string>
     <string name="setup_vibrate_switch">Vibrate when typing</string>
 

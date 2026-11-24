@@ -212,4 +212,79 @@ class KeyboardPresetsTest {
         assertFalse(prefs.contains(Settings.PREF_THEME_COLORS))
         assertFalse(prefs.contains(Settings.PREF_THEME_COLORS_NIGHT))
     }
+
+    private fun actionColor(): Int =
+        helium314.keyboard.keyboard.KeyboardTheme.getColorsForCurrentTheme(context).get(helium314.keyboard.latin.common.ColorType.ACTION_KEY_BACKGROUND)
+
+    private fun shiftColor(): Int =
+        helium314.keyboard.keyboard.KeyboardTheme.getColorsForCurrentTheme(context).get(helium314.keyboard.latin.common.ColorType.SHIFT_KEY_ICON)
+
+    @Test
+    fun accent_gboardAndSamsungDefaultToVioletAndTakeTheChoice() {
+        for (preset in listOf(KeyboardPreset.GBOARD, KeyboardPreset.SAMSUNG)) {
+            prefs.edit().clear().commit()
+            KeyboardPresets.apply(context, preset)
+            assertEquals(0xFF8B5CF6.toInt(), actionColor())
+            assertEquals(0xFF8B5CF6.toInt(), shiftColor())
+            for (accent in KeyboardAccent.entries) {
+                KeyboardPresets.setAccent(context, accent)
+                assertEquals(accent.color, actionColor())
+                assertEquals(accent.color, shiftColor())
+            }
+        }
+    }
+
+    @Test
+    fun accent_ownKeepsItsThemeColorUntilAChoiceIsMade() {
+        prefs.edit().clear().commit()
+        val before = actionColor()
+        KeyboardPresets.apply(context, KeyboardPreset.OWN)
+        assertEquals("unset pref: OWN looks like before", before, actionColor())
+        assertFalse(prefs.contains(Settings.PREF_KEYBOARD_ACCENT))
+        KeyboardPresets.setAccent(context, KeyboardAccent.ORANGE)
+        assertEquals(KeyboardAccent.ORANGE.color, actionColor())
+        assertEquals(KeyboardAccent.ORANGE.color, shiftColor())
+    }
+
+    @Test
+    fun accent_ownOnlyRecolorsTheAccent() {
+        prefs.edit().clear().commit()
+        val colors = { helium314.keyboard.keyboard.KeyboardTheme.getColorsForCurrentTheme(context) }
+        val types = helium314.keyboard.latin.common.ColorType.entries.filter {
+            it != helium314.keyboard.latin.common.ColorType.ACTION_KEY_BACKGROUND && it != helium314.keyboard.latin.common.ColorType.SHIFT_KEY_ICON
+        }
+        val before = types.associateWith { runCatching { colors().get(it) }.getOrNull() }
+        KeyboardPresets.setAccent(context, KeyboardAccent.PINK)
+        val after = types.associateWith { runCatching { colors().get(it) }.getOrNull() }
+        val changed = types.filter { before[it] != after[it] }
+        // only accent-derived types may differ (gesture trail, toolbar enabled, popup action key, pin, emoji selected ...)
+        val allowed = setOf("GESTURE_TRAIL", "TOOL_BAR_KEY_ENABLED_BACKGROUND", "EMOJI_CATEGORY_SELECTED", "CLIPBOARD_PIN",
+            "ACTION_KEY_POPUP_KEYS_BACKGROUND")
+        assertTrue("unexpected changes: $changed", changed.all { it.name in allowed })
+    }
+
+    @Test
+    fun accent_choiceSurvivesPresetSwitchAndUpgrade() {
+        prefs.edit().clear().commit()
+        KeyboardPresets.setAccent(context, KeyboardAccent.GREEN)
+        for (preset in listOf(KeyboardPreset.SAMSUNG, KeyboardPreset.GBOARD, KeyboardPreset.OWN, KeyboardPreset.SAMSUNG)) {
+            KeyboardPresets.apply(context, preset)
+            assertEquals(KeyboardAccent.GREEN, KeyboardPresets.readAccent(prefs))
+            assertEquals(KeyboardAccent.GREEN.color, actionColor())
+        }
+        storePreviousSamsung(KeyboardPreset.SAMSUNG)
+        KeyboardPresets.setAccent(context, KeyboardAccent.PINK)
+        checkVersionUpgrade(context)
+        assertEquals(KeyboardAccent.PINK, KeyboardPresets.readAccent(prefs))
+        assertEquals(KeyboardAccent.PINK.color, actionColor())
+    }
+
+    @Test
+    fun accent_unknownStoredValueIsTreatedAsUnset() {
+        prefs.edit().clear().commit()
+        prefs.edit().putString(Settings.PREF_KEYBOARD_ACCENT, "blue").commit()
+        assertEquals(null, KeyboardPresets.readAccent(prefs))
+        KeyboardPresets.apply(context, KeyboardPreset.GBOARD)
+        assertEquals(KeyboardAccent.VIOLET.color, actionColor())
+    }
 }
