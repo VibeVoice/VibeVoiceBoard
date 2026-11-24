@@ -85,7 +85,6 @@ fun SettingsNavHost(
                 onClickLayouts = { navController.navigate(SettingsDestination.Layouts) },
                 onClickDictionaries = { navController.navigate(SettingsDestination.Dictionaries) },
                 onClickVibeVoice = { navController.navigate(SettingsDestination.VibeVoice) },
-                onClickSwitcher = { navController.navigate(SettingsDestination.Switcher) },
                 onClickBack = ::goBack,
             )
         }

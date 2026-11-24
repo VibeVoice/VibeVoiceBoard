@@ -846,6 +846,8 @@ language, hence "No language". -->
     <string name="setup_step_progress">Step %1$d of %2$d</string>
 
     <!-- Settings entry for redoing the language and keyboard-style questions -->
+    <string name="switcher_entry_title">Coming from another keyboard?</string>
+    <string name="switcher_entry_summary">Match style and languages</string>
     <string name="switcher_settings_title">Switching from another keyboard?</string>
     <string name="switcher_settings_summary">Match presets and set up languages</string>
     <string name="debug_open_setup_wizard">Open setup wizard</string>

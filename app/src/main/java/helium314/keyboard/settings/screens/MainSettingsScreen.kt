@@ -43,7 +43,6 @@ fun MainSettingsScreen(
     onClickLayouts: () -> Unit,
     onClickDictionaries: () -> Unit,
     onClickVibeVoice: () -> Unit,
-    onClickSwitcher: () -> Unit,
     onClickBack: () -> Unit,
 ) {
     SearchSettingsScreen(
@@ -60,12 +59,6 @@ fun MainSettingsScreen(
                     name = stringResource(R.string.vibevoice_integration_title),
                     onClick = onClickVibeVoice,
                     icon = R.drawable.ic_notification
-                ) { NextScreenIcon() }
-                Preference(
-                    name = stringResource(R.string.switcher_settings_title),
-                    description = stringResource(R.string.switcher_settings_summary),
-                    onClick = onClickSwitcher,
-                    icon = R.drawable.ic_ime_switcher
                 ) { NextScreenIcon() }
                 Preference(
                     name = stringResource(R.string.language_and_layouts_title),
@@ -137,7 +130,7 @@ private fun PreviewScreen() {
     initPreview(LocalContext.current)
     Theme(previewDark) {
         Surface {
-            MainSettingsScreen({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+            MainSettingsScreen({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
         }
     }
 }

@@ -81,6 +81,7 @@ private fun createSettings(context: Context) = createAboutSettings(context) + cr
 
 object SettingsWithoutKey {
     const val EDIT_PERSONAL_DICTIONARY = "edit_personal_dictionary"
+    const val SWITCHER = "switcher_entry"
     const val APP = "app"
     const val VERSION = "version"
     const val LICENSE = "license"

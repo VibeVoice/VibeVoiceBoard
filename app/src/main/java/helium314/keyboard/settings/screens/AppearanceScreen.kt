@@ -39,6 +39,7 @@ import helium314.keyboard.settings.Setting
 import helium314.keyboard.settings.preferences.Preference
 import helium314.keyboard.settings.SearchSettingsScreen
 import helium314.keyboard.settings.SettingsActivity
+import helium314.keyboard.settings.SettingsDestination
 import helium314.keyboard.settings.preferences.SliderPreference
 import helium314.keyboard.settings.preferences.SwitchPreference
 import helium314.keyboard.latin.utils.Theme
@@ -71,6 +72,7 @@ fun AppearanceScreen(
         R.string.settings_screen_theme,
         Settings.PREF_KEYBOARD_PRESET,
         Settings.PREF_KEYBOARD_ACCENT,
+        SettingsWithoutKey.SWITCHER,
         Settings.PREF_THEME_STYLE,
         Settings.PREF_ICON_STYLE,
         Settings.PREF_CUSTOM_ICON_NAMES,
@@ -144,6 +146,14 @@ fun createAppearanceSettings(context: Context) = listOf(
             Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             AccentDots()
         }
+    },
+    // a quiet way into the switcher wizard (it used to be a top level entry); the nav host opens the screen
+    Setting(context, SettingsWithoutKey.SWITCHER, R.string.switcher_entry_title, R.string.switcher_entry_summary) { setting ->
+        Preference(
+            name = setting.title,
+            description = setting.description,
+            onClick = { SettingsDestination.navigateTo(SettingsDestination.Switcher) }
+        )
     },
     Setting(context, Settings.PREF_THEME_STYLE, R.string.theme_style) { setting ->
         val ctx = LocalContext.current
