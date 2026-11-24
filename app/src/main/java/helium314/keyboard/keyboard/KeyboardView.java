@@ -53,7 +53,7 @@ public class KeyboardView extends View {
     // Default keyLabelFlags from {@link KeyboardTheme}.
     // Currently only "alignHintLabelToBottom" is supported.
     private final int mDefaultKeyLabelFlags;
-    private static final float HINT_INSET_DP = 3f;
+    private static final float HINT_INSET_DP = 1.5f;
     private final float mKeyHintLetterPadding;
     private final float mKeyHintTopInset;
     private final String mKeyPopupHintLetter;

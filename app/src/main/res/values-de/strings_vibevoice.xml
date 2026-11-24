@@ -158,9 +158,9 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_style_title">Stil und Gefühl</string>
     <string name="setup_style_instruction">Probiere unten die Tastatur aus. Was du hier änderst, gilt sofort.</string>
     <string name="setup_style_label">Stil</string>
-    <string name="setup_style_own">VibeVoice-Standard</string>
-    <string name="setup_style_gboard">Gboard</string>
-    <string name="setup_style_samsung">Samsung</string>
+    <string name="setup_style_own">VibeVoice</string>
+    <string name="setup_style_gboard">Kompakt</string>
+    <string name="setup_style_samsung">Geräumig</string>
     <string name="setup_style_hint">Hier tippen, um die Tastatur auszuprobieren…</string>
     <string name="setup_vibrate_switch">Beim Tippen vibrieren</string>
     <!-- "VibeVoice typing" is the feature's name, not a description, so it stays as it is. The
@@ -186,10 +186,10 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="draw_keys">Tasten anzeigen</string>
     <string name="draw_keys_summary">Sichtbare Tastenkappen anzeigen</string>
     <!-- Keyboard presets -->
-    <string name="keyboard_preset_title">Tastatur wie…</string>
-    <string name="keyboard_preset_own">Eigenes</string>
-    <string name="keyboard_preset_gboard">Wie Gboard</string>
-    <string name="keyboard_preset_samsung">Wie Samsung Keyboard</string>
+    <string name="keyboard_preset_title">Tastaturstil</string>
+    <string name="keyboard_preset_own">VibeVoice</string>
+    <string name="keyboard_preset_gboard">Kompakt</string>
+    <string name="keyboard_preset_samsung">Geräumig</string>
     <!-- Switcher wizard (switching from another keyboard) -->
     <string name="switcher_settings_title">Von einer anderen Tastatur wechseln?</string>
     <string name="switcher_settings_summary">Layout anpassen und Sprachen einrichten</string>
