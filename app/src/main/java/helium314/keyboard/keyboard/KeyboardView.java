@@ -44,6 +44,7 @@ import helium314.keyboard.latin.suggestions.MoreSuggestionsView;
 import helium314.keyboard.latin.utils.TypefaceUtils;
 
 import java.util.HashSet;
+import java.util.Locale;
 
 /** A view that renders a virtual {@link Keyboard}. */
 // todo: this ThemeStyle-dependent stuff really should not be in here!
@@ -393,7 +394,10 @@ public class KeyboardView extends View {
         if (label == null || !(this instanceof MainKeyboardView) || label.codePointCount(0, label.length()) != 1) return label;
         final SettingsValues values = Settings.getValues();
         if (values == null || values.mKeyboardPreset != KeyboardPreset.SAMSUNG) return label;
-        return Character.isLetter(label.codePointAt(0)) ? label.toUpperCase(java.util.Locale.ROOT) : label;
+        if (!Character.isLetter(label.codePointAt(0))) return label;
+        final Keyboard keyboard = getKeyboard();
+        final Locale locale = (keyboard != null && keyboard.mId != null) ? keyboard.mId.getLocale() : Locale.getDefault();
+        return label.toUpperCase(locale);
     }
 
     protected void onDrawKeyTopVisuals(@NonNull final Key key, @NonNull final Canvas canvas,
