@@ -206,6 +206,7 @@ class VoiceWaveView @JvmOverloads constructor(
         // slowly. The web component uses one constant for both directions, which is what made the
         // swell arrive late and then linger. Attack is more than three times the release here.
         level += (raw - level) * (if (raw > level) attack else damping)
+        if (BuildConfig.DEBUG) LevelLog.drawnLevel = level // sampled by the debug level log
 
         // A microphone that delivers exact zeros is not a quiet room, and a wave that keeps drifting
         // over it looks like a working microphone. Ease to a flat, motionless, dim line instead of

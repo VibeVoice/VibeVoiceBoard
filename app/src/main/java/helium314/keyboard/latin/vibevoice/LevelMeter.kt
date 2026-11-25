@@ -36,6 +36,22 @@ class LevelMeter {
     private var gate = 0.0
     private var held = 0.0
 
+    // What the last [update] measured, for the debug level log only (plain fields: one writer, the capture loop).
+    /** RMS of the whole read, unfiltered. */
+    var lastWholeRms = 0.0
+        private set
+    /** RMS of the freshest quarter, unfiltered: what the displayed level is made from. */
+    var lastTailRms = 0.0
+        private set
+    /** RMS of the freshest quarter after the high-pass: what the gate and the floor are decided on. */
+    var lastFilteredRms = 0.0
+        private set
+    var lastFloor = 0.0
+        private set
+    /** 0..1, the gate over the raw level. */
+    var lastGate = 0.0
+        private set
+
     /** The microphone has been delivering exact zeros for at least [SILENT_NOW_BYTES]. */
     var silentNow = false
         private set
@@ -49,6 +65,11 @@ class LevelMeter {
         silentNow = false
         gate = 0.0
         held = 0.0
+        lastWholeRms = 0.0
+        lastTailRms = 0.0
+        lastFilteredRms = 0.0
+        lastFloor = 0.0
+        lastGate = 0.0
     }
 
     /** Takes one read of 16-bit little-endian mono PCM and returns the display level, 0..1. */
@@ -76,6 +97,7 @@ class LevelMeter {
         val tailStart = (numSamples * 3) / 4
         var squares = 0.0
         var rawSquares = 0.0
+        var wholeSquares = 0.0
         var x1 = hpIn
         var y1 = hpOut
         for (i in 0 until numSamples) {
@@ -85,6 +107,7 @@ class LevelMeter {
             val y = HP_COEFFICIENT * (y1 + x - x1)
             x1 = x
             y1 = y
+            wholeSquares += x * x
             if (i >= tailStart) {
                 squares += y * y
                 rawSquares += x * x
@@ -129,6 +152,11 @@ class LevelMeter {
         // than dropping to the room. A dead microphone still goes flat at once.
         held = if (allZero) 0.0 else maxOf(now, held * exp(-seconds / LEVEL_RELEASE_SECONDS))
         if (allZero) gate = 0.0
+        lastWholeRms = sqrt(wholeSquares / numSamples)
+        lastTailRms = rawRms
+        lastFilteredRms = rms
+        lastFloor = floor
+        lastGate = gate
         return held.toFloat()
     }
 

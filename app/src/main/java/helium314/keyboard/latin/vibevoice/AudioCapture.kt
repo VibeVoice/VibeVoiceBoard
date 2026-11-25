@@ -5,7 +5,9 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
+import helium314.keyboard.latin.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -53,6 +55,9 @@ class AudioCapture(
     /** Measures the display level on a copy of the samples; [onAudio] always gets the buffer as read. */
     private val meter = LevelMeter()
 
+    /** Debug builds only: level numbers into the on-device log. Null in release, so nothing is measured or written. */
+    private val levelLog: LevelLog? = if (BuildConfig.DEBUG) LevelLog(sink = { VibeVoiceDebugLogger.log(it) }) else null
+
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -80,6 +85,7 @@ class AudioCapture(
         silenceSeen = false
         micSilentNow = false
         meter.reset()
+        levelLog?.begin(SystemClock.elapsedRealtime())
         synchronized(lock) {
             if (!running) {
                 releaseLocked()
@@ -100,6 +106,7 @@ class AudioCapture(
             currentLevel = 0f
             micSilentNow = false
         }
+        levelLog?.end()
         oldJob?.cancel()
     }
 
@@ -214,6 +221,10 @@ class AudioCapture(
                 readsSinceInit++
                 currentLevel = meter.update(buffer, read)
                 micSilentNow = meter.silentNow
+                levelLog?.onRead(
+                    SystemClock.elapsedRealtime(), meter.lastWholeRms, meter.lastTailRms, meter.lastFilteredRms,
+                    currentLevel, meter.lastFloor, meter.lastGate
+                )
 
                 var isAllZeros = true
                 for (i in 0 until read) {
