@@ -190,6 +190,9 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="keyboard_preset_own">VibeVoice</string>
     <string name="keyboard_preset_gboard">Google-Stil</string>
     <string name="keyboard_preset_samsung">Samsung-Stil</string>
+    <string name="appearance_section_look">Aussehen</string>
+    <string name="appearance_section_advanced_theme">Erweitertes Design</string>
+    <string name="key_shape">Tastenform</string>
     <string name="keyboard_accent_title">Akzentfarbe</string>
     <string name="keyboard_accent_vibevoice">VibeVoice</string>
     <string name="keyboard_accent_auto">Automatisch (Systemfarbe)</string>

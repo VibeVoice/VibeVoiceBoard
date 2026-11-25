@@ -51,6 +51,10 @@
     <string name="keyboard_preset_own">VibeVoice</string>
     <string name="keyboard_preset_gboard">Google style</string>
     <string name="keyboard_preset_samsung">Samsung style</string>
+    <string name="appearance_section_look">Look</string>
+    <string name="appearance_section_advanced_theme">Advanced theme</string>
+    <!-- the setting that was titled "Style" (Material, Holo, Rounded) -->
+    <string name="key_shape">Key shape</string>
     <string name="keyboard_accent_title">Accent color</string>
     <string name="keyboard_accent_vibevoice">VibeVoice</string>
     <string name="keyboard_accent_auto">Auto (system color)</string>

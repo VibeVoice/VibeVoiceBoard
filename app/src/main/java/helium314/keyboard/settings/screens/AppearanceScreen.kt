@@ -69,10 +69,11 @@ fun AppearanceScreen(
         Log.v("irrelevant", "stupid way to trigger recomposition on preference change")
     val dayNightMode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && prefs.getBoolean(Settings.PREF_THEME_DAY_NIGHT, Defaults.PREF_THEME_DAY_NIGHT)
     val items = listOf(
-        R.string.settings_screen_theme,
+        R.string.appearance_section_look,
         Settings.PREF_KEYBOARD_PRESET,
         Settings.PREF_KEYBOARD_ACCENT,
         SettingsWithoutKey.SWITCHER,
+        R.string.appearance_section_advanced_theme,
         Settings.PREF_THEME_STYLE,
         Settings.PREF_ICON_STYLE,
         Settings.PREF_CUSTOM_ICON_NAMES,
@@ -152,7 +153,7 @@ fun createAppearanceSettings(context: Context) = listOf(
             onClick = { SettingsDestination.navigateTo(SettingsDestination.Switcher) }
         )
     },
-    Setting(context, Settings.PREF_THEME_STYLE, R.string.theme_style) { setting ->
+    Setting(context, Settings.PREF_THEME_STYLE, R.string.key_shape) { setting ->
         val ctx = LocalContext.current
         val prefs = ctx.prefs()
         val items = KeyboardTheme.STYLES.map {
