@@ -146,6 +146,7 @@
     <string name="vibevoice_waves_count">Number of waves</string>
     <string name="vibevoice_waves_speed">Speed</string>
     <string name="vibevoice_waves_jitter">Roughness</string>
+    <string name="vibevoice_waves_noise_floor">Noise floor</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
     <!-- On the space bar while a session runs. %s is the elapsed time, m:ss. -->

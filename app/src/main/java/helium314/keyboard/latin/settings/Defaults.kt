@@ -151,6 +151,8 @@ object Defaults {
     /** Short-wavelength roughness that only appears while there is sound. */
     const val PREF_WAVE_JITTER = 0.21f
     const val PREF_WAVE_COUNT = 6.0f
+    /** How far above the room's steady noise a sound must rise before the waves react to it. */
+    const val PREF_WAVE_NOISE_FLOOR = 1.75f
     /** How fast the waves follow a rising voice. */
     const val PREF_WAVE_ATTACK = 0.70f
     /** How fast they settle once it stops. Low values let them swing on like a resonator. */
