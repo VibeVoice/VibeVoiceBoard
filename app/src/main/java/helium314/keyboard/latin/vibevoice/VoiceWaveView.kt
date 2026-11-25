@@ -11,6 +11,7 @@ import android.view.View
 import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.SystemAccent
 import helium314.keyboard.latin.utils.prefs
 import java.lang.ref.WeakReference
 import kotlin.math.cos
@@ -106,7 +107,7 @@ class VoiceWaveView @JvmOverloads constructor(
         // try/catch is the honest way to say so -- but it belongs on a once-per-session call, not
         // on a path that runs thirty times a second. A theme change re-inflates the input view, so
         // a new view with a freshly resolved colour is what follows it anyway.
-        baseColor = VoiceGlow.RECORDING_COLOR
+        baseColor = SystemAccent.recordingColor(context)
         if (running) return
         running = true
         phase = 0f

@@ -76,6 +76,9 @@ class StripScreenshotTest {
     @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_own_pink_light() = render("accent_own_pink_light", KeyboardPreset.OWN, accent = KeyboardAccent.PINK)
     @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_own_unset_dark() = render("accent_own_unset_dark", KeyboardPreset.OWN)
 
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_auto_dark() = render("accent_samsung_auto_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.AUTO)
+    @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_auto_light() = render("accent_gboard_auto_light", KeyboardPreset.GBOARD, accent = KeyboardAccent.AUTO)
+    @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_own_auto_dark() = render("accent_own_auto_dark", KeyboardPreset.OWN, accent = KeyboardAccent.AUTO)
     @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_vibevoice_dark() = render("accent_samsung_vibevoice_dark", KeyboardPreset.SAMSUNG, accent = KeyboardAccent.VIBEVOICE)
     @Test @Config(qualifiers = "w384dp-h832dp-notnight-600dpi") fun accent_gboard_vibevoice_light() = render("accent_gboard_vibevoice_light", KeyboardPreset.GBOARD, accent = KeyboardAccent.VIBEVOICE)
     @Test @Config(qualifiers = "w384dp-h832dp-night-600dpi") fun accent_samsung_customyellow_dark() = render("accent_samsung_customyellow_dark", KeyboardPreset.SAMSUNG, custom = 0xFFFFD60A.toInt())

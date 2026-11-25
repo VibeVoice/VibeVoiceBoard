@@ -58,6 +58,7 @@ import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.SystemAccent
 import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.ToolbarMode
@@ -854,7 +855,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // allocations on the UI thread each time -- during a rotation, exactly when there is
             // least room for it.
             val prefs = context.prefs()
-            val accent = VoiceGlow.RECORDING_COLOR // the same colour as the waves and the floating mark
+            val accent = SystemAccent.recordingColor(context) // the same colour as the waves and the floating mark
             // The black mark on a light keyboard, the white one on a dark keyboard.
             val markRes = VoiceGlow.markFor(Settings.getValues().mColors.get(ColorType.MAIN_BACKGROUND))
             val key = "$inkPx|$accent|$markRes|" +

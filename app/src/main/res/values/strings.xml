@@ -53,6 +53,7 @@
     <string name="keyboard_preset_samsung">Samsung style</string>
     <string name="keyboard_accent_title">Accent color</string>
     <string name="keyboard_accent_vibevoice">VibeVoice</string>
+    <string name="keyboard_accent_auto">Auto (system color)</string>
     <string name="keyboard_accent_custom">Custom</string>
     <string name="keyboard_accent_custom_title">Custom accent color</string>
     <string name="keyboard_accent_hue">Hue</string>

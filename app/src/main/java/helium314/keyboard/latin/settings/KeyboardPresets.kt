@@ -7,6 +7,7 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.keyboard.KeyboardTheme
 import helium314.keyboard.keyboard.internal.keyboard_parser.LayoutParser
 import helium314.keyboard.latin.utils.LayoutType
+import helium314.keyboard.latin.utils.SystemAccent
 import helium314.keyboard.latin.utils.prefs
 
 enum class KeyboardPreset { OWN, GBOARD, SAMSUNG }
@@ -23,12 +24,14 @@ enum class KeyboardAccent(val color: Int) {
     ORANGE(0xFFEA580C.toInt()),
     PINK(0xFFDB2777.toInt()),
     GRAPHITE(0xFF5B6472.toInt()),
+    /** the phone's Material You accent ([helium314.keyboard.latin.utils.SystemAccent.keyboardAccent]); [color] is the violet used where there is none */
+    AUTO(0xFF8B5CF6.toInt()),
     /** the color the user mixed himself, stored in [Settings.PREF_KEYBOARD_ACCENT_CUSTOM]; [color] is not used */
     CUSTOM(0);
 
     companion object {
         /** The fixed colors, in the order the dots show them (the custom color follows as the last dot). */
-        val PALETTE: List<KeyboardAccent> = entries.filter { it != CUSTOM }
+        val PALETTE: List<KeyboardAccent> = entries.filter { it != CUSTOM && it != AUTO }
 
         /** The stored choice, or null if the user never picked one (or the value is unknown). */
         fun fromName(name: String?): KeyboardAccent? = entries.firstOrNull { it.name == name }
@@ -63,10 +66,14 @@ object KeyboardPresets {
         return if (accent == KeyboardAccent.CUSTOM && readCustomColor(prefs) == null) null else accent
     }
 
-    /** The color of the chosen accent (also the custom one), or null while none was made. */
-    fun readAccentColor(prefs: SharedPreferences): Int? = when (val accent = readAccent(prefs)) {
+    /**
+     * The color of the chosen accent (also the custom one), or null while none was made. "Auto" is the system
+     * accent for [night] when a [context] is given and the phone has one, else violet.
+     */
+    fun readAccentColor(prefs: SharedPreferences, context: Context? = null, night: Boolean = false): Int? = when (val accent = readAccent(prefs)) {
         null -> null
         KeyboardAccent.CUSTOM -> readCustomColor(prefs)
+        KeyboardAccent.AUTO -> context?.let { SystemAccent.keyboardAccent(it, night) } ?: accent.color
         else -> accent.color
     }
 

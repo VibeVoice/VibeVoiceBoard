@@ -154,7 +154,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
         private fun getThemeColors(themeName: String, themeStyle: String, context: Context, prefs: SharedPreferences, isNight: Boolean): Colors {
             val colors = buildThemeColors(themeName, themeStyle, context, prefs, isNight)
             // a chosen accent (any preset) gets a glyph by luminance; Own without a choice keeps its old look
-            val chosen = KeyboardPresets.readAccentColor(prefs) != null || Settings.readKeyboardPreset(prefs) != KeyboardPreset.OWN
+            val chosen = KeyboardPresets.readAccentColor(prefs, context, isNight) != null || Settings.readKeyboardPreset(prefs) != KeyboardPreset.OWN
             if (chosen && colors is DefaultColors) colors.useLuminanceGlyphs()
             return colors
         }
@@ -163,7 +163,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
             val hasBorders = Settings.readDrawKeys(prefs)
             val backgroundImage = Settings.readUserBackgroundImage(context, isNight)
             // the accent the user picked; the Own preset only recolors the accent of its theme, the others carry it in their palette
-            val accentColor = KeyboardPresets.readAccentColor(prefs)
+            val accentColor = KeyboardPresets.readAccentColor(prefs, context, isNight)
             val ownAccent = if (Settings.readKeyboardPreset(prefs) == KeyboardPreset.OWN) accentColor else null
             fun acc(default: Int) = ownAccent ?: default
             return when (themeName) {

@@ -365,6 +365,34 @@ class KeyboardPresetsTest {
     }
 
     @Test
+    fun accent_autoTakesTheSystemAccentForEveryPresetAndKeepsAContrastingGlyph() {
+        val night = helium314.keyboard.latin.utils.SystemAccent.isNight(context)
+        val system = helium314.keyboard.latin.utils.SystemAccent.keyboardAccent(context, night)!!
+        for (preset in KeyboardPreset.entries) {
+            prefs.edit().clear().commit()
+            KeyboardPresets.apply(context, preset)
+            KeyboardPresets.setAccent(context, KeyboardAccent.AUTO)
+            assertEquals(KeyboardAccent.AUTO, KeyboardPresets.readAccent(prefs))
+            assertEquals(system, actionColor())
+            assertEquals(helium314.keyboard.latin.utils.accentGlyphColor(system), themeColors().get(actionIcon))
+        }
+        // the choice survives a preset switch
+        KeyboardPresets.apply(context, KeyboardPreset.GBOARD)
+        assertEquals(KeyboardAccent.AUTO, KeyboardPresets.readAccent(prefs))
+        assertEquals(system, actionColor())
+        assertFalse(KeyboardAccent.PALETTE.contains(KeyboardAccent.AUTO))
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(sdk = [30])
+    fun accent_autoIsVioletBelowAndroid12() {
+        prefs.edit().clear().commit()
+        KeyboardPresets.apply(context, KeyboardPreset.SAMSUNG)
+        KeyboardPresets.setAccent(context, KeyboardAccent.AUTO)
+        assertEquals(KeyboardAccent.VIOLET.color, actionColor())
+    }
+
+    @Test
     fun accent_activeShiftGlyphStaysReadable() {
         val shift = helium314.keyboard.latin.common.ColorType.SHIFT_KEY_ICON
         val text = helium314.keyboard.latin.common.ColorType.KEY_TEXT

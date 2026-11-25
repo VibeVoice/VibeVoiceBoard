@@ -192,6 +192,7 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="keyboard_preset_samsung">Samsung-Stil</string>
     <string name="keyboard_accent_title">Akzentfarbe</string>
     <string name="keyboard_accent_vibevoice">VibeVoice</string>
+    <string name="keyboard_accent_auto">Automatisch (Systemfarbe)</string>
     <string name="keyboard_accent_custom">Eigene</string>
     <string name="keyboard_accent_custom_title">Eigene Akzentfarbe</string>
     <string name="keyboard_accent_hue">Farbton</string>

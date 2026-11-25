@@ -37,13 +37,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.settings.KeyboardAccent
 import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.SystemAccent
+import helium314.keyboard.latin.utils.accentGlyphColor
 import helium314.keyboard.latin.utils.getActivity
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.settings.SettingsActivity
@@ -55,6 +59,7 @@ private fun accentLabel(accent: KeyboardAccent) = when (accent) {
     KeyboardAccent.ORANGE -> R.string.keyboard_accent_orange
     KeyboardAccent.PINK -> R.string.keyboard_accent_pink
     KeyboardAccent.GRAPHITE -> R.string.keyboard_accent_graphite
+    KeyboardAccent.AUTO -> R.string.keyboard_accent_auto
     KeyboardAccent.CUSTOM -> R.string.keyboard_accent_custom
 }
 
@@ -90,9 +95,10 @@ fun AccentDots(modifier: Modifier = Modifier, ringColor: Color = MaterialTheme.c
     }
 
     @Composable
-    fun Dot(isSelected: Boolean, label: String, fill: Brush, onClick: () -> Unit) {
+    fun Dot(isSelected: Boolean, label: String, fill: Brush, mark: String? = null, markColor: Color = Color.White, onClick: () -> Unit) {
         Box(
-            Modifier
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
                 .size(28.dp)
                 .clip(CircleShape)
                 .border(BorderStroke(if (isSelected) 2.dp else 0.dp, if (isSelected) ringColor else Color.Transparent), CircleShape)
@@ -101,7 +107,9 @@ fun AccentDots(modifier: Modifier = Modifier, ringColor: Color = MaterialTheme.c
                 .background(fill)
                 .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
                 .semantics { contentDescription = label }
-        )
+        ) {
+            if (mark != null) Text(mark, color = markColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
     }
 
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -111,6 +119,16 @@ fun AccentDots(modifier: Modifier = Modifier, ringColor: Color = MaterialTheme.c
                 KeyboardPresets.setAccent(ctx, accent)
                 restyle()
             }
+        }
+        // "Auto": the phone's own accent, shown live, with an A on it
+        val autoColor = SystemAccent.keyboardAccent(ctx) ?: KeyboardAccent.AUTO.color
+        Dot(
+            selected == KeyboardAccent.AUTO, stringResource(R.string.keyboard_accent_auto),
+            Brush.linearGradient(listOf(Color(autoColor), Color(autoColor))), mark = "A", markColor = Color(accentGlyphColor(autoColor))
+        ) {
+            selected = KeyboardAccent.AUTO
+            KeyboardPresets.setAccent(ctx, KeyboardAccent.AUTO)
+            restyle()
         }
         val custom = customColor
         Dot(

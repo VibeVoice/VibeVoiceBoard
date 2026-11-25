@@ -10,6 +10,7 @@ import helium314.keyboard.latin.settings.KeyboardAccent
 import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.SystemAccent
 import helium314.keyboard.latin.utils.prefs
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -95,15 +96,26 @@ class VoiceWaveColorTest {
             assertTrue("wave colours differ: ${colours.map { "#%06X".format(it) }}",
                 Math.abs(Color.red(c) - Color.red(first)) <= 3 && Math.abs(Color.green(c) - Color.green(first)) <= 3 && Math.abs(Color.blue(c) - Color.blue(first)) <= 3)
         }
-        // and it is the blue-turquoise
-        val want = VoiceGlow.RECORDING_COLOR
+        // and it is the system accent for night (system_accent1_100), not anything of the theme
+        val want = SystemAccent.recordingColor(context, night = true)
+        println("WAVECOLOR expected system_accent1_100=#%06X (Robolectric's own palette, not a phone's)".format(want and 0xFFFFFF))
         assertTrue("#%06X is not #%06X".format(first, want and 0xFFFFFF),
             Math.abs(Color.red(first) - Color.red(want)) <= 4 && Math.abs(Color.green(first) - Color.green(want)) <= 4 && Math.abs(Color.blue(first) - Color.blue(want)) <= 4)
-        assertTrue("hue ${hue(first)}", hue(first) in 185f..205f)
     }
 
     @Test
     fun glowAndFloatingMarkShareTheWaveColour() {
+        assertEquals(SystemAccent.recordingColor(context), VoiceOverlay(context).barColor)
+    }
+
+    @Test
+    @Config(sdk = [30], qualifiers = "w384dp-h832dp-night-600dpi")
+    fun beforeAndroid12TheWavesFallBackToTheBlueTurquoise() {
+        context.prefs().edit(commit = true) { clear() }
+        val (rgb, _) = waveColor(draw(Color.TRANSPARENT))
+        println("WAVECOLOR sdk30 rgb=#%06X".format(rgb))
+        val want = VoiceGlow.RECORDING_COLOR
+        assertTrue("#%06X".format(rgb), Math.abs(Color.red(rgb) - Color.red(want)) <= 4 && Math.abs(Color.green(rgb) - Color.green(want)) <= 4 && Math.abs(Color.blue(rgb) - Color.blue(want)) <= 4)
         assertEquals(VoiceGlow.RECORDING_COLOR, VoiceOverlay(context).barColor)
     }
 }
