@@ -89,7 +89,7 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
         }
         // the real Samsung keyboard has a flatter number row; the other rows take the height, so the keyboard stays as tall
         if (params.mId.element.takesFunctionalKeys && params.mId.numberRowEnabled && keysInRows.size == 5
-            && Settings.getValues().mKeyboardPreset == KeyboardPreset.SAMSUNG) {
+            && Settings.getValues()?.mKeyboardPreset == KeyboardPreset.SAMSUNG) {
             val n = keysInRows.size
             val numberRowScale = n * SAMSUNG_NUMBER_ROW_RATIO / (n - 1 + SAMSUNG_NUMBER_ROW_RATIO)
             val otherRowScale = (n - numberRowScale) / (n - 1)
