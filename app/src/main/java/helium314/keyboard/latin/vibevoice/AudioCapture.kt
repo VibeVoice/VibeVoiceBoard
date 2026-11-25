@@ -5,7 +5,9 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
+import helium314.keyboard.latin.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,6 +30,8 @@ interface AudioSource {
     val currentLevel: Float
     /** The microphone delivered a second or more of exact zeros at some point since [start]. */
     val silenceSeen: Boolean get() = false
+    /** The microphone is delivering exact zeros right now (for 300 ms or more); clears with the first sound. */
+    val micSilentNow: Boolean get() = false
     fun start(): Boolean
     fun stop()
 }
@@ -45,6 +49,14 @@ class AudioCapture(
         private set
     @Volatile override var silenceSeen = false
         private set
+    @Volatile override var micSilentNow = false
+        private set
+
+    /** Measures the display level on a copy of the samples; [onAudio] always gets the buffer as read. */
+    private val meter = LevelMeter()
+
+    /** Debug builds only: level numbers into the on-device log. Null in release, so nothing is measured or written. */
+    private val levelLog: LevelLog? = if (BuildConfig.DEBUG) LevelLog(sink = { VibeVoiceDebugLogger.log(it) }) else null
 
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
@@ -71,6 +83,9 @@ class AudioCapture(
         }
         currentLevel = 0f
         silenceSeen = false
+        micSilentNow = false
+        meter.reset()
+        levelLog?.begin(SystemClock.elapsedRealtime())
         synchronized(lock) {
             if (!running) {
                 releaseLocked()
@@ -89,7 +104,9 @@ class AudioCapture(
             job = null
             releaseLocked()
             currentLevel = 0f
+            micSilentNow = false
         }
+        levelLog?.end()
         oldJob?.cancel()
     }
 
@@ -202,7 +219,12 @@ class AudioCapture(
 
             if (read > 0) {
                 readsSinceInit++
-                currentLevel = level(buffer, read)
+                currentLevel = meter.update(buffer, read)
+                micSilentNow = meter.silentNow
+                levelLog?.onRead(
+                    SystemClock.elapsedRealtime(), meter.lastWholeRms, meter.lastTailRms, meter.lastFilteredRms,
+                    currentLevel, meter.lastFloor, meter.lastGate, meter.lastFullScale
+                )
 
                 var isAllZeros = true
                 for (i in 0 until read) {
@@ -279,7 +301,11 @@ class AudioCapture(
         /** One second of 16 kHz 16-bit mono. */
         private const val SILENCE_SEEN_BYTES = 32_000L
 
-        /** The level for the waves from the freshest quarter of a read, as in [VibeVoiceClient]. */
+        /**
+         * The raw level of the freshest quarter of a read, as in [VibeVoiceClient]. The waves no
+         * longer use it -- [LevelMeter] subtracts the room's noise first -- but it is the curve
+         * the meter's output is held to.
+         */
         internal fun level(buffer: ByteArray, read: Int): Float {
             val numSamples = read / 2
             if (numSamples <= 0) return 0f

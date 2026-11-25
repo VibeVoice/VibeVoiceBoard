@@ -19,6 +19,8 @@ interface VoiceSession {
     val micSilenceSeen: Boolean get() = false
     /** The session ended without text because the server was never reachable or kept refusing. */
     val serverUnavailable: Boolean get() = false
+    /** The microphone is delivering exact zeros right now; the waves go still while it does. */
+    val micSilentNow: Boolean get() = false
     fun startStreaming()
     fun stopStreaming()
     fun cancel()

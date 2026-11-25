@@ -36,12 +36,15 @@ import helium314.keyboard.latin.common.ColorType;
 import helium314.keyboard.latin.common.Colors;
 import helium314.keyboard.latin.common.Constants;
 import helium314.keyboard.latin.common.StringUtilsKt;
+import helium314.keyboard.latin.settings.KeyboardPreset;
 import helium314.keyboard.latin.settings.Settings;
+import helium314.keyboard.latin.settings.SettingsValues;
 import helium314.keyboard.latin.suggestions.MoreSuggestions;
 import helium314.keyboard.latin.suggestions.MoreSuggestionsView;
 import helium314.keyboard.latin.utils.TypefaceUtils;
 
 import java.util.HashSet;
+import java.util.Locale;
 
 /** A view that renders a virtual {@link Keyboard}. */
 // todo: this ThemeStyle-dependent stuff really should not be in here!
@@ -51,7 +54,9 @@ public class KeyboardView extends View {
     // Default keyLabelFlags from {@link KeyboardTheme}.
     // Currently only "alignHintLabelToBottom" is supported.
     private final int mDefaultKeyLabelFlags;
+    private static final float HINT_INSET_DP = 1.5f;
     private final float mKeyHintLetterPadding;
+    private final float mKeyHintTopInset;
     private final String mKeyPopupHintLetter;
     private final float mKeyPopupHintLetterPadding;
     private final float mKeyShiftedLetterHintPadding;
@@ -125,8 +130,11 @@ public class KeyboardView extends View {
 
         mSpacebarIconWidthRatio = keyboardViewAttr.getFloat(
                 R.styleable.KeyboardView_spacebarIconWidthRatio, 1.0f);
+        // Draw keys: hint letters sit a little further in, clear of the cap's right and top edge.
         mKeyHintLetterPadding = keyboardViewAttr.getDimension(
-                R.styleable.KeyboardView_keyHintLetterPadding, 0.0f);
+                R.styleable.KeyboardView_keyHintLetterPadding, 0.0f)
+                + (mColors.getHasKeyBorders() ? HINT_INSET_DP * getResources().getDisplayMetrics().density : 0f);
+        mKeyHintTopInset = mColors.getHasKeyBorders() ? HINT_INSET_DP * getResources().getDisplayMetrics().density : 0f;
         mKeyPopupHintLetter = Settings.getValues().mShowsPopupHints
                 ? keyboardViewAttr.getString(R.styleable.KeyboardView_keyPopupHintLetter)
                 : "";
@@ -376,6 +384,22 @@ public class KeyboardView extends View {
     }
 
     // Draw key top visuals.
+    private boolean isSamsungPreset() {
+        final SettingsValues values = Settings.getValues();
+        return this instanceof MainKeyboardView && values != null && values.mKeyboardPreset == KeyboardPreset.SAMSUNG;
+    }
+
+    /** The real Samsung keyboard shows capital letters on the keys while typing lowercase; only the label changes. */
+    private String samsungUpperCase(final String label) {
+        if (label == null || !(this instanceof MainKeyboardView) || label.codePointCount(0, label.length()) != 1) return label;
+        final SettingsValues values = Settings.getValues();
+        if (values == null || values.mKeyboardPreset != KeyboardPreset.SAMSUNG) return label;
+        if (!Character.isLetter(label.codePointAt(0))) return label;
+        final Keyboard keyboard = getKeyboard();
+        final Locale locale = (keyboard != null && keyboard.mId != null) ? keyboard.mId.getLocale() : Locale.getDefault();
+        return label.toUpperCase(locale);
+    }
+
     protected void onDrawKeyTopVisuals(@NonNull final Key key, @NonNull final Canvas canvas,
             @NonNull final Paint paint, @NonNull final KeyDrawParams params) {
         final int keyWidth = key.getDrawWidth();
@@ -389,7 +413,7 @@ public class KeyboardView extends View {
                 : key.getIcon(keyboard.mIconsSet, params.mAnimAlpha);
         float labelX = centerX;
         float labelBaseline = centerY;
-        final String label = key.getLabel();
+        final String label = samsungUpperCase(key.getLabel());
         if (label != null) {
             paint.setTypeface(KeyboardTypeface.resolve(label, key.selectTypeface(params)));
             paint.setTextSize(key.selectTextSize(params) * mFontSizeMultiplier);
@@ -494,7 +518,7 @@ public class KeyboardView extends View {
                 // The hint letter is placed at top-right corner of the key. Used mainly on phone.
                 final float hintDigitWidth = TypefaceUtils.getReferenceDigitWidth(paint);
                 final float hintLabelWidth = TypefaceUtils.getStringWidth(hintLabel, paint);
-                hintBaseline = -paint.ascent();
+                hintBaseline = -paint.ascent() + mKeyHintTopInset;
                 hintX = isFunctionalKeyAndRoundedStyle
                         ? keyWidth - hintBaseline
                         : keyWidth - mKeyHintLetterPadding - Math.max(hintDigitWidth, hintLabelWidth) / 2.0f;

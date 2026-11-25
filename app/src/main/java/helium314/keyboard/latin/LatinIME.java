@@ -1894,6 +1894,15 @@ public class LatinIME extends InputMethodService implements
 
             String apiKey = VibeVoiceClient.getApiKey(this);
             if (apiKey == null) {
+                // The wizard retries the trial key for the user -- but only if it is still
+                // listening and the trial is not already spent. Otherwise the mic key falls back
+                // to sending the user to settings rather than doing nothing.
+                if (VibeVoiceClient.isSetupWizardActive(this)
+                        && !VibeVoiceClient.isTrialSpent(this)
+                        && VibeVoiceClient.triggerTrialRetry(this)) {
+                    VibeVoiceDebugLogger.log("Voice input requested in setup wizard without key: triggered retry");
+                    return;
+                }
                 android.widget.Toast
                         .makeText(this, R.string.vibevoice_not_linked, android.widget.Toast.LENGTH_LONG).show();
                 launchSettings("vibevoice");

@@ -18,9 +18,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.prefs
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -1412,6 +1416,9 @@ class VibeVoiceClient(
             }
         }
 
+        @Volatile
+        internal var trialKeyEndpoint: String = "https://vibevoice.net/api/trial/key"
+
         /**
          * Asks for this install's free minutes and stores the key it gets.
          *
@@ -1426,7 +1433,7 @@ class VibeVoiceClient(
             }
             val body = JSONObject().put("install_id", installId(context)).toString().toRequestBody(JSON)
             val request = Request.Builder()
-                .url("https://vibevoice.net/api/trial/key")
+                .url(trialKeyEndpoint)
                 .post(body)
                 .build()
             try {
@@ -1447,6 +1454,62 @@ class VibeVoiceClient(
                 VibeVoiceDebugLogger.log("Trial key request failed: ${e.message}")
                 TrialResult.Failed
             }
+        }
+
+        /**
+         * Requests trial key with automatic retry and exponential backoff.
+         * Retries on [TrialResult.Failed] only: a [TrialResult.RateLimited] answer means the server
+         * wants us to stop asking, and asking again within a second is what it is refusing.
+         */
+        suspend fun requestTrialKeyWithRetry(
+            context: Context,
+            maxAttempts: Int = 3,
+            initialDelayMs: Long = 1000L
+        ): TrialResult {
+            var delayMs = initialDelayMs
+            var lastResult: TrialResult = TrialResult.Failed
+            for (attempt in 1..maxAttempts) {
+                lastResult = requestTrialKey(context)
+                if (lastResult !is TrialResult.Failed) return lastResult
+                if (attempt < maxAttempts) {
+                    delay(delayMs)
+                    delayMs *= 2
+                }
+            }
+            return lastResult
+        }
+
+        /**
+         * Whether the setup wizard is on screen. In memory only: the keyboard service and the
+         * settings activity share one process, and a flag that survives a killed process would
+         * leave the mic key swallowed with nobody to answer it.
+         */
+        @JvmStatic
+        @Volatile
+        var isWizardActive: Boolean = false
+
+        @JvmStatic
+        fun setSetupWizardActive(active: Boolean) {
+            isWizardActive = active
+        }
+
+        private val _trialRetryFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val trialRetryFlow = _trialRetryFlow.asSharedFlow()
+
+        @Suppress("UNUSED_PARAMETER")
+        @JvmStatic
+        fun isSetupWizardActive(context: Context): Boolean = isWizardActive
+
+        /**
+         * Asks the wizard to retry the trial key. Returns false when nobody collects
+         * [trialRetryFlow], i.e. the request went nowhere and the caller must do something else.
+         */
+        @JvmStatic
+        fun triggerTrialRetry(context: Context): Boolean {
+            if (_trialRetryFlow.subscriptionCount.value == 0) return false
+            val count = context.prefs().getInt(Settings.PREF_TRIAL_RETRY_TRIGGER, 0)
+            context.prefs().edit().putInt(Settings.PREF_TRIAL_RETRY_TRIGGER, count + 1).apply()
+            return _trialRetryFlow.tryEmit(Unit)
         }
 
         /**

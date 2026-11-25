@@ -18,6 +18,7 @@ import helium314.keyboard.latin.common.StringUtils
 import helium314.keyboard.latin.common.encodeBase36
 import helium314.keyboard.latin.database.ClipboardDao
 import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.settings.SettingsSubtype
 import helium314.keyboard.latin.settings.SettingsSubtype.Companion.toSettingsSubtype
@@ -79,6 +80,13 @@ fun transferOldPinnedClips(context: Context) {
         Log.e("upgrade", "error transferring old pinned clips", e)
     }
 }
+
+/**
+ * The last versionCode that shipped with vibrate_on defaulting to true and without the draw_keys
+ * switch. Anyone upgrading from it or earlier keeps what they had; later installs, fresh or not,
+ * are already on the new defaults, so a missing value there means "off" and must stay so.
+ */
+internal const val LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS = 600063
 
 private object AppUpgrade {
     fun onUpgrade(context: Context) {
@@ -708,6 +716,18 @@ private object AppUpgrade {
                 prefs.edit { remove("emoji_recent_keys")  }
             }
         }
+        if (oldVersion <= LAST_VERSION_WITH_OLD_VIBRATE_AND_DRAW_KEYS_DEFAULTS) {
+            // vibrate_on used to default to true; fresh installs now start with it off. Whoever never
+            // stored a value had it on, and must keep it.
+            if (!prefs.contains(Settings.PREF_VIBRATE_ON))
+                prefs.edit { putBoolean(Settings.PREF_VIBRATE_ON, true) }
+            // the "draw keys" switch is new, and what it does used to be the theme_key_borders setting
+            if (!prefs.contains(Settings.PREF_DRAW_KEYS) && prefs.contains(Settings.PREF_THEME_KEY_BORDERS))
+                prefs.edit { putBoolean(Settings.PREF_DRAW_KEYS, prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)) }
+        }
+        // Gboard / Samsung preset sizes were corrected after some phones had stored them
+        KeyboardPresets.migrateSizes(prefs)
+        KeyboardPresets.migrateLayout(prefs)
         upgradeToolbarPrefs(prefs)
         LayoutUtilsCustom.onLayoutFileChanged() // just to be sure
         prefs.edit { putInt(Settings.PREF_VERSION_CODE, BuildConfig.VERSION_CODE) }

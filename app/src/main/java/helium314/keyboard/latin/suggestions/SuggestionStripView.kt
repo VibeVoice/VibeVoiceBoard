@@ -9,16 +9,20 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.StateListDrawable
 import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
 import android.text.TextUtils
 import android.util.AttributeSet
+import android.util.StateSet
 import android.util.TypedValue
 import android.view.Gravity
 import androidx.core.content.ContextCompat
@@ -52,7 +56,9 @@ import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.KeyboardPreset
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.SystemAccent
 import helium314.keyboard.latin.vibevoice.VoiceGlow
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.ToolbarMode
@@ -67,6 +73,7 @@ import helium314.keyboard.latin.utils.removePinnedKey
 import helium314.keyboard.latin.utils.setToolbarButtonsActivatedStateOnPrefChange
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 import androidx.core.view.isGone
 import helium314.keyboard.latin.utils.onClickToolbarKey
@@ -97,6 +104,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val debugInfoViews = ArrayList<TextView>()
     private val dividerViews = ArrayList<View>()
 
+    /** Draw-keys style: the strip is drawn like the keys, as caps on the key grid. Off: nothing below changes. */
+    private val useCaps = Settings.getValues().mColors.hasKeyBorders
+    private var grid: StripCapGrid? = null
+
     init {
         val inflater = LayoutInflater.from(context)
         inflater.inflate(R.layout.suggestions_strip, this)
@@ -109,9 +120,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             word.contentDescription = resources.getString(R.string.spoken_empty_suggestion)
             word.setOnClickListener(this)
             word.setOnLongClickListener(this)
-            colors.setBackground(word, ColorType.STRIP_BACKGROUND)
+            if (useCaps) word.background = pressOnlyCapBackground(colors)
+            else colors.setBackground(word, ColorType.STRIP_BACKGROUND)
             wordViews.add(word)
             val divider = inflater.inflate(R.layout.suggestion_divider, null)
+            if (useCaps) divider.alpha = 0f // one wide cap carries the words; no lines between them
             dividerViews.add(divider)
             val info = TextView(context, null, R.attr.suggestionWordStyle)
             info.setTextColor(colors.get(ColorType.KEY_TEXT))
@@ -122,6 +135,175 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         DEBUG_SUGGESTIONS = context.prefs().getBoolean(DebugSettings.PREF_SHOW_SUGGESTION_INFOS, Defaults.PREF_SHOW_SUGGESTION_INFOS)
     }
 
+    /** The keyboard's own key drawable, coloured like a letter key (same fill, alpha, corner radius, pressed state). */
+    private fun newCap(colors: Colors): Drawable {
+        val attr = context.obtainStyledAttributes(null, R.styleable.KeyboardView, R.attr.keyboardViewStyle, R.style.KeyboardView)
+        try {
+            return colors.selectAndColorDrawable(attr, ColorType.KEY_BACKGROUND)
+        } finally {
+            attr.recycle()
+        }
+    }
+
+    /** Background of a suggestion word in caps mode: nothing, the wide cap is behind it, but the cap's pressed look. */
+    private fun pressOnlyCapBackground(colors: Colors): Drawable = StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_pressed), newCap(colors))
+        addState(StateSet.WILD_CARD, ColorDrawable(Color.TRANSPARENT))
+    }
+
+    private val wideCap: Drawable by lazy { newCap(Settings.getValues().mColors) }
+
+    private fun computeGrid(): Pair<StripCapGrid, Int>? {
+        if (height <= 0 || width <= 0) return null
+        val keyboard = KeyboardSwitcher.getInstance().keyboard ?: return null
+        // Samsung look: the real keyboard has no strip at all, so ours is as small as the icons allow
+        val compact = Settings.getValues().mKeyboardPreset == KeyboardPreset.SAMSUNG
+        val minCap = (if (compact) COMPACT_CAP_HEIGHT_DP else MIN_CAP_HEIGHT_DP).dpToPx(resources)
+        val vGap = keyboard.sortedKeys.firstOrNull { !it.isSpacer }?.verticalGap ?: 0
+        val top = if (compact) COMPACT_TOP_MARGIN_DP.dpToPx(resources) else null
+        val bottom = if (compact) vGap / 2 else null
+        val stripHeight = StripCapGrid.stripHeightOf(keyboard, minCap, top, bottom, !compact) ?: return null
+        return StripCapGrid.fromKeyboard(keyboard, stripHeight, minCap, slotCount(), top, bottom)?.let { it to stripHeight }
+    }
+
+    /** One slot for the expand key, one per toolbar key, one for the VibeVoice key: all of them share the width evenly. */
+    private fun slotCount() = (1 + toolbar.childCount + voiceAnchor.childCount).coerceAtLeast(MIN_SLOTS)
+
+    private var capsOverflow = false
+
+    /** True when an icon was swapped (incognito, pinned) so its visible width, and with it the gaps, may have changed. */
+    private fun iconsChanged(): Boolean {
+        val g = grid ?: return false
+        val key = listOf(toolbarExpandKey.drawable, toolbar.childCount, voiceAnchor.childCount, g)
+        if (key == lastIconKey) return false
+        lastIconKey = key
+        return true
+    }
+    private var lastIconKey: List<Any?>? = null
+    private var lastIconLayout: List<Int>? = null
+    private val inkCache = HashMap<Any, IntArray>()
+
+    /**
+     * The visible part of [view]'s icon as (left offset in the drawable, visible width, drawable width), found by
+     * drawing the drawable and looking for the pixels that are not transparent. Icons have very different amounts of
+     * empty margin (a chevron is a third as wide as a gear), and the gaps between icons must be the visible ones.
+     */
+    private fun inkOf(view: ImageView): IntArray {
+        val drawable = view.drawable
+        val dw = drawable?.intrinsicWidth ?: 0
+        val dh = drawable?.intrinsicHeight ?: 0
+        if (drawable == null || dw <= 0 || dh <= 0) {
+            val w = toolbarKeyWidth / 2
+            return intArrayOf((toolbarKeyWidth - w) / 2, w, toolbarKeyWidth)
+        }
+        val key = Triple(view.tag, drawable.javaClass, dw to dh)
+        inkCache[key]?.let { if (view.tag != null || drawable === toolbarArrowIcon) return it }
+        val copy = drawable.constantState?.newDrawable()?.mutate() ?: drawable
+        val old = copy.bounds
+        copy.setBounds(0, 0, dw, dh)
+        val bmp = android.graphics.Bitmap.createBitmap(dw, dh, android.graphics.Bitmap.Config.ARGB_8888)
+        copy.draw(Canvas(bmp))
+        var minX = dw
+        var maxX = -1
+        for (x in 0 until dw) for (y in 0 until dh) {
+            if (android.graphics.Color.alpha(bmp.getPixel(x, y)) > 40) { minX = min(minX, x); maxX = max(maxX, x); break }
+        }
+        bmp.recycle()
+        copy.bounds = old
+        val ink = if (maxX < minX) intArrayOf(0, dw, dw) else intArrayOf(minX, maxX - minX + 1, dw)
+        inkCache[key] = ink
+        return ink
+    }
+
+    /**
+     * Places the icons so the VISIBLE gaps between neighbours are all the same: one common gap
+     * = (cap's inner width - the sum of the icons' visible widths) / (icons - 1), and the same padding
+     * between the cap's edge and the outermost icons on both sides. Each icon's view is its visible width
+     * plus that gap, with the ink centred in it. Nothing scrolls unless the gap would drop below [MIN_ICON_GAP_DP].
+     */
+    private fun layoutIcons(g: StripCapGrid) {
+        val views = ArrayList<ImageView>()
+        views.add(toolbarExpandKey)
+        for (i in 0 until toolbar.childCount) (toolbar.getChildAt(i) as? ImageView)?.let { views.add(it) }
+        for (i in 0 until voiceAnchor.childCount) (voiceAnchor.getChildAt(i) as? ImageView)?.let { views.add(it) }
+        val n = views.size
+        if (n < 2) return
+        val inks = views.map { inkOf(it) }
+        val density = resources.displayMetrics.density
+        val capLeft = g.left + g.hGap / 2
+        val capRight = g.right - g.hGap / 2
+        val edgePad = (EDGE_PADDING_DP * density).toInt()
+        val inner = capRight - capLeft - 2 * edgePad
+        val visibleSum = inks.sumOf { it[1] }
+        val minGap = (MIN_ICON_GAP_DP * density).toInt()
+        val rawGap = (inner - visibleSum) / (n - 1)
+        val gap = max(rawGap, minGap)
+        val remainder = if (rawGap >= minGap) (inner - visibleSum) - rawGap * (n - 1) else 0
+        capsOverflow = rawGap < minGap
+
+        val widths = ArrayList<Int>()
+        val shifts = ArrayList<Int>()
+        for (i in 0 until n) {
+            val w = inks[i][1] + gap + (if (i < remainder) 1 else 0)
+            widths.add(w)
+            // ink off-centre within its drawable: nudge with padding so the visible part is centred
+            // (a mirrored expand key flips the padding with the drawing, so no sign change is needed)
+            shifts.add(inks[i][0] - (inks[i][2] - inks[i][1]) / 2)
+        }
+        val spec = widths + shifts + listOf(capLeft, capRight, width)
+        if (spec == lastIconLayout) return
+        lastIconLayout = spec
+
+        val leftPad = (capLeft + edgePad - gap / 2).coerceAtLeast(0)
+        val rightPad = (width - leftPad - widths.sum()).coerceAtLeast(0) // exact, so nothing overflows by a rounding pixel
+        stripWrapper.setPadding(leftPad, 0, rightPad, 0)
+        views.forEachIndexed { i, v ->
+            val lp = v.layoutParams as? LinearLayout.LayoutParams ?: return@forEachIndexed
+            lp.width = widths[i]
+            lp.height = LinearLayout.LayoutParams.MATCH_PARENT
+            lp.weight = 0f
+            lp.marginStart = 0
+            lp.gravity = Gravity.NO_GRAVITY
+            v.layoutParams = lp
+            val e = shifts[i]
+            v.setPadding(if (e < 0) -2 * e else 0, 0, if (e > 0) 2 * e else 0, 0)
+            v.scaleType = ImageView.ScaleType.CENTER
+        }
+    }
+
+    /**
+     * Lays the strip out under one wide cap: icons with equal visible gaps, see [layoutIcons]. Only with draw keys on.
+     */
+    private fun applyKeyGrid() {
+        if (!useCaps) return
+        val (g, stripHeight) = computeGrid() ?: return
+        grid = g
+        // the strip is as tall as the caps need: a cap taller than the icons, the gap to the first key row like the row gaps
+        (parent as? View)?.let { container ->
+            if (container.layoutParams?.height != stripHeight) {
+                container.layoutParams = container.layoutParams.also { it.height = stripHeight }
+            }
+        }
+        layoutIcons(g)
+        toolbarContainer.isScrollingEnabled = capsOverflow
+        updateVoiceKey()
+        requestLayout()
+        invalidate()
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        if (useCaps) {
+            val computed = computeGrid()?.first
+            if (computed != null && (computed != grid || iconsChanged())) post { applyKeyGrid() }
+            val g = grid
+            if (g != null) { // one wide cap behind the whole row, toolbar and suggestions alike
+                wideCap.bounds = g.wideCapRect()
+                wideCap.draw(canvas)
+            }
+        }
+        super.dispatchDraw(canvas)
+    }
+
     // toolbar views, drawables and setup
     private val toolbar: ViewGroup = findViewById(R.id.toolbar)
     private val toolbarContainer: ToolbarScrollView = findViewById(R.id.toolbar_container)
@@ -130,6 +312,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val voiceAnchor: ViewGroup = findViewById(R.id.voice_anchor)
     private val suggestionsStrip: ViewGroup = findViewById(R.id.suggestions_strip)
     private val toolbarExpandKey = findViewById<ImageButton>(R.id.suggestions_strip_toolbar_key)
+    private val stripWrapper: ViewGroup = findViewById(R.id.suggestions_strip_wrapper)
     private val incognitoIcon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.INCOGNITO.name, context)
     private val toolbarArrowIcon = KeyboardIconsSet.instance.getNewDrawable(KeyboardIconsSet.NAME_TOOLBAR_KEY, context)
     private val defaultToolbarBackground: Drawable = toolbarExpandKey.background
@@ -159,9 +342,18 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         val toolbarHeight = min(toolbarExpandKey.layoutParams.height, resources.getDimension(R.dimen.config_suggestions_strip_height).toInt())
         toolbarExpandKey.layoutParams.height = toolbarHeight
         toolbarExpandKey.layoutParams.width = toolbarHeight // we want it square
-        colors.setBackground(toolbarExpandKey, ColorType.STRIP_BACKGROUND) // necessary because background is re-used for defaultToolbarBackground
-        colors.setColor(toolbarExpandKey, ColorType.TOOL_BAR_EXPAND_KEY)
-        colors.setColor(toolbarExpandKey.background, ColorType.TOOL_BAR_EXPAND_KEY_BACKGROUND)
+        if (useCaps) {
+            // no button of its own: the wide cap is behind it; the arrow in the keys' icon colour
+            toolbarExpandKey.background = ColorDrawable(Color.TRANSPARENT)
+            toolbarContainer.showScrollBar = false
+            toolbarContainer.overScrollMode = OVER_SCROLL_NEVER
+            toolbarContainer.isHorizontalFadingEdgeEnabled = false
+            colors.setColor(toolbarExpandKey, ColorType.KEY_ICON)
+        } else {
+            colors.setBackground(toolbarExpandKey, ColorType.STRIP_BACKGROUND) // necessary because background is re-used for defaultToolbarBackground
+            colors.setColor(toolbarExpandKey, ColorType.TOOL_BAR_EXPAND_KEY)
+            colors.setColor(toolbarExpandKey.background, ColorType.TOOL_BAR_EXPAND_KEY_BACKGROUND)
+        }
 
         // background indicator for pinned keys
         val color = colors.get(ColorType.TOOL_BAR_KEY_ENABLED_BACKGROUND) or -0x1000000 // ignore alpha (in Java this is more readable 0xFF000000)
@@ -197,7 +389,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             pinnedKeys.addView(button)
             val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
             if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
-                pinnedKeyInToolbar.background = enabledToolKeyBackground
+                pinnedKeyInToolbar.background = pinnedHighlightBackground(colors)
         }
         // Anchored, but still the user's to switch off. Creating it unconditionally made the
         // toolbar customiser lie: turning VOICE off there changed nothing, because this bypassed
@@ -274,6 +466,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         pinnedKeys.isVisible = !toolbarVisible
         suggestionsStrip.isVisible = !toolbarVisible
         toolbarContainer.isVisible = toolbarVisible
+        if (useCaps) invalidate()
 
         if (DEBUG_SUGGESTIONS) {
             for (view in debugInfoViews) {
@@ -428,11 +621,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             val pinnedKeyView = pinnedKeys.findViewWithTag<View>(tag)
             if (pinnedKeyView == null) {
                 addKeyToPinnedKeys(tag)
-                toolbar.findViewWithTag<View>(tag).background = enabledToolKeyBackground
+                toolbar.findViewWithTag<View>(tag).background = pinnedHighlightBackground(Settings.getValues().mColors)
                 addPinnedKey(context.prefs(), tag)
             } else if (tag != ToolbarKey.VOICE) {
                 removePinnedKey(context.prefs(), tag)
-                toolbar.findViewWithTag<View>(tag).background = defaultToolbarBackground.constantState?.newDrawable(resources)
+                toolbar.findViewWithTag<View>(tag).background = plainKeyBackground()
                 pinnedKeys.removeView(pinnedKeyView)
             }
         }
@@ -662,7 +855,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // allocations on the UI thread each time -- during a rotation, exactly when there is
             // least room for it.
             val prefs = context.prefs()
-            val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
+            val accent = SystemAccent.recordingColor(context) // the same colour as the waves and the floating mark
             // The black mark on a light keyboard, the white one on a dark keyboard.
             val markRes = VoiceGlow.markFor(Settings.getValues().mColors.get(ColorType.MAIN_BACKGROUND))
             val key = "$inkPx|$accent|$markRes|" +
@@ -683,6 +876,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             button.clearColorFilter()
             if (mark != null) button.setImageBitmap(mark) else button.setImageDrawable(plain)
             button.scaleType = ImageView.ScaleType.CENTER
+            button.setPadding(0, 0, 0, 0)
             // The glow goes on the layer underneath as the view's background, which is also what
             // keeps it out of any tint: a colour filter on an ImageView applies to its image and
             // not to its background.
@@ -692,12 +886,25 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // No "pinned" highlight to preserve any more: the key is not in the toolbar and not in
             // the pinned row, it is the anchor's only child, so the plain background is always the
             // right one.
-            button.background = defaultToolbarBackground.constantState?.newDrawable(resources)
-            Settings.getValues().mColors.setColor(button, ColorType.TOOL_BAR_KEY)
+            button.background = plainKeyBackground()
+            val colors = Settings.getValues().mColors
+            if (useCaps) {
+                // the same colour source as the key glyphs, so the mark and the keys can never drift apart
+                colors.setColor(button, ColorType.KEY_ICON)
+            } else {
+                button.clearColorFilter()
+                colors.setColor(button, ColorType.TOOL_BAR_KEY)
+            }
+            button.setPadding(0, 0, 0, 0)
             button.scaleType = ImageView.ScaleType.CENTER
             view.rotation = 0f // an older build left the key tilted; clear it once
         }
     }
+
+    private fun pinnedHighlightBackground(@Suppress("UNUSED_PARAMETER") colors: Colors): Drawable = enabledToolKeyBackground
+
+    private fun plainKeyBackground(): Drawable? =
+        if (useCaps) ColorDrawable(Color.TRANSPARENT) else defaultToolbarBackground.constantState?.newDrawable(resources)
 
     private fun updateKeys() {
         updateVoiceKey()
@@ -761,6 +968,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      * appears only when dragging it actually brings a key into view.
      */
     private fun fitToolbarKeys() {
+        if (useCaps) { // the cap layout sizes the icons itself, see layoutIcons
+            toolbarContainer.isScrollingEnabled = capsOverflow
+            return
+        }
         val count = toolbar.childCount
         if (count == 0) return
         val viewport = toolbarContainer.width - toolbarContainer.paddingLeft - toolbarContainer.paddingRight
@@ -791,8 +1002,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         view.setOnClickListener(this)
         view.setOnLongClickListener(this)
         (view.layoutParams as LinearLayout.LayoutParams).weight = 1f
-        colors.setColor(view, ColorType.TOOL_BAR_KEY)
-        colors.setBackground(view, ColorType.STRIP_BACKGROUND)
+        if (useCaps) colors.setColor(view, ColorType.KEY_ICON) // exactly the key glyphs' colour, not the dimmer toolbar tint
+        else colors.setColor(view, ColorType.TOOL_BAR_KEY)
+        if (useCaps) view.background = ColorDrawable(Color.TRANSPARENT)
+        else colors.setBackground(view, ColorType.STRIP_BACKGROUND)
     }
 
     companion object {
@@ -808,6 +1021,20 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
          * on a strip this short, and a key too small to press is worse than one you have to scroll to.
          */
         private const val MIN_KEY_WIDTH_FRACTION = 0.75f
+
+        /** A cap never gets thinner than this, however small the strip. */
+        private const val MIN_CAP_HEIGHT_DP = 34
+        private const val COMPACT_CAP_HEIGHT_DP = 32
+        private const val COMPACT_TOP_MARGIN_DP = 2
+
+        /** Padding between the cap's edge and the outermost icon's visible edge, on both sides. */
+        private const val EDGE_PADDING_DP = 10
+
+        /** Below this gap between visible icons the toolbar scrolls instead of squeezing further. */
+        private const val MIN_ICON_GAP_DP = 6
+
+        /** The caps' slots never get fewer than this, so a toolbar of a few keys is not spread thin. */
+        private const val MIN_SLOTS = 8
 
         private const val VOICE_GLOW_BOX_DP = 40f
     }

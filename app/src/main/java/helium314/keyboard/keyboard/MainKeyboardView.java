@@ -57,7 +57,14 @@ import helium314.keyboard.latin.common.CoordinateUtils;
 import helium314.keyboard.latin.define.DebugFlags;
 import helium314.keyboard.latin.settings.DebugSettings;
 import helium314.keyboard.latin.settings.Defaults;
+import helium314.keyboard.latin.settings.KeyboardPreset;
 import helium314.keyboard.latin.settings.Settings;
+import helium314.keyboard.latin.settings.SettingsValues;
+import helium314.keyboard.latin.utils.SubtypeLocaleUtils;
+import helium314.keyboard.latin.utils.SubtypeSettings;
+import helium314.keyboard.latin.utils.SubtypeUtilsKt;
+import android.view.inputmethod.InputMethodSubtype;
+import java.util.LinkedHashSet;
 import helium314.keyboard.latin.utils.KtxKt;
 import helium314.keyboard.latin.utils.LanguageOnSpacebarUtils;
 import helium314.keyboard.latin.utils.Log;
@@ -66,6 +73,7 @@ import helium314.keyboard.latin.utils.TypefaceUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.WeakHashMap;
 
 /** A view that is responsible for detecting key presses and touch movements. */
@@ -738,6 +746,8 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             drawLanguageOnSpacebar(key, canvas, paint);
             // No "..." popup hint here: long-pressing space starts voice input and never opens a
             // popup panel or the IME switcher, see PointerTracker#onLongPressed.
+        } else if (isSamsungPresetView()) {
+            // the Samsung layout has its own globe key: a plain one, without the switcher badge
         } else if (code == KeyCode.LANGUAGE_SWITCH
                 || ((code == KeyCode.SYMBOL || code == KeyCode.ALPHA) && mHasMultipleEnabledIMEsOrSubtypes)) {
             // The symbol and alpha keys only carry the switcher badge when there is a switcher to
@@ -746,6 +756,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             // release -- the badge promised a dialog and delivered a layout switch.
             drawImeSwitcherIconOnKey(key, canvas);
         }
+    }
+
+    private boolean isSamsungPresetView() {
+        final KeyboardPreset preset = Settings.getValues() != null ? Settings.getValues().mKeyboardPreset : KeyboardPreset.OWN;
+        return preset == KeyboardPreset.SAMSUNG;
     }
 
     private void drawImeSwitcherIconOnKey(final Key key, final Canvas canvas) {
@@ -831,13 +846,23 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         return "";
     }
 
+    // Cache for Gboard spacebar label to avoid allocations per-draw
+    private String mCachedGboardSpacebarText = null;
+    private RichInputMethodSubtype mCachedGboardSubtype = null;
+    private List<Locale> mCachedGboardSecondaryLocales = null;
+    private List<InputMethodSubtype> mCachedGboardEnabledSubtypes = null;
+    private int mCachedGboardWidth = -1;
+
+    // Cache for Samsung spacebar label
+    private String mCachedSamsungSpacebarText = null;
+    private RichInputMethodSubtype mCachedSamsungSubtype = null;
+    private int mCachedSamsungWidth = -1;
+
     private List<Locale> withoutDuplicateLanguages(List<Locale> locales, String mainLanguage) {
-        ArrayList<String> languages = new ArrayList<String>() {
-            {
-                add(mainLanguage);
-            }
-        };
+        ArrayList<String> languages = new ArrayList<>();
+        languages.add(mainLanguage);
         ArrayList<Locale> newLocales = new ArrayList<>();
+        if (locales == null) return newLocales;
         for (Locale locale : locales) {
             boolean keep = true;
             for (String language : languages) {
@@ -850,6 +875,106 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
             newLocales.add(locale);
         }
         return newLocales;
+    }
+
+    private String layoutGboardSpacebar(final Paint paint,
+            final RichInputMethodSubtype subtype, final int width) {
+        if (subtype == null) return "";
+        final SettingsValues settingsValues = Settings.getValues();
+        final List<Locale> secondaryLocales = settingsValues != null ? settingsValues.mSecondaryLocales : null;
+        final List<InputMethodSubtype> enabledSubtypes = SubtypeSettings.INSTANCE.getEnabledSubtypes(false);
+
+        if (mCachedGboardSpacebarText != null
+                && width == mCachedGboardWidth
+                && Objects.equals(subtype, mCachedGboardSubtype)
+                && Objects.equals(secondaryLocales, mCachedGboardSecondaryLocales)
+                && Objects.equals(enabledSubtypes, mCachedGboardEnabledSubtypes)) {
+            return mCachedGboardSpacebarText;
+        }
+
+        final List<Locale> secondaryLocalesToUse = withoutDuplicateLanguages(secondaryLocales,
+                subtype.getLocale().getLanguage());
+        final Locale displayLocale = ConfigurationCompatKt.locale(getResources().getConfiguration());
+
+        // Check if multilingual: multiple enabled subtypes or secondary locales
+        final LinkedHashSet<String> languages = new LinkedHashSet<>();
+        final String mainLang = subtype.getLocale().getLanguage();
+        if (!mainLang.isEmpty() && !SubtypeLocaleUtils.NO_LANGUAGE.equals(mainLang)) {
+            languages.add(mainLang);
+        }
+        for (Locale loc : secondaryLocalesToUse) {
+            String l = loc.getLanguage();
+            if (!l.isEmpty() && !SubtypeLocaleUtils.NO_LANGUAGE.equals(l)) {
+                languages.add(l);
+            }
+        }
+        if (enabledSubtypes != null) {
+            for (InputMethodSubtype sub : enabledSubtypes) {
+                Locale loc = SubtypeUtilsKt.locale(sub);
+                String l = loc.getLanguage();
+                if (!l.isEmpty() && !SubtypeLocaleUtils.NO_LANGUAGE.equals(l)) {
+                    languages.add(l);
+                }
+            }
+        }
+
+        String result = "";
+        if (languages.size() > 1) {
+            StringBuilder sb = new StringBuilder();
+            for (String lang : languages) {
+                if (sb.length() > 0) {
+                    sb.append(" • ");
+                }
+                sb.append(lang.toUpperCase(displayLocale));
+            }
+            final String multiText = sb.toString();
+            if (fitsTextIntoWidth(width, multiText, paint)) {
+                result = multiText;
+            }
+        }
+
+        if (result.isEmpty()) {
+            final String middleText = subtype.getMiddleDisplayName();
+            if (fitsTextIntoWidth(width, middleText, paint)) {
+                result = middleText;
+            }
+        }
+
+        mCachedGboardWidth = width;
+        mCachedGboardSubtype = subtype;
+        mCachedGboardSecondaryLocales = secondaryLocales != null ? new ArrayList<>(secondaryLocales) : null;
+        mCachedGboardEnabledSubtypes = enabledSubtypes != null ? new ArrayList<>(enabledSubtypes) : null;
+        mCachedGboardSpacebarText = result;
+        return result;
+    }
+
+    private String layoutSamsungSpacebar(final Paint paint,
+            final RichInputMethodSubtype subtype, final int width) {
+        if (subtype == null) return "";
+        if (mCachedSamsungSpacebarText != null
+                && width == mCachedSamsungWidth
+                && Objects.equals(subtype, mCachedSamsungSubtype)) {
+            return mCachedSamsungSpacebarText;
+        }
+
+        final String middleText = subtype.getMiddleDisplayName();
+        // the language name alone; with the region ("English (UK)") only where the region says something
+        final java.util.Locale locale = subtype.getLocale();
+        final String country = locale.getCountry();
+        final boolean homeRegion = country.isEmpty() || country.equalsIgnoreCase(locale.getLanguage())
+                || (locale.getLanguage().equals("en") && country.equals("US"));
+        final String fullText = subtype.getFullDisplayName();
+        String result = "";
+        if (!homeRegion && fitsTextIntoWidth(width, fullText, paint)) {
+            result = fullText;
+        } else if (fitsTextIntoWidth(width, middleText, paint)) {
+            result = middleText;
+        }
+
+        mCachedSamsungWidth = width;
+        mCachedSamsungSubtype = subtype;
+        mCachedSamsungSpacebarText = result;
+        return result;
     }
 
     /** Repaints the space bar alone, for the dictation clock. */
@@ -884,7 +1009,14 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
                         String.format(java.util.Locale.US, "%d:%02d", seconds / 60, seconds % 60));
             }
         } else {
-            spaceText = getContext().getString(R.string.vibevoice_hold_to_transcribe);
+            final KeyboardPreset preset = Settings.getValues() != null ? Settings.getValues().mKeyboardPreset : KeyboardPreset.OWN;
+            if (preset == KeyboardPreset.GBOARD) {
+                spaceText = layoutGboardSpacebar(paint, keyboard.mId.getSubtype(), width);
+            } else if (preset == KeyboardPreset.SAMSUNG) {
+                spaceText = layoutSamsungSpacebar(paint, keyboard.mId.getSubtype(), width);
+            } else {
+                spaceText = getContext().getString(R.string.vibevoice_hold_to_transcribe);
+            }
         }
         paint.setTypeface(KeyboardTypeface.resolve(spaceText, Typeface.DEFAULT));
         // Draw language text with shadow
@@ -913,5 +1045,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     public void deallocateMemory() {
         super.deallocateMemory();
         mDrawingPreviewPlacerView.deallocateMemory();
+        mCachedGboardSpacebarText = null;
+        mCachedGboardSubtype = null;
+        mCachedGboardSecondaryLocales = null;
+        mCachedGboardEnabledSubtypes = null;
+        mCachedSamsungSpacebarText = null;
+        mCachedSamsungSubtype = null;
     }
 }

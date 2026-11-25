@@ -131,6 +131,8 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_try_phase_b_instruction">Jetzt die andere Hälfte – lass sie dich hören.</string>
     <string name="setup_try_phase_c_title">Tippe auf die Marke und sag etwas.</string>
     <string name="setup_try_phase_c_instruction">Tippe oben rechts auf das V oder halte die Leertaste gedrückt.</string>
+    <string name="setup_try_trial_connecting">Kostenlose Testminuten werden eingerichtet…</string>
+    <string name="setup_try_trial_retry">VibeVoice nicht erreichbar. Zum Wiederholen tippen.</string>
     <string name="setup_minutes_title">"Deine Minuten"</string>
     <string name="setup_minutes_instruction">"Diese ersten 10 Minuten gehen auf uns – ganz ohne Konto.\n\nDanach gibt dir ein kostenloses Konto 30 Minuten im Monat. Pro kostet 3 € für 180."</string>
     <string name="setup_link_later_equal">Später</string>
@@ -141,6 +143,26 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="setup_overlay_guard_message">Ohne dies endet das Diktat, sobald die Tastatur schließt.</string>
     <string name="setup_overlay_guard_keep_off">Auslassen</string>
     <string name="setup_overlay_guard_turn_on">Aktivieren</string>
+    <string name="setup_language_title">Deine Sprache</string>
+    <string name="setup_language_instruction">Wähle die Sprache, in der du tippst. Du kannst sie später in den Einstellungen ändern.</string>
+    <string name="setup_prev_question">Kommst du von einer anderen Tastatur?</string>
+    <string name="setup_prev_other">Von einer anderen</string>
+    <string name="setup_prev_first">Das ist meine erste</string>
+    <string name="setup_lang_chip_main">Haupt: %s</string>
+    <string name="setup_lang_chip_second">Zweite: %s</string>
+    <string name="setup_lang_none">Keine</string>
+    <string name="setup_lang_pick_main">Wähle deine Hauptsprache</string>
+    <string name="setup_lang_pick_second">Wähle eine zweite Sprache oder keine</string>
+    <string name="setup_lang_search_hint">Sprachen suchen</string>
+    <string name="setup_lang_no_results">Keine Sprache gefunden</string>
+    <string name="setup_style_title">Stil und Gefühl</string>
+    <string name="setup_style_instruction">Probiere unten die Tastatur aus. Was du hier änderst, gilt sofort.</string>
+    <string name="setup_style_label">Stil</string>
+    <string name="setup_style_own">VibeVoice</string>
+    <string name="setup_style_gboard">Google-Stil</string>
+    <string name="setup_style_samsung">Samsung-Stil</string>
+    <string name="setup_style_hint">Hier tippen, um die Tastatur auszuprobieren…</string>
+    <string name="setup_vibrate_switch">Beim Tippen vibrieren</string>
     <!-- "VibeVoice typing" is the feature's name, not a description, so it stays as it is. The
          slogan on the last setup page is the brand's own wording and stays English for the same
          reason the wordmark does. -->
@@ -159,4 +181,33 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="vibevoice_blocked_private_field">In Passwortfeldern und privaten Tabs ist das Diktat aus</string>
     <string name="setup_link_action">Konto verknüpfen</string>
     <string name="setup_step_progress">Schritt %1$d von %2$d</string>
+
+    <!-- Draw keys (visible key caps) -->
+    <string name="draw_keys">Tasten anzeigen</string>
+    <string name="draw_keys_summary">Sichtbare Tastenkappen anzeigen</string>
+    <!-- Keyboard presets -->
+    <string name="keyboard_preset_title">Tastaturstil</string>
+    <string name="keyboard_preset_own">VibeVoice</string>
+    <string name="keyboard_preset_gboard">Google-Stil</string>
+    <string name="keyboard_preset_samsung">Samsung-Stil</string>
+    <string name="appearance_section_look">Aussehen</string>
+    <string name="appearance_section_advanced_theme">Erweitertes Design</string>
+    <string name="key_shape">Tastenform</string>
+    <string name="keyboard_accent_title">Akzentfarbe</string>
+    <string name="keyboard_accent_vibevoice">VibeVoice</string>
+    <string name="keyboard_accent_auto">Automatisch (Systemfarbe)</string>
+    <string name="keyboard_accent_custom">Eigene</string>
+    <string name="keyboard_accent_custom_title">Eigene Akzentfarbe</string>
+    <string name="keyboard_accent_hue">Farbton</string>
+    <string name="keyboard_accent_saturation">Sättigung</string>
+    <string name="keyboard_accent_brightness">Helligkeit</string>
+    <string name="keyboard_accent_violet">Violett</string>
+    <string name="keyboard_accent_green">Grün</string>
+    <string name="keyboard_accent_orange">Orange</string>
+    <string name="keyboard_accent_pink">Pink</string>
+    <!-- Switcher wizard (switching from another keyboard) -->
+    <string name="switcher_entry_title">Kommst du von einer anderen Tastatur?</string>
+    <string name="switcher_entry_summary">Stil und Sprachen übernehmen</string>
+    <string name="switcher_settings_title">Von einer anderen Tastatur wechseln?</string>
+    <string name="switcher_settings_summary">Layout anpassen und Sprachen einrichten</string>
 </resources>

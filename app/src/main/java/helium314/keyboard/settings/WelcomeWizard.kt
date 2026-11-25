@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.FocusRequester
@@ -42,10 +43,22 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -95,7 +108,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import helium314.keyboard.latin.R
+import androidx.compose.ui.text.style.TextOverflow
+import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.KeyboardPreset
+import helium314.keyboard.latin.settings.KeyboardPresets
+import helium314.keyboard.settings.preferences.AccentDots
+import helium314.keyboard.latin.settings.PreviousKeyboard
+import helium314.keyboard.latin.settings.SwitcherHelper
 import helium314.keyboard.latin.settings.Settings as KeySettings
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.utils.getActivity
@@ -115,6 +135,30 @@ import kotlinx.coroutines.launch
 
 private enum class TryPhase { A, B, C }
 
+private enum class TrialState {
+    IDLE,
+    LOADING,
+    GRANTED,
+    FAILED
+}
+
+// The wizard's screens, in order. StepNumbers counts the ones between the hero and the closing
+// screen, so inserting a step means renumbering the headers below, not just adding a constant.
+private const val STEP_HERO = 0
+private const val STEP_TURN_ON = 1
+private const val STEP_LANGUAGE = 2
+private const val STEP_PRACTICE = 3
+private const val STEP_LINK = 4
+private const val STEP_FLOATING_MARK = 5
+private const val STEP_STYLE = 6
+private const val STEP_DONE = 7
+
+/** Headers are numbered 1..this; the hero and the closing screen carry no number. */
+private const val NUMBERED_STEPS = 6
+
+/** The steps that fill the screen and pin their button, rather than scroll as one column. */
+private fun isPinnedStep(step: Int) = step == STEP_LANGUAGE || step == STEP_STYLE
+
 @Composable
 fun WelcomeWizard(
     close: () -> Unit,
@@ -122,7 +166,15 @@ fun WelcomeWizard(
 ) {
     val ctx = LocalContext.current
     val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-    var step by rememberSaveable { mutableIntStateOf(0) }
+    var step by rememberSaveable { mutableIntStateOf(STEP_HERO) }
+
+    // Answers that outlive their step. The previous-keyboard answer from the language step
+    // pre-selects the style on the last one; the style, once chosen or pre-selected, is remembered
+    // so that stepping back and forth does not apply it again.
+    var previousName by rememberSaveable { mutableStateOf(PreviousKeyboard.DEFAULT.name) }
+    var mainTag by rememberSaveable { mutableStateOf<String?>(null) }
+    var secondTag by rememberSaveable { mutableStateOf<String?>(null) }
+    var stylePresetName by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Derived IME states for Step 1
     var isImeEnabled by remember { mutableStateOf(UncachedInputMethodManagerUtils.isThisImeEnabled(ctx, imm)) }
@@ -134,20 +186,65 @@ fun WelcomeWizard(
         isImeCurrent = UncachedInputMethodManagerUtils.isThisImeCurrent(ctx, imm)
     }
 
-    // Free trial key: requested at start so dictation is ready by Step 2, and again on reaching
-    // Step 2 if the first attempt found no network. Without a key the mic key in the practice step
-    // throws the user out of the wizard into settings.
-    LaunchedEffect(step == 0 || step == 2) {
-        if (step != 0 && step != 2) return@LaunchedEffect
-        if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx)) return@LaunchedEffect
-        if (VibeVoiceClient.requestTrialKey(ctx) !is TrialResult.Granted)
-            VibeVoiceDebugLogger.log("Wizard: no trial key (step $step)")
+    var trialState by remember {
+        mutableStateOf(
+            if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx) || VibeVoiceClient.isLinked(ctx))
+                TrialState.GRANTED
+            else
+                TrialState.IDLE
+        )
+    }
+    val wizardScope = rememberCoroutineScope()
+
+    fun performTrialRequest(withRetry: Boolean) {
+        if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx) || VibeVoiceClient.isLinked(ctx)) {
+            trialState = TrialState.GRANTED
+            return
+        }
+        if (trialState == TrialState.LOADING) return
+        trialState = TrialState.LOADING
+        wizardScope.launch {
+            val result = if (withRetry) {
+                VibeVoiceClient.requestTrialKeyWithRetry(ctx)
+            } else {
+                VibeVoiceClient.requestTrialKey(ctx)
+            }
+            val granted = (result is TrialResult.Granted) || (VibeVoiceClient.getApiKey(ctx) != null)
+            trialState = if (granted) TrialState.GRANTED else TrialState.FAILED
+            if (!granted) {
+                VibeVoiceDebugLogger.log("Wizard: trial key failed")
+            }
+        }
     }
 
-    // Ensure pulse preference is cleared when wizard leaves composition
+    LaunchedEffect(step) {
+        if (trialState == TrialState.GRANTED) return@LaunchedEffect
+        if (step == STEP_HERO && trialState == TrialState.IDLE) {
+            performTrialRequest(withRetry = true)
+        } else if (step == STEP_PRACTICE && trialState != TrialState.LOADING) {
+            if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx) || VibeVoiceClient.isLinked(ctx)) {
+                trialState = TrialState.GRANTED
+            } else if (trialState == TrialState.IDLE || trialState == TrialState.FAILED) {
+                performTrialRequest(withRetry = true)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        VibeVoiceClient.trialRetryFlow.collect {
+            performTrialRequest(withRetry = false)
+        }
+    }
+
+    // Ensure pulse preference and wizard active state are maintained with composition.
+    // Finding (a): Stop writing persisted PREF_SETUP_WIZARD_ACTIVE; use in-memory flag only.
     DisposableEffect(Unit) {
+        VibeVoiceClient.isWizardActive = true
         onDispose {
-            ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
+            VibeVoiceClient.isWizardActive = false
+            ctx.prefs().edit()
+                .putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false)
+                .apply()
         }
     }
 
@@ -178,7 +275,7 @@ fun WelcomeWizard(
 
     @Composable fun bigText() {
         // Nothing above the hero or closing screens
-        if (step == 0 || step == 5) return
+        if (step == STEP_HERO || step == STEP_DONE || isPinnedStep(step)) return
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text(
                 stringResource(R.string.brand_wordmark).uppercase(),
@@ -207,7 +304,7 @@ fun WelcomeWizard(
     // accent, the rest a faint track, and the colour eases across when the step changes instead of
     // snapping.
     @Composable fun StepNumbers(current: Int) {
-        val total = 4
+        val total = NUMBERED_STEPS
         Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
             Text(
                 stringResource(R.string.setup_step_progress, current, total).uppercase(),
@@ -256,9 +353,9 @@ fun WelcomeWizard(
     }
 
     LaunchedEffect(step) {
-        if (step == 1) {
+        if (step == STEP_TURN_ON) {
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (step == 1) {
+                while (step == STEP_TURN_ON) {
                     updateImeState()
                     delay(200)
                 }
@@ -267,9 +364,9 @@ fun WelcomeWizard(
     }
 
     LaunchedEffect(isImeCurrent) {
-        if (step == 1 && isImeCurrent && !previousImeCurrent) {
+        if (step == STEP_TURN_ON && isImeCurrent && !previousImeCurrent) {
             delay(400)
-            step = 2
+            if (step == STEP_TURN_ON) step = STEP_LANGUAGE
         }
         previousImeCurrent = isImeCurrent
     }
@@ -365,20 +462,20 @@ fun WelcomeWizard(
     }
 
     @Composable fun steps() {
-        if (step == 0) {
-            WizardHero(closing = false) { step = 1 }
-        } else if (step == 5) {
+        if (step == STEP_HERO) {
+            WizardHero(closing = false) { step = STEP_TURN_ON }
+        } else if (step == STEP_DONE) {
             WizardHero(closing = true) {
                 ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
                 finish()
             }
         } else {
-            Column(Modifier.fillMaxWidth()) {
+            Column(if (isPinnedStep(step)) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
                 val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
                     updateImeState()
                 }
 
-                if (step == 1) {
+                if (step == STEP_TURN_ON) {
                     StepHeader(
                         1,
                         stringResource(R.string.setup_step1_turn_on),
@@ -453,11 +550,38 @@ fun WelcomeWizard(
                                 stringResource(R.string.setup_next_action),
                                 active = true
                             ) {
-                                step = 2
+                                step = STEP_LANGUAGE
                             }
                         }
                     }
-                } else if (step == 2) {
+                } else if (step == STEP_LANGUAGE) {
+                    LanguageStep(
+                        previous = PreviousKeyboard.fromName(previousName),
+                        onPrevious = { answer ->
+                            // The style on the last step follows this answer; a changed answer
+                            // means it has to be worked out again.
+                            if (answer.name != previousName) stylePresetName = null
+                            previousName = answer.name
+                        },
+                        mainTag = mainTag,
+                        secondTag = secondTag,
+                        onMain = { mainTag = it },
+                        onSecond = { secondTag = it },
+                        onContinue = { main, second ->
+                            // main is null when nothing was touched: leave the languages alone
+                            SwitcherHelper.applyAnswers(ctx, preset = null, mainLocale = main, secondLocale = second)
+                            (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+                            step = STEP_PRACTICE
+                        },
+                        header = {
+                            StepHeader(
+                                2,
+                                stringResource(R.string.setup_language_title),
+                                stringResource(R.string.setup_language_instruction)
+                            )
+                        }
+                    )
+                } else if (step == STEP_PRACTICE) {
                     var phase by rememberSaveable { mutableStateOf(TryPhase.A) }
                     var practiceText by rememberSaveable { mutableStateOf("") }
                     var hasDictated by rememberSaveable { mutableStateOf(false) }
@@ -465,9 +589,11 @@ fun WelcomeWizard(
                         mutableStateOf(ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO)
                                 == PackageManager.PERMISSION_GRANTED)
                     }
-
-                    // Refresh microphone permission on resume from Android Settings or PermissionActivity
+                    // Refresh microphone permission and trial key status on resume
                     OnResume {
+                        if (VibeVoiceClient.getApiKey(ctx) != null || VibeVoiceClient.isTrialSpent(ctx) || VibeVoiceClient.isLinked(ctx)) {
+                            trialState = TrialState.GRANTED
+                        }
                         val granted = ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                         micGranted = granted
                         if (granted && phase == TryPhase.B) {
@@ -477,7 +603,7 @@ fun WelcomeWizard(
 
                     // Reset PREF_HAS_DICTATED on entering Step 2, and listen for dictation events from LatinIME
                     DisposableEffect(step) {
-                        if (step == 2) {
+                        if (step == STEP_PRACTICE) {
                             ctx.prefs().edit().putBoolean(KeySettings.PREF_HAS_DICTATED, false).apply()
                             val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
                                 if (key == KeySettings.PREF_HAS_DICTATED && prefs.getBoolean(KeySettings.PREF_HAS_DICTATED, false)) {
@@ -515,7 +641,7 @@ fun WelcomeWizard(
                     val focusRequester = remember { FocusRequester() }
 
                     LaunchedEffect(step) {
-                        if (step == 2) {
+                        if (step == STEP_PRACTICE) {
                             delay(150)
                             try { focusRequester.requestFocus() } catch (_: Exception) {}
                         }
@@ -523,7 +649,7 @@ fun WelcomeWizard(
 
                     // Phase A: advances after user types >= 2 characters plus 1s pause
                     LaunchedEffect(practiceText) {
-                        if (step == 2 && phase == TryPhase.A && practiceText.length >= 2) {
+                        if (step == STEP_PRACTICE && phase == TryPhase.A && practiceText.length >= 2) {
                             delay(1000)
                             if (phase == TryPhase.A) {
                                 phase = if (micGranted) TryPhase.C else TryPhase.B
@@ -535,7 +661,7 @@ fun WelcomeWizard(
                     // their own. Keyed on fewer than two characters, not on empty: a single stray
                     // letter cancelled this timeout and never reached the typing rule either.
                     LaunchedEffect(step, phase, practiceText.length < 2) {
-                        if (step == 2 && phase == TryPhase.A && practiceText.length < 2) {
+                        if (step == STEP_PRACTICE && phase == TryPhase.A && practiceText.length < 2) {
                             delay(6000)
                             if (phase == TryPhase.A && practiceText.length < 2) {
                                 phase = if (micGranted) TryPhase.C else TryPhase.B
@@ -545,7 +671,7 @@ fun WelcomeWizard(
 
                     // Phase C pulse & timeout: pulses toolbar key, auto-clears after 15s
                     LaunchedEffect(phase) {
-                        if (step == 2 && phase == TryPhase.C) {
+                        if (step == STEP_PRACTICE && phase == TryPhase.C) {
                             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, true).apply()
                             delay(15000)
                             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
@@ -566,7 +692,7 @@ fun WelcomeWizard(
                             stringResource(R.string.setup_try_phase_c_instruction)
                         )
                     }
-                    StepHeader(2, title, instruction)
+                    StepHeader(3, title, instruction)
 
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
@@ -588,6 +714,47 @@ fun WelcomeWizard(
                             unfocusedContainerColor = stepBackgroundColor
                         )
                     )
+
+                    if (trialState != TrialState.GRANTED && !VibeVoiceClient.isLinked(ctx) && !VibeVoiceClient.isTrialSpent(ctx)) {
+                        val isConnecting = trialState == TrialState.LOADING || trialState == TrialState.IDLE
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(cardShape)
+                                .background(color = stepBackgroundColor)
+                                .clickable(enabled = !isConnecting) { performTrialRequest(withRetry = true) }
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isConnecting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Brand.accent(dark),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    stringResource(R.string.setup_try_trial_connecting),
+                                    style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                Icon(
+                                    painterResource(R.drawable.ic_redo),
+                                    null,
+                                    Modifier.size(20.dp),
+                                    tint = Brand.accent(dark)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    stringResource(R.string.setup_try_trial_retry),
+                                    style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
 
                     if (phase == TryPhase.B) {
                         Spacer(Modifier.height(12.dp))
@@ -614,7 +781,7 @@ fun WelcomeWizard(
                             active = true
                         ) {
                             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
-                            step = 3
+                            step = STEP_LINK
                         }
                     } else {
                         ActionRow(
@@ -623,10 +790,10 @@ fun WelcomeWizard(
                             active = false
                         ) {
                             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_KEY_PULSE, false).apply()
-                            step = 3
+                            step = STEP_LINK
                         }
                     }
-                } else if (step == 3) {
+                } else if (step == STEP_LINK) {
                     var linked by rememberSaveable { mutableStateOf(VibeVoiceClient.isLinked(ctx)) }
                     // Only a link made on this screen earns the chime; arriving already linked does not.
                     val linkedOnArrival = rememberSaveable { linked }
@@ -634,7 +801,7 @@ fun WelcomeWizard(
                     var celebrated by rememberSaveable { mutableStateOf(false) }
                     OnResume { linked = VibeVoiceClient.isLinked(ctx) }
                     StepHeader(
-                        3,
+                        4,
                         stringResource(R.string.setup_minutes_title),
                         stringResource(R.string.setup_minutes_instruction)
                     )
@@ -644,9 +811,18 @@ fun WelcomeWizard(
                         ActionRow(R.drawable.ic_setup_check, stringResource(R.string.setup_link_done), true, primary = false) { }
                         Spacer(Modifier.height(8.dp))
                         ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_next_action), true) {
-                            step = 4
+                            step = STEP_FLOATING_MARK
                         }
                     } else {
+                        ActionRow(
+                            R.drawable.ic_setup_check,
+                            stringResource(R.string.setup_next_action),
+                            active = true,
+                            primary = true
+                        ) {
+                            step = STEP_FLOATING_MARK
+                        }
+                        Spacer(Modifier.height(8.dp))
                         val linkCardModifier = Modifier
                             .fillMaxWidth()
                             .clip(cardShape)
@@ -667,16 +843,13 @@ fun WelcomeWizard(
                                         else R.string.setup_link_action
                                     ),
                                     enabled,
-                                    brand = true
+                                    brand = true,
+                                    primary = false
                                 ) { if (enabled) onClick() }
                             }
                         ) { linked = true }
-                        Spacer(Modifier.height(8.dp))
-                        ActionRow(R.drawable.ic_setup_select, stringResource(R.string.setup_link_later_equal), false) {
-                            step = 4
-                        }
                     }
-                } else if (step == 4) {
+                } else if (step == STEP_FLOATING_MARK) {
                     var overlay by rememberSaveable { mutableStateOf(VoiceOverlay.isAllowed(ctx)) }
                     OnResume {
                         val allowed = VoiceOverlay.isAllowed(ctx)
@@ -689,7 +862,7 @@ fun WelcomeWizard(
                     var guardDialogShown by rememberSaveable { mutableStateOf(false) }
 
                     StepHeader(
-                        4,
+                        5,
                         stringResource(R.string.setup_floating_mark_title),
                         stringResource(R.string.setup_floating_mark_instruction)
                     )
@@ -706,7 +879,7 @@ fun WelcomeWizard(
                         // used to be a capture lifted off a black screen: right for a dark keyboard,
                         // a ghost of pale light on a light one, and never the colours a user with
                         // another theme would actually get.
-                        FloatingMarkPreview(Modifier.size(76.dp))
+                        FloatingMarkPreview(Modifier.size(56.dp))
                         Text(
                             stringResource(R.string.setup_extras_overlay_preview),
                             style = MaterialTheme.typography.bodyMedium.merge(color = Brand.textDim(dark)),
@@ -723,7 +896,7 @@ fun WelcomeWizard(
                             active = true
                         ) {
                             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, true).apply()
-                            step = 5
+                            step = STEP_STYLE
                         }
                     } else {
                         ActionRow(
@@ -750,7 +923,7 @@ fun WelcomeWizard(
                                         showGuardDialog = true
                                     } else {
                                         ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
-                                        step = 5
+                                        step = STEP_STYLE
                                     }
                                 }
                                 .padding(vertical = 8.dp),
@@ -802,7 +975,7 @@ fun WelcomeWizard(
                                         .clickable {
                                             showGuardDialog = false
                                             ctx.prefs().edit().putBoolean(KeySettings.PREF_VOICE_BACKGROUND, false).apply()
-                                            step = 5
+                                            step = STEP_STYLE
                                         }
                                         .padding(8.dp),
                                     color = Brand.textDim(dark)
@@ -812,6 +985,20 @@ fun WelcomeWizard(
                             shape = cardShape
                         )
                     }
+                } else if (step == STEP_STYLE) {
+                    StyleStep(
+                        header = {
+                            StepHeader(
+                                6,
+                                stringResource(R.string.setup_style_title),
+                                stringResource(R.string.setup_style_instruction)
+                            )
+                        },
+                        previous = PreviousKeyboard.fromName(previousName),
+                        presetName = stylePresetName,
+                        onPresetApplied = { stylePresetName = it.name },
+                        onNext = { step = STEP_DONE }
+                    )
                 }
             }
         }
@@ -819,7 +1006,7 @@ fun WelcomeWizard(
     Box(Modifier.fillMaxSize()) {
         BrandBackground(dark)
         // The waves on hero and closing screens
-        if (step == 0 || step == 5) HeroWaves(dark)
+        if (step == STEP_HERO || step == STEP_DONE) HeroWaves(dark)
         Surface(color = Color.Transparent) {
         CompositionLocalProvider(
             LocalContentColor provides textColor,
@@ -827,7 +1014,7 @@ fun WelcomeWizard(
         ) {
             // Scrollable, and padded for the keyboard.
             //
-            // The practice field in step 4 asks to be brought into view when it takes focus --
+            // The practice field asks to be brought into view when it takes focus --
             // BasicTextField does that by itself -- but the request needs a scrollable ancestor to
             // be honoured by, and there was none: a fillMaxSize Box with centred content cannot
             // move. So tapping the field put the keyboard over the field. `imePadding` is what
@@ -836,29 +1023,42 @@ fun WelcomeWizard(
             //
             // fillMaxSize before verticalScroll is deliberate: the column takes the viewport's
             // height, so Arrangement.Center still centres content that fits, and only content that
-            // does not fit scrolls. Step 6 was already close to overflowing on a short screen.
-            // A step starts at its top: the practice field in step 2 scrolls the column down with
-            // the keyboard open, and without the reset step 3 opened with its header scrolled away.
+            // does not fit scrolls. The closing screen was already close to overflowing on a short
+            // screen. A step starts at its top: the practice field scrolls the column down with
+            // the keyboard open, and without the reset the next step opened with its header scrolled
+            // away.
+            //
+            // The language and style steps are not scrolled as a whole: they pin their button to the
+            // bottom, and the language list takes the height that is left. They scroll inside
+            // themselves where they need to.
+            //
+            // The system bars are padded for explicitly. The activity is edge-to-edge, and a fixed
+            // top padding that cleared the status bar on one phone sat under it on another.
             val scrollState = rememberScrollState()
+            val pinned = isPinnedStep(step)
+            val heroLike = step == STEP_HERO || step == STEP_DONE
             LaunchedEffect(step) { scrollState.scrollTo(0) }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
                     .imePadding()
-                    .verticalScroll(scrollState)
-                    // Steps 1-4 start at the same height every time. Centred, each step sat wherever
-                    // its own height put it, so the wordmark and the step numbers jumped up and down
-                    // between steps. Anchored to the top, only the content below them changes. The
-                    // hero and the closing screen are single compositions and stay centred.
+                    .then(if (pinned) Modifier else Modifier.verticalScroll(scrollState))
+                    // Numbered steps start at the same height every time. Centred, each step sat
+                    // wherever its own height put it, so the wordmark and the step numbers jumped up
+                    // and down between steps. Anchored to the top, only the content below them
+                    // changes. The hero and the closing screen are single compositions and stay
+                    // centred.
                     .padding(horizontal = 28.dp)
-                    .padding(top = if (step == 0 || step == 5) 32.dp else 64.dp, bottom = 32.dp),
-                verticalArrangement = if (step == 0 || step == 5) Arrangement.Center else Arrangement.Top,
+                    .padding(top = if (heroLike) 32.dp else if (pinned) 12.dp else 24.dp, bottom = if (pinned) 12.dp else 32.dp),
+                verticalArrangement = if (heroLike) Arrangement.Center else Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Not for the hero and the closing screen: bigText has nothing for them, and the split
                 // left a blank 40 % column beside a squeezed screen.
-                if (useWideLayout && step != 0 && step != 5)
-                    Row {
+                if (useWideLayout && !heroLike)
+                    Row(if (pinned) Modifier.fillMaxSize() else Modifier) {
                         Box(Modifier.weight(0.4f)) {
                             bigText()
                         }
@@ -867,12 +1067,235 @@ fun WelcomeWizard(
                         }
                     }
                 else
-                    Column(Modifier.fillMaxWidth()) {
+                    Column(if (pinned) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
                         bigText()
                         steps()
                     }
             }
         }
+        }
+    }
+}
+
+/**
+ * Step 6: Style and feel.
+ *
+ * Shows the real keyboard with a live practice text field and compact controls above it.
+ * The style is pre-selected from the previous-keyboard answer in step 3 (Gboard -> GBOARD, Samsung -> SAMSUNG,
+ * else OWN). Vibration toggle defaults to off.
+ *
+ * Finding (c): Choosing OTHER or FIRST in previous-keyboard does NOT call KeyboardPresets.apply(OWN) on entry;
+ * it only pre-selects the radio button. Explicitly tapping OWN applies it.
+ */
+@Composable
+private fun StyleStep(
+    header: @Composable () -> Unit,
+    previous: PreviousKeyboard?,
+    presetName: String?,
+    onPresetApplied: (KeyboardPreset) -> Unit,
+    onNext: () -> Unit
+) {
+    val ctx = LocalContext.current
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val accent = Brand.accent(dark)
+    val textColor = Brand.text(dark)
+    val textColorDim = Brand.textDim(dark)
+    val fill = if (dark) Color(0x17FFFFFF) else Color(0x0F000000)
+    val border = Brand.cardBorder(dark)
+    val shape = RoundedCornerShape(6.dp)
+
+    var selectedPreset by rememberSaveable {
+        mutableStateOf(
+            presetName?.let { runCatching { KeyboardPreset.valueOf(it) }.getOrNull() }
+                ?: when (previous) {
+                    PreviousKeyboard.GBOARD -> KeyboardPreset.GBOARD
+                    PreviousKeyboard.SAMSUNG -> KeyboardPreset.SAMSUNG
+                    else -> KeyboardPreset.OWN
+                }
+        )
+    }
+
+    var vibrateEnabled by rememberSaveable {
+        mutableStateOf(ctx.prefs().getBoolean(KeySettings.PREF_VIBRATE_ON, Defaults.PREF_VIBRATE_ON))
+    }
+
+    var testText by rememberSaveable { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        if (presetName == null) {
+            val initial = previous?.toPreset()
+            if (initial != null) {
+                KeyboardPresets.apply(ctx, initial)
+                (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+                KeyboardSwitcher.getInstance().reloadKeyboard()
+                onPresetApplied(initial)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        delay(150)
+        try {
+            focusRequester.requestFocus()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun selectPreset(preset: KeyboardPreset) {
+        selectedPreset = preset
+        KeyboardPresets.apply(ctx, preset)
+        (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+        KeyboardSwitcher.getInstance().reloadKeyboard()
+        onPresetApplied(preset)
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        header()
+        Spacer(Modifier.height(8.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                stringResource(R.string.setup_style_label),
+                style = MaterialTheme.typography.titleSmall.merge(color = textColor),
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val presets = listOf(
+                    Pair(KeyboardPreset.OWN, stringResource(R.string.setup_style_own)),
+                    Pair(KeyboardPreset.GBOARD, stringResource(R.string.setup_style_gboard)),
+                    Pair(KeyboardPreset.SAMSUNG, stringResource(R.string.setup_style_samsung))
+                )
+                presets.forEach { (preset, label) ->
+                    val isSelected = selectedPreset == preset
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 44.dp)
+                            .clip(shape)
+                            .background(if (isSelected) accent.copy(alpha = if (dark) 0.20f else 0.14f) else fill)
+                            .border(
+                                BorderStroke(if (isSelected) 1.5.dp else 1.dp, if (isSelected) accent else border),
+                                shape
+                            )
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
+                                onClick = { selectPreset(preset) }
+                            )
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = null,
+                            modifier = Modifier.size(20.dp),
+                            colors = RadioButtonDefaults.colors(selectedColor = accent, unselectedColor = textColorDim)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.bodySmall.merge(color = textColor),
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // the label on its own line above the dots: it never wraps and the dots get the full width
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(fill)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    stringResource(R.string.keyboard_accent_title),
+                    style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                )
+                // keyed on the preset: choosing a preset changes what "no choice yet" shows
+                androidx.compose.runtime.key(selectedPreset) { AccentDots(Modifier.fillMaxWidth(), ringColor = textColor) }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(fill)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    stringResource(R.string.setup_vibrate_switch),
+                    style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = vibrateEnabled,
+                    onCheckedChange = { checked ->
+                        vibrateEnabled = checked
+                        ctx.prefs().edit().putBoolean(KeySettings.PREF_VIBRATE_ON, checked).apply()
+                        (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+                        KeyboardSwitcher.getInstance().reloadKeyboard()
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = accent,
+                        uncheckedThumbColor = textColorDim,
+                        uncheckedTrackColor = fill
+                    )
+                )
+            }
+
+            OutlinedTextField(
+                value = testText,
+                onValueChange = { testText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+                placeholder = { Text(stringResource(R.string.setup_style_hint), style = MaterialTheme.typography.bodyMedium) },
+                minLines = 2,
+                maxLines = 3,
+                shape = shape,
+                textStyle = MaterialTheme.typography.bodyMedium.merge(color = textColor),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = accent,
+                    unfocusedBorderColor = border,
+                    cursorColor = accent,
+                    focusedContainerColor = fill,
+                    unfocusedContainerColor = fill
+                )
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = onNext,
+            shape = RoundedCornerShape(percent = 50),
+            colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.White),
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 50.dp)
+        ) {
+            Text(
+                stringResource(R.string.setup_next_action),
+                fontFamily = BrandFont,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium
+            )
         }
     }
 }
@@ -1008,11 +1431,11 @@ fun WizardHero(
 }
 
 /**
- * The waves behind the hero, with nothing speaking into them.
+ * The floating mark, live, shrunk to fit [modifier]'s box.
  *
- * The same [VoiceWaveView] the keyboard runs during a session, in its demo mode. Not a second
- * implementation and not a video: it is the one piece of the landing page's hero that this app
- * already had, and it costs a view and a sine to reuse it.
+ * The view is laid out at the size the real window would have and scaled down to the box, so the
+ * drawing is the real one; the box itself stays the layout size, which keeps it from overlapping
+ * the text beside it.
  */
 @Composable
 private fun FloatingMarkPreview(modifier: Modifier) {
@@ -1031,6 +1454,13 @@ private fun FloatingMarkPreview(modifier: Modifier) {
     }
 }
 
+/**
+ * The waves behind the hero, with nothing speaking into them.
+ *
+ * The same [VoiceWaveView] the keyboard runs during a session, in its demo mode. Not a second
+ * implementation and not a video: it is the one piece of the landing page's hero that this app
+ * already had, and it costs a view and a sine to reuse it.
+ */
 @Composable
 private fun HeroWaves(dark: Boolean) {
     // Keyed on the theme, so switching it rebuilds the view with the matching colour.

@@ -3,7 +3,16 @@ package helium314.keyboard.settings.screens
 
 import android.content.Context
 import android.os.Build
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import helium314.keyboard.settings.preferences.AccentDots
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,6 +39,7 @@ import helium314.keyboard.settings.Setting
 import helium314.keyboard.settings.preferences.Preference
 import helium314.keyboard.settings.SearchSettingsScreen
 import helium314.keyboard.settings.SettingsActivity
+import helium314.keyboard.settings.SettingsDestination
 import helium314.keyboard.settings.preferences.SliderPreference
 import helium314.keyboard.settings.preferences.SwitchPreference
 import helium314.keyboard.latin.utils.Theme
@@ -42,6 +52,8 @@ import helium314.keyboard.settings.preferences.KeyboardScalePreference
 import helium314.keyboard.settings.preferences.TextInputPreference
 import helium314.keyboard.latin.utils.previewDark
 import androidx.core.content.edit
+import helium314.keyboard.latin.settings.KeyboardPreset
+import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.FoldableUtils
 import helium314.keyboard.settings.dialogs.ThreeButtonAlertDialog
@@ -57,11 +69,15 @@ fun AppearanceScreen(
         Log.v("irrelevant", "stupid way to trigger recomposition on preference change")
     val dayNightMode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && prefs.getBoolean(Settings.PREF_THEME_DAY_NIGHT, Defaults.PREF_THEME_DAY_NIGHT)
     val items = listOf(
-        R.string.settings_screen_theme,
+        R.string.appearance_section_look,
+        Settings.PREF_KEYBOARD_PRESET,
+        Settings.PREF_KEYBOARD_ACCENT,
+        SettingsWithoutKey.SWITCHER,
+        R.string.appearance_section_advanced_theme,
         Settings.PREF_THEME_STYLE,
         Settings.PREF_ICON_STYLE,
         Settings.PREF_CUSTOM_ICON_NAMES,
-        Settings.PREF_THEME_KEY_BORDERS,
+        Settings.PREF_DRAW_KEYS,
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
             Settings.PREF_THEME_DAY_NIGHT else null,
         Settings.PREF_THEME_COLORS,
@@ -77,7 +93,7 @@ fun AppearanceScreen(
             || prefs.getBoolean(Settings.PREF_ENABLE_SPLIT_KEYBOARD_FOLDED_LANDSCAPE, Defaults.PREF_ENABLE_SPLIT_KEYBOARD)
             )
             Settings.PREF_SPLIT_SPACER_SCALE_PREFIX else null,
-        if (prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS))
+        if (Settings.readDrawKeys(prefs))
             Settings.PREF_KEY_GAP_SCALE_PREFIX else null,
         Settings.PREF_KEYBOARD_HEIGHT_SCALE_PREFIX,
         Settings.PREF_BOTTOM_ROW_SCALE_PREFIX,
@@ -101,7 +117,43 @@ fun AppearanceScreen(
 }
 
 fun createAppearanceSettings(context: Context) = listOf(
-    Setting(context, Settings.PREF_THEME_STYLE, R.string.theme_style) { setting ->
+    Setting(context, Settings.PREF_KEYBOARD_PRESET, R.string.keyboard_preset_title) { setting ->
+        val ctx = LocalContext.current
+        val items = listOf(
+            stringResource(R.string.keyboard_preset_own) to KeyboardPreset.OWN.name,
+            stringResource(R.string.keyboard_preset_gboard) to KeyboardPreset.GBOARD.name,
+            stringResource(R.string.keyboard_preset_samsung) to KeyboardPreset.SAMSUNG.name,
+        )
+        ListPreference(
+            setting = setting,
+            items = items,
+            default = Defaults.PREF_KEYBOARD_PRESET
+        ) { selectedValue ->
+            val preset = try {
+                KeyboardPreset.valueOf(selectedValue)
+            } catch (e: Exception) {
+                KeyboardPreset.OWN
+            }
+            KeyboardPresets.apply(ctx, preset)
+            (ctx.getActivity() as? SettingsActivity)?.prefChanged()
+        }
+    },
+    Setting(context, Settings.PREF_KEYBOARD_ACCENT, R.string.keyboard_accent_title) { setting ->
+        // the label on its own line above the dots, so it never wraps and the dots get the full width
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth())
+            AccentDots(Modifier.fillMaxWidth())
+        }
+    },
+    // a quiet way into the switcher wizard (it used to be a top level entry); the nav host opens the screen
+    Setting(context, SettingsWithoutKey.SWITCHER, R.string.switcher_entry_title, R.string.switcher_entry_summary) { setting ->
+        Preference(
+            name = setting.title,
+            description = setting.description,
+            onClick = { SettingsDestination.navigateTo(SettingsDestination.Switcher) }
+        )
+    },
+    Setting(context, Settings.PREF_THEME_STYLE, R.string.key_shape) { setting ->
         val ctx = LocalContext.current
         val prefs = ctx.prefs()
         val items = KeyboardTheme.STYLES.map {
@@ -189,8 +241,8 @@ fun createAppearanceSettings(context: Context) = listOf(
                 default = Defaults.PREF_THEME_COLORS_NIGHT
             )
     },
-    Setting(context, Settings.PREF_THEME_KEY_BORDERS, R.string.key_borders) {
-        SwitchPreference(it, Defaults.PREF_THEME_KEY_BORDERS) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
+    Setting(context, Settings.PREF_DRAW_KEYS, R.string.draw_keys, R.string.draw_keys_summary) {
+        SwitchPreference(it, Defaults.PREF_DRAW_KEYS) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
     Setting(context, Settings.PREF_THEME_DAY_NIGHT, R.string.day_night_mode, R.string.day_night_mode_summary) {
         SwitchPreference(it, Defaults.PREF_THEME_DAY_NIGHT) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }

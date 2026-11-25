@@ -58,6 +58,7 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_ICON_STYLE = "icon_style";
     public static final String PREF_THEME_COLORS = "theme_colors";
     public static final String PREF_THEME_COLORS_NIGHT = "theme_colors_night";
+    public static final String PREF_DRAW_KEYS = "draw_keys";
     public static final String PREF_THEME_KEY_BORDERS = "theme_key_borders";
     public static final String PREF_THEME_DAY_NIGHT = "theme_auto_day_night";
     public static final String PREF_USER_COLORS_PREFIX = "user_colors_";
@@ -89,6 +90,9 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_KEY_USE_PERSONALIZED_DICTS = "use_personalized_dicts";
     public static final String PREF_KEY_USE_DOUBLE_SPACE_PERIOD = "use_double_space_period";
     public static final String PREF_BLOCK_POTENTIALLY_OFFENSIVE = "block_potentially_offensive";
+    public static final String PREF_KEYBOARD_PRESET = "keyboard_preset";
+    public static final String PREF_KEYBOARD_ACCENT = "keyboard_accent";
+    public static final String PREF_KEYBOARD_ACCENT_CUSTOM = "keyboard_accent_custom";
     public static final String PREF_SHOW_LANGUAGE_SWITCH_KEY = "show_language_switch_key";
     public static final String PREF_LANGUAGE_SWITCH_KEY = "language_switch_key";
     public static final String PREF_SHOW_EMOJI_KEY = "show_emoji_key";
@@ -115,6 +119,8 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_VOICE_BACKGROUND = "vibevoice_background_dictation";
     public static final String PREF_VOICE_KEY_PULSE = "vibevoice_voice_key_pulse";
     public static final String PREF_HAS_DICTATED = "vibevoice_has_dictated";
+    public static final String PREF_SETUP_WIZARD_ACTIVE = "vibevoice_setup_wizard_active";
+    public static final String PREF_TRIAL_RETRY_TRIGGER = "vibevoice_trial_retry_trigger";
     public static final String PREF_BG_HINT_SHOWN = "vibevoice_background_hint_shown";
     public static final String PREF_OVERLAY_ENABLED = "vibevoice_overlay_enabled";
     public static final String PREF_OVERLAY_ICON = "vibevoice_overlay_icon";
@@ -136,6 +142,8 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_WAVE_SPREAD = "vibevoice_wave_spread";
     public static final String PREF_WAVE_JITTER = "vibevoice_wave_jitter";
     public static final String PREF_WAVE_COUNT = "vibevoice_wave_count";
+    public static final String PREF_WAVE_NOISE_FLOOR = "vibevoice_wave_noise_floor";
+    public static final String PREF_WAVE_SPEECH_PEAK = "vibevoice_wave_speech_peak";
     public static final String PREF_WAVE_ATTACK = "vibevoice_wave_attack";
     public static final String PREF_WAVE_DAMPING = "vibevoice_wave_damping";
     public static final String PREF_HINT_FONT_SCALE = "hint_font_scale";
@@ -250,7 +258,7 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
         return switch (key) {
             case PREF_LAST_SHOWN_EMOJI_CATEGORY_PAGE_ID, PREF_LAST_SHOWN_EMOJI_CATEGORY_ID, PREF_RECENT_EMOJIS,
                  PREF_DONT_SHOW_MISSING_DICTIONARY_DIALOG, PREF_SELECTED_SUBTYPE, PREF_VOICE_KEY_PULSE,
-                 PREF_HAS_DICTATED -> false;
+                 PREF_HAS_DICTATED, PREF_SETUP_WIZARD_ACTIVE, PREF_TRIAL_RETRY_TRIGGER -> false;
             default -> !key.startsWith(PREF_SAVED_APP_SUBTYPE_PREFIX) && !key.startsWith("floating_pos");
         };
     }
@@ -508,6 +516,19 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
         int index = SettingsKt.findIndexOfDefaultSetting(landscape, folded);
         float defaultValue = Defaults.PREF_KEY_GAP_SCALE[index];
         return prefs.getFloat(SettingsKt.createPrefKeyForBooleanSettings(PREF_KEY_GAP_SCALE_PREFIX, index, 2), defaultValue);
+    }
+
+    public static boolean readDrawKeys(final SharedPreferences prefs) {
+        return prefs.getBoolean(PREF_DRAW_KEYS, prefs.getBoolean(PREF_THEME_KEY_BORDERS, Defaults.PREF_DRAW_KEYS));
+    }
+
+    public static KeyboardPreset readKeyboardPreset(final SharedPreferences prefs) {
+        final String name = prefs.getString(PREF_KEYBOARD_PRESET, Defaults.PREF_KEYBOARD_PRESET);
+        try {
+            return KeyboardPreset.valueOf(name);
+        } catch (Exception e) {
+            return KeyboardPreset.OWN;
+        }
     }
 
     public static boolean readHasHardwareKeyboard(final Configuration conf) {

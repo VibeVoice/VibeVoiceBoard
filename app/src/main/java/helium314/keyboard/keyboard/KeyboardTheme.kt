@@ -21,6 +21,9 @@ import helium314.keyboard.latin.common.Colors
 import helium314.keyboard.latin.common.DefaultColors
 import helium314.keyboard.latin.common.DynamicColors
 import helium314.keyboard.latin.settings.Defaults
+import helium314.keyboard.latin.settings.KeyboardAccent
+import helium314.keyboard.latin.settings.KeyboardPreset
+import helium314.keyboard.latin.settings.KeyboardPresets
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.ResourceUtils
 import helium314.keyboard.latin.utils.brightenOrDarken
@@ -65,6 +68,10 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
         const val THEME_PINK = "pink"
         const val THEME_SAND = "sand"
         const val THEME_VIOLETTE = "violette"
+        /** the palette of the Gboard and Samsung presets, day and night; set by the presets, not offered in the theme list */
+        const val THEME_VIBEVOICE = "vibevoice"
+        /** name the first Samsung palette was stored under: still understood, see [THEME_VIBEVOICE] */
+        const val THEME_SAMSUNG_LEGACY = "samsung"
         fun getAvailableDefaultColors(prefs: SharedPreferences, isNight: Boolean) = listOfNotNull(
             if (!isNight) THEME_LIGHT else null, THEME_DARK,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) THEME_DYNAMIC else null,
@@ -117,7 +124,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
         fun getKeyboardTheme(context: Context): KeyboardTheme {
             val prefs = context.prefs()
             val style = prefs.getString(Settings.PREF_THEME_STYLE, Defaults.PREF_THEME_STYLE)
-            val borders = prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)
+            val borders = Settings.readDrawKeys(prefs)
             val matchingId = when (style) {
                 STYLE_HOLO -> THEME_ID_HOLO_BASE
                 STYLE_ROUNDED -> if (borders) THEME_ID_ROUNDED_BASE_BORDER else THEME_ID_ROUNDED_BASE
@@ -145,17 +152,57 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
         }
 
         private fun getThemeColors(themeName: String, themeStyle: String, context: Context, prefs: SharedPreferences, isNight: Boolean): Colors {
-            val hasBorders = prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)
+            val colors = buildThemeColors(themeName, themeStyle, context, prefs, isNight)
+            // a chosen accent (any preset) gets a glyph by luminance; Own without a choice keeps its old look
+            val chosen = KeyboardPresets.readAccentColor(prefs, context, isNight) != null || Settings.readKeyboardPreset(prefs) != KeyboardPreset.OWN
+            if (chosen && colors is DefaultColors) colors.useLuminanceGlyphs()
+            return colors
+        }
+
+        private fun buildThemeColors(themeName: String, themeStyle: String, context: Context, prefs: SharedPreferences, isNight: Boolean): Colors {
+            val hasBorders = Settings.readDrawKeys(prefs)
             val backgroundImage = Settings.readUserBackgroundImage(context, isNight)
+            // the accent the user picked; the Own preset only recolors the accent of its theme, the others carry it in their palette
+            val accentColor = KeyboardPresets.readAccentColor(prefs, context, isNight)
+            val ownAccent = if (Settings.readKeyboardPreset(prefs) == KeyboardPreset.OWN) accentColor else null
+            fun acc(default: Int) = ownAccent ?: default
             return when (themeName) {
                 THEME_DYNAMIC -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) DynamicColors(context, themeStyle, hasBorders, backgroundImage)
                     else getThemeColors(THEME_LIGHT, themeStyle, context, prefs, isNight)
                 }
+                THEME_VIBEVOICE, "samsung" -> {
+                    // our own palette for the Gboard and Samsung presets: a warm violet-tinted gray and the violet of our wave.
+                    // alpha 0xFE: not 255, so the draw_keys alpha blend leaves the color as it is (to within 1 step)
+                    val violet = accentColor ?: KeyboardAccent.VIOLET.color
+                    if (isNight) DefaultColors(
+                        themeStyle, hasBorders,
+                        accent = violet,
+                        background = "#16141A".toColorInt(),
+                        keyBackground = "#FE37333D".toColorInt(),
+                        functionalKey = "#FE25222B".toColorInt(),
+                        spaceBar = "#FE37333D".toColorInt(),
+                        keyText = Color.WHITE,
+                        keyHintText = "#A59FB0".toColorInt(),
+                        spaceBarText = "#CFC9D8".toColorInt(),
+                        keyboardBackground = backgroundImage
+                    ) else DefaultColors(
+                        themeStyle, hasBorders,
+                        accent = violet,
+                        background = "#ECE8F0".toColorInt(),
+                        keyBackground = "#FEFBFAFC".toColorInt(),
+                        functionalKey = "#FED9D4DF".toColorInt(),
+                        spaceBar = "#FEFBFAFC".toColorInt(),
+                        keyText = "#1F1B24".toColorInt(),
+                        keyHintText = "#6F6878".toColorInt(),
+                        spaceBarText = "#4A4452".toColorInt(),
+                        keyboardBackground = backgroundImage
+                    )
+                }
                 THEME_LIGHT -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_light),
+                    acc(ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_light)),
                     ContextCompat.getColor(context, R.color.keyboard_background_lxx_light_border),
                     ContextCompat.getColor(context, R.color.key_background_normal_lxx_light_border),
                     ContextCompat.getColor(context, R.color.key_background_functional_lxx_light_border),
@@ -167,11 +214,11 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_DARK -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark),
+                    acc(ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark)),
                     "#263238".toColorInt(),
-                    "#364248".toColorInt(),
-                    "#2d393f".toColorInt(),
-                    "#364248".toColorInt(),
+                    if (hasBorders) "#485862".toColorInt() else "#364248".toColorInt(),
+                    if (hasBorders) "#566570".toColorInt() else "#2d393f".toColorInt(),
+                    if (hasBorders) "#485862".toColorInt() else "#364248".toColorInt(),
                     ContextCompat.getColor(context, R.color.key_text_color_lxx_dark),
                     ContextCompat.getColor(context, R.color.key_hint_letter_color_lxx_dark),
                     keyboardBackground = backgroundImage
@@ -179,7 +226,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_HOLO_WHITE -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.WHITE,
+                    acc(Color.WHITE),
                     "#282828".toColorInt(),
                     Color.WHITE, // drawable is transparent
                     "#444444".toColorInt(), // should be 222222, but the key drawable is already grey
@@ -193,7 +240,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_DARKER -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark),
+                    acc(ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark)),
                     ContextCompat.getColor(context, R.color.keyboard_background_lxx_dark_border),
                     ContextCompat.getColor(context, R.color.key_background_normal_lxx_dark_border),
                     ContextCompat.getColor(context, R.color.key_background_functional_lxx_dark_border),
@@ -205,7 +252,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_BLACK -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark),
+                    acc(ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark)),
                     ContextCompat.getColor(context, R.color.background_amoled_black),
                     ContextCompat.getColor(context, R.color.background_amoled_dark),
                     ContextCompat.getColor(context, R.color.background_amoled_dark),
@@ -217,7 +264,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_BLUE_GRAY -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(120, 144, 156),
+                    acc(Color.rgb(120, 144, 156)),
                     Color.rgb(236, 239, 241),
                     Color.WHITE,
                     Color.rgb(207, 216, 220),
@@ -229,7 +276,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_BROWN -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(141, 110, 99),
+                    acc(Color.rgb(141, 110, 99)),
                     Color.rgb(239, 235, 233),
                     Color.WHITE,
                     Color.rgb(215, 204, 200),
@@ -241,7 +288,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_CHOCOLATE -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(80, 128, 255),
+                    acc(Color.rgb(80, 128, 255)),
                     Color.rgb(140, 112, 94),
                     Color.rgb(193, 163, 146),
                     Color.rgb(168, 127, 103),
@@ -253,7 +300,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_CLOUDY -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(255, 113, 129),
+                    acc(Color.rgb(255, 113, 129)),
                     Color.rgb(81, 97, 113),
                     Color.rgb(117, 128, 142),
                     Color.rgb(99, 109, 121),
@@ -265,7 +312,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_FOREST -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(75, 110, 75),
+                    acc(Color.rgb(75, 110, 75)),
                     Color.rgb(181, 125, 88),
                     Color.rgb(228, 212, 191),
                     Color.rgb(212, 186, 153),
@@ -279,7 +326,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_INDIGO -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(92, 107, 192),
+                    acc(Color.rgb(92, 107, 192)),
                     Color.rgb(232, 234, 246),
                     Color.WHITE,
                     Color.rgb(197, 202, 233),
@@ -291,7 +338,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_OCEAN -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(255, 124, 0),
+                    acc(Color.rgb(255, 124, 0)),
                     Color.rgb(89, 109, 155),
                     Color.rgb(132, 157, 212),
                     Color.rgb(81, 116, 194),
@@ -303,7 +350,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_PINK -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(236, 64, 122),
+                    acc(Color.rgb(236, 64, 122)),
                     Color.rgb(252, 228, 236),
                     Color.WHITE,
                     Color.rgb(248, 187, 208),
@@ -315,7 +362,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_SAND -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(110, 155, 255),
+                    acc(Color.rgb(110, 155, 255)),
                     Color.rgb(242, 232, 218),
                     Color.WHITE,
                     Color.rgb(234, 211, 185),
@@ -327,7 +374,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                 THEME_VIOLETTE -> DefaultColors(
                     themeStyle,
                     hasBorders,
-                    Color.rgb(255, 96, 255),
+                    acc(Color.rgb(255, 96, 255)),
                     Color.rgb(112, 112, 174),
                     Color.rgb(150, 150, 216),
                     Color.rgb(123, 123, 206),
@@ -492,7 +539,7 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                     val background = determineUserColor(colors, context, COLOR_BACKGROUND, isNight)
                     return if (isBrightColor(background)) {
                         // but if key borders are enabled, we still want reasonable contrast
-                        if (!context.prefs().getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)
+                        if (!Settings.readDrawKeys(context.prefs())
                             || isGoodContrast(Color.BLACK, determineUserColor(colors, context, COLOR_KEYS, isNight))
                         ) Color.BLACK
                         else Color.GRAY

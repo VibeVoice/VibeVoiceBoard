@@ -26,7 +26,11 @@ import helium314.keyboard.keyboard.KeyboardTheme.Companion.STYLE_HOLO
 import helium314.keyboard.keyboard.KeyboardTheme.Companion.STYLE_MATERIAL
 import helium314.keyboard.latin.common.ColorType.*
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.utils.GLYPH_MIN_CONTRAST
+import helium314.keyboard.latin.utils.SHIFT_ICON_MIN_CONTRAST
+import helium314.keyboard.latin.utils.accentGlyphColor
 import helium314.keyboard.latin.utils.adjustLuminosityAndKeepAlpha
+import helium314.keyboard.latin.utils.contrastRatio
 import helium314.keyboard.latin.utils.brighten
 import helium314.keyboard.latin.utils.brightenOrDarken
 import helium314.keyboard.latin.utils.darken
@@ -34,6 +38,9 @@ import helium314.keyboard.latin.utils.isBrightColor
 import helium314.keyboard.latin.utils.isDarkColor
 import java.util.EnumMap
 import androidx.core.graphics.drawable.toDrawable
+
+const val DRAW_KEYS_ALPHA_LETTER = 0xCC // 80% alpha (204 / 255)
+const val DRAW_KEYS_ALPHA_FUNCTIONAL = 0xDB // ~86% alpha (219 / 255)
 
 interface Colors {
     // these theme parameters should no be in here, but are still used
@@ -218,24 +225,30 @@ class DynamicColors(context: Context, override val themeStyle: String, override 
             else colorFilter(keyBackground)
 
         if (hasKeyBorders) {
+            val capKeyBackground = ColorUtils.setAlphaComponent(keyBackground, DRAW_KEYS_ALPHA_LETTER)
+            val capFunctionalKey = ColorUtils.setAlphaComponent(
+                if (!isNight) functionalKey else doubleAdjustedKeyBackground,
+                DRAW_KEYS_ALPHA_FUNCTIONAL
+            )
+
             backgroundStateList =
                 if (!isNight) pressedStateList(adjustedFunctionalKey, background)
                 else pressedStateList(adjustedKeyBackground, background)
 
             keyStateList =
-                if (!isNight) pressedStateList(adjustedBackground, keyBackground)
-                else pressedStateList(adjustedKeyBackground, keyBackground)
+                if (!isNight) pressedStateList(ColorUtils.setAlphaComponent(adjustedBackground, DRAW_KEYS_ALPHA_LETTER), capKeyBackground)
+                else pressedStateList(ColorUtils.setAlphaComponent(adjustedKeyBackground, DRAW_KEYS_ALPHA_LETTER), capKeyBackground)
 
             functionalKeyStateList =
-                if (!isNight) pressedStateList(doubleAdjustedFunctionalKey, functionalKey)
-                else pressedStateList(functionalKey, doubleAdjustedKeyBackground)
+                if (!isNight) pressedStateList(ColorUtils.setAlphaComponent(doubleAdjustedFunctionalKey, DRAW_KEYS_ALPHA_FUNCTIONAL), capFunctionalKey)
+                else pressedStateList(ColorUtils.setAlphaComponent(functionalKey, DRAW_KEYS_ALPHA_FUNCTIONAL), capFunctionalKey)
 
             actionKeyStateList =
                 if (!isNight) pressedStateList(gesture, accent)
                 else pressedStateList(doubleAdjustedAccent, accent)
 
             spaceBarStateList =
-                if (themeStyle == STYLE_HOLO) pressedStateList(spaceBar, spaceBar)
+                if (themeStyle == STYLE_HOLO) pressedStateList(ColorUtils.setAlphaComponent(spaceBar, DRAW_KEYS_ALPHA_LETTER), ColorUtils.setAlphaComponent(spaceBar, DRAW_KEYS_ALPHA_LETTER))
                 else keyStateList
 
         } else {
@@ -282,10 +295,13 @@ class DynamicColors(context: Context, override val themeStyle: String, override 
             EMOJI_SEARCH_TEXT, CLIPBOARD_SUGGESTION_ICON -> keyText
         KEY_HINT_TEXT -> keyHintText
         SPACE_BAR_TEXT -> spaceBarText
-        FUNCTIONAL_KEY_BACKGROUND, EMOJI_SEARCH_BACKGROUND -> if (!isNight) functionalKey else doubleAdjustedKeyBackground
-        SPACE_BAR_BACKGROUND -> spaceBar
+        FUNCTIONAL_KEY_BACKGROUND, EMOJI_SEARCH_BACKGROUND -> {
+            val functional = if (!isNight) functionalKey else doubleAdjustedKeyBackground
+            if (hasKeyBorders) ColorUtils.setAlphaComponent(functional, DRAW_KEYS_ALPHA_FUNCTIONAL) else functional
+        }
+        SPACE_BAR_BACKGROUND -> if (hasKeyBorders) ColorUtils.setAlphaComponent(spaceBar, DRAW_KEYS_ALPHA_LETTER) else spaceBar
         MORE_SUGGESTIONS_WORD_BACKGROUND, MAIN_BACKGROUND -> background
-        KEY_BACKGROUND -> keyBackground
+        KEY_BACKGROUND -> if (hasKeyBorders) ColorUtils.setAlphaComponent(keyBackground, DRAW_KEYS_ALPHA_LETTER) else keyBackground
         ACTION_KEY_POPUP_KEYS_BACKGROUND -> if (themeStyle == STYLE_HOLO) adjustedBackground else accent
         STRIP_BACKGROUND -> if (!hasKeyBorders && themeStyle == STYLE_MATERIAL) adjustedBackground else background
         CLIPBOARD_SUGGESTION_BACKGROUND -> keyBackground
@@ -391,7 +407,12 @@ class DefaultColors (
     private val accentColorFilter = colorFilter(accent)
 
     /** color filter for the white action key icons in material theme, switches to gray if necessary for contrast */
-    private val actionKeyIconColorFilter: ColorFilter?
+    private var actionKeyIconColorFilter: ColorFilter?
+    /** the glyph / label color on the action key background; white unless [useLuminanceGlyphs] found it too weak */
+    private var actionGlyph = Color.WHITE
+    /** the color of the active shift glyph, which sits on a key and is the accent unless that is hard to see there */
+    private var shiftIconColor = accent
+    private var shiftIconFilter: ColorFilter = accentColorFilter
 
     private val backgroundStateList: ColorStateList
     private val keyStateList: ColorStateList
@@ -443,14 +464,22 @@ class DefaultColors (
 
         adjustedBackgroundFilter = colorFilter(adjustedBackground)
         if (hasKeyBorders) {
+            val keyAlpha = if (Color.alpha(keyBackground) == 255) DRAW_KEYS_ALPHA_LETTER else Color.alpha(keyBackground)
+            val functionalAlpha = if (Color.alpha(functionalKey) == 255) DRAW_KEYS_ALPHA_FUNCTIONAL else Color.alpha(functionalKey)
+            val spaceBarAlpha = if (Color.alpha(spaceBar) == 255) DRAW_KEYS_ALPHA_LETTER else Color.alpha(spaceBar)
+
+            val capKeyBackground = ColorUtils.setAlphaComponent(keyBackground, keyAlpha)
+            val capFunctionalKey = ColorUtils.setAlphaComponent(functionalKey, functionalAlpha)
+            val capSpaceBar = ColorUtils.setAlphaComponent(spaceBar, spaceBarAlpha)
+
             backgroundStateList = pressedStateList(brightenOrDarken(background, true), background)
-            keyStateList = if (themeStyle == STYLE_HOLO) pressedStateList(keyBackground, keyBackground)
-                else pressedStateList(brightenOrDarken(keyBackground, true), keyBackground)
-            functionalKeyStateList = pressedStateList(brightenOrDarken(functionalKey, true), functionalKey)
+            keyStateList = if (themeStyle == STYLE_HOLO) pressedStateList(capKeyBackground, capKeyBackground)
+                else pressedStateList(brightenOrDarken(capKeyBackground, true), capKeyBackground)
+            functionalKeyStateList = pressedStateList(brightenOrDarken(capFunctionalKey, true), capFunctionalKey)
             actionKeyStateList = if (themeStyle == STYLE_HOLO) functionalKeyStateList
                 else pressedStateList(brightenOrDarken(accent, true), accent)
-            spaceBarStateList = if (themeStyle == STYLE_HOLO) pressedStateList(spaceBar, spaceBar)
-                else pressedStateList(brightenOrDarken(spaceBar, true), spaceBar)
+            spaceBarStateList = if (themeStyle == STYLE_HOLO) pressedStateList(capSpaceBar, capSpaceBar)
+                else pressedStateList(brightenOrDarken(capSpaceBar, true), capSpaceBar)
         } else {
             // need to set color to background if key borders are disabled, or there will be ugly keys
             backgroundStateList = pressedStateList(brightenOrDarken(background, true), background)
@@ -469,9 +498,25 @@ class DefaultColors (
         }
     }
 
+    /**
+     * For an accent the user chose: the glyph on the action key is white or near-black by the accent's luminance,
+     * and the active shift glyph falls back to the key text color when the accent would hardly show on the key.
+     */
+    fun useLuminanceGlyphs() {
+        if (themeStyle == STYLE_HOLO) return
+        actionGlyph = accentGlyphColor(accent)
+        actionKeyIconColorFilter = if (actionGlyph == Color.WHITE) null else colorFilter(actionGlyph)
+        val shiftKeyBackground = if (hasKeyBorders) functionalKey else background
+        if (contrastRatio(accent, shiftKeyBackground) < SHIFT_ICON_MIN_CONTRAST) {
+            shiftIconColor = keyText
+            shiftIconFilter = keyTextFilter
+        }
+    }
+
     override fun get(color: ColorType): Int = when (color) {
+        SHIFT_KEY_ICON -> shiftIconColor
         TOOL_BAR_KEY_ENABLED_BACKGROUND, EMOJI_CATEGORY_SELECTED, ACTION_KEY_BACKGROUND,
-            CLIPBOARD_PIN, SHIFT_KEY_ICON -> accent
+            CLIPBOARD_PIN -> accent
         AUTOFILL_BACKGROUND_CHIP -> if (themeStyle == STYLE_MATERIAL && !hasKeyBorders) background else adjustedBackground
         GESTURE_PREVIEW, POPUP_KEYS_BACKGROUND, MORE_SUGGESTIONS_BACKGROUND, KEY_PREVIEW_BACKGROUND -> adjustedBackground
         TOOL_BAR_EXPAND_KEY_BACKGROUND, CLIPBOARD_SUGGESTION_BACKGROUND -> doubleAdjustedBackground
@@ -480,16 +525,25 @@ class DefaultColors (
             POPUP_KEY_TEXT, POPUP_KEY_ICON, KEY_PREVIEW_TEXT, EMOJI_SEARCH_TEXT, CLIPBOARD_SUGGESTION_ICON -> keyText
         KEY_HINT_TEXT -> keyHintText
         SPACE_BAR_TEXT -> spaceBarText
-        FUNCTIONAL_KEY_BACKGROUND, EMOJI_SEARCH_BACKGROUND -> functionalKey
-        SPACE_BAR_BACKGROUND -> spaceBar
+        FUNCTIONAL_KEY_BACKGROUND, EMOJI_SEARCH_BACKGROUND -> if (hasKeyBorders) {
+            val functionalAlpha = if (Color.alpha(functionalKey) == 255) DRAW_KEYS_ALPHA_FUNCTIONAL else Color.alpha(functionalKey)
+            ColorUtils.setAlphaComponent(functionalKey, functionalAlpha)
+        } else functionalKey
+        SPACE_BAR_BACKGROUND -> if (hasKeyBorders) {
+            val spaceBarAlpha = if (Color.alpha(spaceBar) == 255) DRAW_KEYS_ALPHA_LETTER else Color.alpha(spaceBar)
+            ColorUtils.setAlphaComponent(spaceBar, spaceBarAlpha)
+        } else spaceBar
         MORE_SUGGESTIONS_WORD_BACKGROUND, MAIN_BACKGROUND -> background
-        KEY_BACKGROUND -> keyBackground
+        KEY_BACKGROUND -> if (hasKeyBorders) {
+            val keyAlpha = if (Color.alpha(keyBackground) == 255) DRAW_KEYS_ALPHA_LETTER else Color.alpha(keyBackground)
+            ColorUtils.setAlphaComponent(keyBackground, keyAlpha)
+        } else keyBackground
         ACTION_KEY_POPUP_KEYS_BACKGROUND -> if (themeStyle == STYLE_HOLO) adjustedBackground else accent
         STRIP_BACKGROUND -> if (!hasKeyBorders && themeStyle == STYLE_MATERIAL) adjustedBackground else background
         NAVIGATION_BAR -> navBar
         SUGGESTION_AUTO_CORRECT, EMOJI_CATEGORY, TOOL_BAR_KEY, TOOL_BAR_EXPAND_KEY, ONE_HANDED_MODE_BUTTON -> suggestionText
         MORE_SUGGESTIONS_HINT, SUGGESTED_WORD, SUGGESTION_TYPED_WORD, SUGGESTION_VALID_WORD -> adjustedSuggestionText
-        ACTION_KEY_ICON -> Color.WHITE
+        ACTION_KEY_ICON -> actionGlyph
     }
 
     override fun setColor(drawable: Drawable, color: ColorType) {
@@ -546,7 +600,8 @@ class DefaultColors (
     }
 
     private fun getColorFilter(color: ColorType): ColorFilter? = when (color) {
-        EMOJI_CATEGORY_SELECTED, CLIPBOARD_PIN, SHIFT_KEY_ICON -> accentColorFilter
+        SHIFT_KEY_ICON -> shiftIconFilter
+        EMOJI_CATEGORY_SELECTED, CLIPBOARD_PIN -> accentColorFilter
         KEY_TEXT, KEY_ICON -> keyTextFilter
         REMOVE_SUGGESTION_ICON, EMOJI_CATEGORY, ONE_HANDED_MODE_BUTTON, TOOL_BAR_KEY, TOOL_BAR_EXPAND_KEY -> suggestionTextFilter
         KEY_PREVIEW_BACKGROUND -> adjustedBackgroundFilter
@@ -560,10 +615,27 @@ class AllColors(private val colorMap: EnumMap<ColorType, Int>, override val them
     private val stateListMap = EnumMap<ColorType, ColorStateList>(ColorType::class.java)
     private var backgroundSetupDone = false
     private val colorFilters = hashMapOf<ColorType, ColorFilter>()
-    override fun get(color: ColorType): Int = colorMap[color] ?: color.default()
+    override fun get(color: ColorType): Int {
+        val baseColor = colorMap[color] ?: color.default()
+        if (!hasKeyBorders) return baseColor
+        return when (color) {
+            KEY_BACKGROUND, SPACE_BAR_BACKGROUND -> {
+                val alpha = if (Color.alpha(baseColor) == 255) DRAW_KEYS_ALPHA_LETTER else Color.alpha(baseColor)
+                ColorUtils.setAlphaComponent(baseColor, alpha)
+            }
+            FUNCTIONAL_KEY_BACKGROUND, EMOJI_SEARCH_BACKGROUND -> {
+                val functionalAlpha = if (Color.alpha(baseColor) == 255) DRAW_KEYS_ALPHA_FUNCTIONAL else Color.alpha(baseColor)
+                ColorUtils.setAlphaComponent(baseColor, functionalAlpha)
+            }
+            else -> baseColor
+        }
+    }
 
     override fun setColor(drawable: Drawable, color: ColorType) {
-        val colorStateList = stateListMap.getOrPut(color) { pressedStateList(brightenOrDarken(get(color), true), get(color)) }
+        val colorStateList = stateListMap.getOrPut(color) {
+            val adjusted = get(color)
+            pressedStateList(brightenOrDarken(adjusted, true), adjusted)
+        }
         DrawableCompat.setTintMode(drawable, PorterDuff.Mode.MULTIPLY)
         DrawableCompat.setTintList(drawable, colorStateList)
     }

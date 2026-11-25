@@ -22,11 +22,14 @@ import android.widget.HorizontalScrollView
  */
 class ToolbarScrollView(context: Context, attrs: AttributeSet?) : HorizontalScrollView(context, attrs) {
 
+    /** False with draw keys on: the toolbar still scrolls when it overflows, but silently. */
+    var showScrollBar = true
+
     var isScrollingEnabled = false
         set(value) {
             if (field == value) return
             field = value
-            isHorizontalScrollBarEnabled = value
+            isHorizontalScrollBarEnabled = value && showScrollBar
             if (!value && scrollX != 0) scrollTo(0, 0)
         }
 

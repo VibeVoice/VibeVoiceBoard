@@ -48,13 +48,15 @@ object Defaults {
     fun PREF_ICON_STYLE(prefs: SharedPreferences) = prefs.getString(Settings.PREF_THEME_STYLE, PREF_THEME_STYLE)!!
     const val PREF_THEME_COLORS = KeyboardTheme.THEME_LIGHT
     const val PREF_THEME_COLORS_NIGHT = KeyboardTheme.THEME_DARK
+    const val PREF_DRAW_KEYS = false
+    const val PREF_KEYBOARD_PRESET = "OWN"
     const val PREF_THEME_KEY_BORDERS = false
     @JvmField
     val PREF_THEME_DAY_NIGHT = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
     const val PREF_CUSTOM_ICON_NAMES = ""
     const val PREF_TOOLBAR_CUSTOM_KEY_CODES = ""
     const val PREF_AUTO_CAP = true
-    const val PREF_VIBRATE_ON = true
+    const val PREF_VIBRATE_ON = false
     const val PREF_VIBRATE_IN_DND_MODE = false
     const val PREF_SOUND_ON = false
     const val PREF_SUGGEST_EMOJIS = true
@@ -106,6 +108,7 @@ object Defaults {
     const val PREF_VOICE_BACKGROUND = false
     const val PREF_VOICE_KEY_PULSE = false
     const val PREF_HAS_DICTATED = false
+    const val PREF_SETUP_WIZARD_ACTIVE = false
     // On by default: a session running without the keyboard needs something on screen saying so,
     // and this is the part of that a user can actually see without pulling the shade down.
     /** Whether the one-off "this could have kept running" notice has been shown. */
@@ -148,6 +151,10 @@ object Defaults {
     /** Short-wavelength roughness that only appears while there is sound. */
     const val PREF_WAVE_JITTER = 0.21f
     const val PREF_WAVE_COUNT = 6.0f
+    /** How far above the room's steady noise a sound must rise before the waves react to it. */
+    const val PREF_WAVE_NOISE_FLOOR = 1.75f
+    /** Where the wave level's adaptive full scale starts for a speaker never measured (RMS of their loudest speech). */
+    const val PREF_WAVE_SPEECH_PEAK = 0.08f
     /** How fast the waves follow a rising voice. */
     const val PREF_WAVE_ATTACK = 0.70f
     /** How fast they settle once it stops. Low values let them swing on like a resonator. */

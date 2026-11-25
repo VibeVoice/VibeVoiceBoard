@@ -418,7 +418,11 @@ sealed interface KeyData : AbstractKeyData {
             KeyLabel.SHIFT -> return Key.BACKGROUND_TYPE_FUNCTIONAL
         }
         if (type == KeyType.PLACEHOLDER) return Key.BACKGROUND_TYPE_EMPTY
-        if ((params.mId.element == KeyboardElement.SYMBOLS || params.mId.element == KeyboardElement.SYMBOLS_SHIFTED)
+        // comma/period (and the @ and / that replace the comma in email and uri fields) are only
+        // styled as functional keys on the symbols layouts, as upstream does. In alphabet layouts the
+        // default look must stay the same; only the draw keys theme, which the presets turn on, restyles them.
+        if ((params.mId.element == KeyboardElement.SYMBOLS || params.mId.element == KeyboardElement.SYMBOLS_SHIFTED
+                || Settings.getValues()?.mDrawKeys == true)
                 && (groupId == GROUP_COMMA || groupId == GROUP_PERIOD))
             return Key.BACKGROUND_TYPE_FUNCTIONAL
         return Key.BACKGROUND_TYPE_NORMAL

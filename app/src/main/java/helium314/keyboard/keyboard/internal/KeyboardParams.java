@@ -19,6 +19,7 @@ import helium314.keyboard.keyboard.KeyboardId;
 import helium314.keyboard.keyboard.internal.keyboard_parser.LocaleKeyboardInfos;
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode;
 import helium314.keyboard.latin.R;
+import helium314.keyboard.latin.settings.KeyboardPreset;
 import helium314.keyboard.latin.settings.Settings;
 import helium314.keyboard.latin.settings.SettingsValues;
 import helium314.keyboard.latin.utils.ResourceUtils;
@@ -62,6 +63,8 @@ public class KeyboardParams {
     // relative values multiplied with baseHeight / baseWidth
     public int mDefaultAbsoluteRowHeight;
     public int mDefaultAbsoluteKeyWidth;
+    /** The real Samsung keyboard has gaps twice as wide between keys of a row (20 px) as between rows (40 px / 2): the horizontal gap grows by this. */
+    private static final float SAMSUNG_HORIZONTAL_GAP_FACTOR = 1.41f;
     public int mHorizontalGap;
     public int mVerticalGap;
 
@@ -241,7 +244,8 @@ public class KeyboardParams {
             mAbsolutePopupKeyWidth = (int) (alphaSymbolKeyWidth * mBaseWidth);
 
             mRelativeHorizontalGap = keyboardAttr.getFraction(
-                    R.styleable.Keyboard_horizontalGap, 1, 1, 0) * sv.mKeyGapScale;
+                    R.styleable.Keyboard_horizontalGap, 1, 1, 0) * sv.mKeyGapScale
+                    * (sv.mKeyboardPreset == KeyboardPreset.SAMSUNG ? SAMSUNG_HORIZONTAL_GAP_FACTOR : 1f);
             mRelativeVerticalGap = keyboardAttr.getFraction(
                     R.styleable.Keyboard_verticalGap, 1, 1, 0) * sv.mKeyGapScale;
             mHorizontalGap = (int) (mRelativeHorizontalGap * width);

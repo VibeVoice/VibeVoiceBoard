@@ -55,6 +55,15 @@ object VoiceGlow {
      */
     const val FALLBACK_ACCENT = 0xFF629DF6.toInt()
 
+    /**
+     * The colour VibeVoice draws with while it listens where the phone has no system accent (before Android
+     * 12): a blue-turquoise. Everywhere else the waves, the glow behind the toolbar mark and the floating
+     * mark take the system accent -- see [helium314.keyboard.latin.utils.SystemAccent.recordingColor] -- which is
+     * what they always wore until the presets brought palettes of their own, and which does not follow the
+     * preset, the keyboard theme or the accent the user picked. The swipe trail still follows the theme.
+     */
+    const val RECORDING_COLOR = 0xFF35B6E8.toInt()
+
 
     private const val MIN_BLUR_PX = 1.5f
 

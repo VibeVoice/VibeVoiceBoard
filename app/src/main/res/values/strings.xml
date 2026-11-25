@@ -46,6 +46,27 @@
     <string name="settings_screen_correction">Text correction</string>
     <!-- Settings screen title for advanced settings -->
     <string name="settings_screen_advanced">Advanced</string>
+    <!-- Keyboard presets -->
+    <string name="keyboard_preset_title">Keyboard style</string>
+    <string name="keyboard_preset_own">VibeVoice</string>
+    <string name="keyboard_preset_gboard">Google style</string>
+    <string name="keyboard_preset_samsung">Samsung style</string>
+    <string name="appearance_section_look">Look</string>
+    <string name="appearance_section_advanced_theme">Advanced theme</string>
+    <!-- the setting that was titled "Style" (Material, Holo, Rounded) -->
+    <string name="key_shape">Key shape</string>
+    <string name="keyboard_accent_title">Accent color</string>
+    <string name="keyboard_accent_vibevoice">VibeVoice</string>
+    <string name="keyboard_accent_auto">Auto (system color)</string>
+    <string name="keyboard_accent_custom">Custom</string>
+    <string name="keyboard_accent_custom_title">Custom accent color</string>
+    <string name="keyboard_accent_hue">Hue</string>
+    <string name="keyboard_accent_saturation">Saturation</string>
+    <string name="keyboard_accent_brightness">Brightness</string>
+    <string name="keyboard_accent_violet">Violet</string>
+    <string name="keyboard_accent_green">Green</string>
+    <string name="keyboard_accent_orange">Orange</string>
+    <string name="keyboard_accent_pink">Pink</string>
     <!-- Settings screen title for VibeVoice integration -->
     <string name="vibevoice_integration_title">VibeVoice typing</string>
     <string name="vibevoice_stop_dictation">Stop dictation</string>
@@ -129,6 +150,7 @@
     <string name="vibevoice_waves_count">Number of waves</string>
     <string name="vibevoice_waves_speed">Speed</string>
     <string name="vibevoice_waves_jitter">Roughness</string>
+    <string name="vibevoice_waves_noise_floor">Noise floor</string>
     <!-- Spacebar text shown while VibeVoice transcription is active -->
     <string name="vibevoice_transcribing">Transcribing…</string>
     <!-- On the space bar while a session runs. %s is the elapsed time, m:ss. -->
@@ -781,6 +803,8 @@ language, hence "No language". -->
     <string name="setup_try_phase_b_instruction">Now the other half — let it hear you.</string>
     <string name="setup_try_phase_c_title">Tap the mark and say something.</string>
     <string name="setup_try_phase_c_instruction">Tap the V at the top right of the keyboard, or hold the space bar.</string>
+    <string name="setup_try_trial_connecting">Setting up your free trial minutes…</string>
+    <string name="setup_try_trial_retry">Couldn’t connect to VibeVoice. Tap to retry.</string>
 
     <string name="setup_minutes_title">"Your minutes"</string>
     <string name="setup_minutes_instruction">"These first 10 minutes are on us — no account needed.\n\nAfter that, a free account gives you 30 minutes a month. Pro is €3 for 180."</string>
@@ -794,10 +818,43 @@ language, hence "No language". -->
     <string name="setup_overlay_guard_keep_off">Keep it off</string>
     <string name="setup_overlay_guard_turn_on">Turn it on</string>
 
+    <!-- Language step: one step for the previous keyboard and the typing languages. -->
+    <string name="setup_language_title">Your language</string>
+    <string name="setup_language_instruction">Choose the language you type in. You can change it later in settings.</string>
+    <string name="setup_prev_question">Coming from another keyboard?</string>
+    <string name="setup_keyboard_gboard" translatable="false">Gboard</string>
+    <string name="setup_keyboard_samsung" translatable="false">Samsung</string>
+    <string name="setup_prev_other">Something else</string>
+    <string name="setup_prev_first">This is my first</string>
+    <!-- The two language slots as one-line chips; the value is a language name or "None". -->
+    <string name="setup_lang_chip_main">Main: %s</string>
+    <string name="setup_lang_chip_second">Second: %s</string>
+    <string name="setup_lang_none">None</string>
+    <string name="setup_lang_pick_main">Choose your main language</string>
+    <string name="setup_lang_pick_second">Choose a second language, or none</string>
+    <string name="setup_lang_search_hint">Search languages</string>
+    <string name="setup_lang_no_results">No language found</string>
+
+    <!-- Style and feel step: the real keyboard, restyled live. -->
+    <string name="setup_style_title">Style and feel</string>
+    <string name="setup_style_instruction">Try the keyboard below. What you change here applies right away.</string>
+    <string name="setup_style_label">Style</string>
+    <string name="setup_style_own">VibeVoice</string>
+    <string name="setup_style_gboard">Google style</string>
+    <string name="setup_style_samsung">Samsung style</string>
+    <string name="setup_style_hint">Type here to try the keyboard…</string>
+    <string name="setup_vibrate_switch">Vibrate when typing</string>
+
     <string name="setup_done_slogan_line1" translatable="false">"You're set."</string>
     <string name="setup_done_slogan_line2" translatable="false">Typing will never</string>
     <string name="setup_done_slogan_line3" translatable="false">feel the same.</string>
     <string name="setup_step_progress">Step %1$d of %2$d</string>
+
+    <!-- Settings entry for redoing the language and keyboard-style questions -->
+    <string name="switcher_entry_title">Coming from another keyboard?</string>
+    <string name="switcher_entry_summary">Match style and languages</string>
+    <string name="switcher_settings_title">Switching from another keyboard?</string>
+    <string name="switcher_settings_summary">Match presets and set up languages</string>
     <string name="debug_open_setup_wizard">Open setup wizard</string>
     <!-- Option to show setup wizard icon. Legacy setting only displayed for Android 9 and older. -->
     <string name="show_setup_wizard_icon">Show app icon</string>
@@ -1430,6 +1487,11 @@ New dictionary:
     <!-- Hint indicating that long-press selects entries
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="gesture_data_long_press_select_hint">Long-press to select</string>
+    <!-- Title of the setting for drawing key caps -->
+    <string name="draw_keys">Draw keys</string>
+    <!-- Description of the setting for drawing key caps -->
+    <string name="draw_keys_summary">Visible key caps</string>
+
     <!-- Toolbar key to enable / disable background gesture data gathering
      string will probably be removed once data gathering is finished (end of 2026 latest) -->
     <string name="background_gathering" tools:keep="@string/background_gathering">Background data gathering</string>

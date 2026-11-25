@@ -9,9 +9,9 @@ import android.provider.Settings as AndroidSettings
 import android.util.AttributeSet
 import android.view.View
 import helium314.keyboard.latin.BuildConfig
-import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.SystemAccent
 import helium314.keyboard.latin.utils.prefs
 import java.lang.ref.WeakReference
 import kotlin.math.cos
@@ -48,9 +48,11 @@ class VoiceWaveView @JvmOverloads constructor(
     @Volatile private var client: WeakReference<VoiceSession>? = null
 
     /** The wave colour, resolved once per session rather than per frame. */
-    private var baseColor = VoiceGlow.FALLBACK_ACCENT
+    private var baseColor = VoiceGlow.RECORDING_COLOR
     private var phase = 0f
     private var level = 0f
+    /** 0 while sound arrives, 1 once the microphone has been delivering nothing; eased between. */
+    private var stillness = 0f
     private var running = false
 
     // The tuning values, read once per session in [start] rather than once per frame. Reading them
@@ -105,18 +107,26 @@ class VoiceWaveView @JvmOverloads constructor(
         // try/catch is the honest way to say so -- but it belongs on a once-per-session call, not
         // on a path that runs thirty times a second. A theme change re-inflates the input view, so
         // a new view with a freshly resolved colour is what follows it anyway.
-        baseColor = try {
-            Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
-        } catch (e: Exception) {
-            VoiceGlow.FALLBACK_ACCENT
-        }
+        baseColor = SystemAccent.recordingColor(context)
         if (running) return
         running = true
         phase = 0f
         level = 0f
+        stillness = 0f
         visibility = VISIBLE
         VibeVoiceDebugLogger.log("VoiceWaveView start, size=${width}x${height}, animated=$animationsEnabled")
         invalidate()
+    }
+
+    /** Keeps what this session learned about how loud the speaker is, so the next one starts there. */
+    private fun saveSpeechPeak() {
+        if (demo) return
+        val peak = LevelMeter.currentSpeechPeak
+        if (peak.isNaN()) return
+        try {
+            context.prefs().edit().putFloat(Settings.PREF_WAVE_SPEECH_PEAK, peak.toFloat()).apply()
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -136,6 +146,7 @@ class VoiceWaveView @JvmOverloads constructor(
         running = true
         phase = 0f
         level = 0f
+        stillness = 0f
         demoPhase = 0f
         visibility = VISIBLE
         invalidate()
@@ -148,9 +159,11 @@ class VoiceWaveView @JvmOverloads constructor(
      */
     fun stop() {
         running = false
+        saveSpeechPeak()
         client = null
         demo = false
         level = 0f
+        stillness = 0f
         visibility = GONE
         VibeVoiceDebugLogger.log("VoiceWaveView stop")
     }
@@ -201,10 +214,18 @@ class VoiceWaveView @JvmOverloads constructor(
         // slowly. The web component uses one constant for both directions, which is what made the
         // swell arrive late and then linger. Attack is more than three times the release here.
         level += (raw - level) * (if (raw > level) attack else damping)
+        if (BuildConfig.DEBUG) LevelLog.drawnLevel = level // sampled by the debug level log
+
+        // A microphone that delivers exact zeros is not a quiet room, and a wave that keeps drifting
+        // over it looks like a working microphone. Ease to a flat, motionless, dim line instead of
+        // jumping, so a brief gap does not flicker. A quiet room has noise in it and never gets here.
+        val silent = !demo && client?.get()?.micSilentNow == true
+        stillness += ((if (silent) 1f else 0f) - stillness) * STILLNESS_EASE
+        val motion = 1f - stillness
 
         // Louder speech travels faster as well as reaching higher; without this the amplitude grows
         // but the motion still reads as idle.
-        phase += speed * (1f + level * PHASE_LEVEL_GAIN)
+        phase += speed * (1f + level * PHASE_LEVEL_GAIN) * motion
 
         val red = Color.red(baseColor)
         val green = Color.green(baseColor)
@@ -237,7 +258,8 @@ class VoiceWaveView @JvmOverloads constructor(
             // Resting alpha fades with depth; speech brightens the whole set. The level term is 1
             // at silence, so a quiet keyboard looks exactly as the theme intends.
             val restAlpha = REST_ALPHA - w * (REST_ALPHA_FALLOFF / waveCount)
-            val alpha = (restAlpha * (1f + level * ALPHA_LEVEL_GAIN)).coerceIn(0.02f, 0.85f)
+            val lively = (restAlpha * (1f + level * ALPHA_LEVEL_GAIN)).coerceIn(MIN_ALPHA, 0.85f)
+            val alpha = lively * motion + MIN_ALPHA * stillness
             paint.color = Color.argb((alpha * 255).toInt(), red, green, blue)
 
             // Amplitude as a fraction of the gap between waves, not an absolute size. That is the
@@ -245,7 +267,7 @@ class VoiceWaveView @JvmOverloads constructor(
             // excursion just past one full spacing, and they interleave. The three terms sum to at
             // most 1.7, so the peak here is 1.7 * amp * envelope — roughly a quarter of a spacing
             // in silence and a little over a full spacing when the voice is loud.
-            val amp = spacing * ampFraction * (1f + level * reaction)
+            val amp = spacing * ampFraction * (1f + level * reaction) * motion
 
             // Each wave is detuned a little. Without this every line is the same curve shifted in
             // phase; under one visible period that passes for organic, at four periods it reads as
@@ -308,6 +330,10 @@ class VoiceWaveView @JvmOverloads constructor(
         jitter = p.getFloat(Settings.PREF_WAVE_JITTER, Defaults.PREF_WAVE_JITTER)
         waveCount = p.getFloat(Settings.PREF_WAVE_COUNT, Defaults.PREF_WAVE_COUNT)
             .toInt().coerceIn(1, 12)
+        // Consumed by the meter inside the capture, which has no access to preferences.
+        LevelMeter.noiseFloorFactor = p.getFloat(Settings.PREF_WAVE_NOISE_FLOOR, Defaults.PREF_WAVE_NOISE_FLOOR).toDouble()
+        // Where the speech-level estimate starts: what the last session learned about this speaker.
+        LevelMeter.speechPeakSeed = p.getFloat(Settings.PREF_WAVE_SPEECH_PEAK, Defaults.PREF_WAVE_SPEECH_PEAK).toDouble()
     }
 
     /**
@@ -357,6 +383,9 @@ class VoiceWaveView @JvmOverloads constructor(
         private const val ALPHA_LEVEL_GAIN = 3.0f
         private const val REST_ALPHA = 0.30f
         private const val REST_ALPHA_FALLOFF = 0.15f
+        private const val MIN_ALPHA = 0.02f
+        /** Per frame; about a 100 ms time constant at 30 fps, so the move settles in roughly 300 ms. */
+        private const val STILLNESS_EASE = 0.3f
         private const val STROKE_WIDTH_DP = 1.2f
     }
 }

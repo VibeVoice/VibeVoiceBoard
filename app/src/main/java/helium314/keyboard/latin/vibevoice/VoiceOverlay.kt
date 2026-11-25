@@ -25,6 +25,7 @@ import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.SystemAccent
 import helium314.keyboard.latin.utils.prefs
 import java.lang.ref.WeakReference
 import kotlin.math.abs
@@ -107,14 +108,15 @@ class VoiceOverlay(context: Context) : View(context) {
     /** Both from the keyboard's own theme, so the mark reads as part of it. */
     var discColor = Color.argb(235, 20, 20, 24)
         private set
-    var barColor = VoiceGlow.FALLBACK_ACCENT
+    var barColor = SystemAccent.recordingColor(context)
         private set
 
     private fun readThemeColors() {
+        // the bars and their glow take the system accent whatever the theme says, so a failed theme read does not matter to them
+        barColor = SystemAccent.recordingColor(context)
         try {
             val colors = Settings.getValues().mColors
             discColor = colors.get(ColorType.MAIN_BACKGROUND)
-            barColor = colors.get(ColorType.GESTURE_TRAIL)
             drawable = ContextCompat.getDrawable(context, VoiceGlow.markFor(discColor))
         } catch (e: Exception) {
             // Settings not loaded; the defaults above stand in for one session.
@@ -187,8 +189,17 @@ class VoiceOverlay(context: Context) : View(context) {
         super.onDetachedFromWindow()
     }
 
-    /** The size [startPreview] draws at, in pixels, before any scaling by the caller. */
-    fun previewSizePx(): Int = requiredSizePx()
+    /**
+     * The size [startPreview] draws at, in pixels, before any scaling by the caller.
+     *
+     * Reads the geometry first. A fresh view has radius, bar length and count at zero, so the size
+     * came out as a few pixels -- the bar width alone -- and the wizard scaled that sliver up to its
+     * box by a factor of twenty or more, which is the mark covering the text next to it.
+     */
+    fun previewSizePx(): Int {
+        readGeometry(context)
+        return requiredSizePx()
+    }
 
     override fun onDraw(canvas: Canvas) {
         if (!running) return
