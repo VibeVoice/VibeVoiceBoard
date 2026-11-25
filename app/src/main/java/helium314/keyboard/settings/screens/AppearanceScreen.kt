@@ -138,13 +138,10 @@ fun createAppearanceSettings(context: Context) = listOf(
         }
     },
     Setting(context, Settings.PREF_KEYBOARD_ACCENT, R.string.keyboard_accent_title) { setting ->
-        androidx.compose.foundation.layout.Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            AccentDots()
+        // the label on its own line above the dots, so it never wraps and the dots get the full width
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth())
+            AccentDots(Modifier.fillMaxWidth())
         }
     },
     // a quiet way into the switcher wizard (it used to be a top level entry); the nav host opens the screen

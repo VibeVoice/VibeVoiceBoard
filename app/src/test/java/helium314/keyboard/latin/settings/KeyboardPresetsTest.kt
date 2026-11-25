@@ -280,6 +280,27 @@ class KeyboardPresetsTest {
     }
 
     @Test
+    fun accent_removedGraphiteIsTreatedAsUnset() {
+        // a phone that stored the graphite accent before it was dropped: no crash, back to the defaults
+        for (preset in listOf(KeyboardPreset.OWN, KeyboardPreset.GBOARD, KeyboardPreset.SAMSUNG)) {
+            prefs.edit().clear().commit()
+            val before = run { KeyboardPresets.apply(context, preset); actionColor() }
+            prefs.edit().putString(Settings.PREF_KEYBOARD_ACCENT, "GRAPHITE").commit()
+            assertEquals(null, KeyboardPresets.readAccent(prefs))
+            assertEquals(null, KeyboardPresets.readAccentColor(prefs))
+            assertEquals(before, actionColor())
+        }
+        KeyboardPresets.apply(context, KeyboardPreset.GBOARD)
+        assertEquals(KeyboardAccent.VIOLET.color, actionColor())
+    }
+
+    @Test
+    fun accent_dotOrderAndPalette() {
+        assertEquals(listOf("VIBEVOICE", "VIOLET", "GREEN", "ORANGE", "PINK"), KeyboardAccent.PALETTE.map { it.name })
+        assertFalse(KeyboardAccent.entries.any { it.name == "GRAPHITE" })
+    }
+
+    @Test
     fun accent_unknownStoredValueIsTreatedAsUnset() {
         prefs.edit().clear().commit()
         prefs.edit().putString(Settings.PREF_KEYBOARD_ACCENT, "blue").commit()
@@ -343,7 +364,7 @@ class KeyboardPresetsTest {
 
     @Test
     fun accent_glyphIsWhiteOrNearBlackByLuminance() {
-        for (accent in listOf(KeyboardAccent.VIOLET, KeyboardAccent.GREEN, KeyboardAccent.ORANGE, KeyboardAccent.PINK, KeyboardAccent.GRAPHITE))
+        for (accent in listOf(KeyboardAccent.VIOLET, KeyboardAccent.GREEN, KeyboardAccent.ORANGE, KeyboardAccent.PINK))
             assertEquals("${accent.name} keeps white", android.graphics.Color.WHITE, helium314.keyboard.latin.utils.accentGlyphColor(accent.color))
         for (light in listOf(KeyboardAccent.VIBEVOICE.color, 0xFFFFD60A.toInt(), 0xFFA7F3D0.toInt()))
             assertEquals(helium314.keyboard.latin.utils.GLYPH_DARK, helium314.keyboard.latin.utils.accentGlyphColor(light))

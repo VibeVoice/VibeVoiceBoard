@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -58,7 +60,6 @@ private fun accentLabel(accent: KeyboardAccent) = when (accent) {
     KeyboardAccent.GREEN -> R.string.keyboard_accent_green
     KeyboardAccent.ORANGE -> R.string.keyboard_accent_orange
     KeyboardAccent.PINK -> R.string.keyboard_accent_pink
-    KeyboardAccent.GRAPHITE -> R.string.keyboard_accent_graphite
     KeyboardAccent.AUTO -> R.string.keyboard_accent_auto
     KeyboardAccent.CUSTOM -> R.string.keyboard_accent_custom
 }
@@ -94,32 +95,34 @@ fun AccentDots(modifier: Modifier = Modifier, ringColor: Color = MaterialTheme.c
         KeyboardSwitcher.getInstance().reloadKeyboard()
     }
 
+    // One equal cell per dot across the full width, at least 40 dp tall and wide enough to tap; the visible dot is smaller.
     @Composable
-    fun Dot(isSelected: Boolean, label: String, fill: Brush, mark: String? = null, markColor: Color = Color.White, onClick: () -> Unit) {
+    fun RowScope.Dot(isSelected: Boolean, label: String, fill: Brush, mark: String? = null, markColor: Color = Color.White, onClick: () -> Unit) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .border(BorderStroke(if (isSelected) 2.dp else 0.dp, if (isSelected) ringColor else Color.Transparent), CircleShape)
-                .padding(3.dp)
-                .clip(CircleShape)
-                .background(fill)
+                .weight(1f)
+                .heightIn(min = 40.dp)
                 .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
                 .semantics { contentDescription = label }
         ) {
-            if (mark != null) Text(mark, color = markColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .border(BorderStroke(if (isSelected) 2.dp else 0.dp, if (isSelected) ringColor else Color.Transparent), CircleShape)
+                    .padding(3.dp)
+                    .clip(CircleShape)
+                    .background(fill)
+            ) {
+                if (mark != null) Text(mark, color = markColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
         }
     }
 
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        KeyboardAccent.PALETTE.forEach { accent ->
-            Dot(selected == accent, stringResource(accentLabel(accent)), Brush.linearGradient(listOf(Color(accent.color), Color(accent.color)))) {
-                selected = accent
-                KeyboardPresets.setAccent(ctx, accent)
-                restyle()
-            }
-        }
+    // Auto first, the fixed colors, the custom one last
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         // "Auto": the phone's own accent, shown live, with an A on it
         val autoColor = SystemAccent.keyboardAccent(ctx) ?: KeyboardAccent.AUTO.color
         Dot(
@@ -129,6 +132,13 @@ fun AccentDots(modifier: Modifier = Modifier, ringColor: Color = MaterialTheme.c
             selected = KeyboardAccent.AUTO
             KeyboardPresets.setAccent(ctx, KeyboardAccent.AUTO)
             restyle()
+        }
+        KeyboardAccent.PALETTE.forEach { accent ->
+            Dot(selected == accent, stringResource(accentLabel(accent)), Brush.linearGradient(listOf(Color(accent.color), Color(accent.color)))) {
+                selected = accent
+                KeyboardPresets.setAccent(ctx, accent)
+                restyle()
+            }
         }
         val custom = customColor
         Dot(

@@ -202,7 +202,6 @@ SPDX-License-Identifier: GPL-3.0-only
     <string name="keyboard_accent_green">Grün</string>
     <string name="keyboard_accent_orange">Orange</string>
     <string name="keyboard_accent_pink">Pink</string>
-    <string name="keyboard_accent_graphite">Graphit</string>
     <!-- Switcher wizard (switching from another keyboard) -->
     <string name="switcher_entry_title">Kommst du von einer anderen Tastatur?</string>
     <string name="switcher_entry_summary">Stil und Sprachen übernehmen</string>

@@ -71,7 +71,7 @@ fun contrastRatio(@ColorInt foreground: Int, @ColorInt background: Int): Double 
 
 /**
  * Glyph color on an accent colored key: white while white has at least [GLYPH_MIN_CONTRAST] against the accent,
- * else near-black. (The violet, green, orange, pink and graphite accents all stay white; light blue and yellow go dark.)
+ * else near-black. (The violet, green, orange and pink accents all stay white; light blue and yellow go dark.)
  */
 @ColorInt
 fun accentGlyphColor(@ColorInt accent: Int): Int =

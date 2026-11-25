@@ -63,7 +63,6 @@
     <string name="keyboard_accent_green">Green</string>
     <string name="keyboard_accent_orange">Orange</string>
     <string name="keyboard_accent_pink">Pink</string>
-    <string name="keyboard_accent_graphite">Graphite</string>
     <!-- Settings screen title for VibeVoice integration -->
     <string name="vibevoice_integration_title">VibeVoice typing</string>
     <string name="vibevoice_stop_dictation">Stop dictation</string>

@@ -1211,22 +1211,21 @@ private fun StyleStep(
                 }
             }
 
-            Row(
+            // the label on its own line above the dots: it never wraps and the dots get the full width
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(shape)
                     .background(fill)
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
                 Text(
                     stringResource(R.string.keyboard_accent_title),
                     style = MaterialTheme.typography.bodyMedium.merge(color = textColor),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
                 )
                 // keyed on the preset: choosing a preset changes what "no choice yet" shows
-                androidx.compose.runtime.key(selectedPreset) { AccentDots(ringColor = textColor) }
+                androidx.compose.runtime.key(selectedPreset) { AccentDots(Modifier.fillMaxWidth(), ringColor = textColor) }
             }
 
             Row(

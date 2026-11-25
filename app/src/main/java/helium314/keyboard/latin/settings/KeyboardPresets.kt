@@ -23,7 +23,6 @@ enum class KeyboardAccent(val color: Int) {
     GREEN(0xFF16A34A.toInt()),
     ORANGE(0xFFEA580C.toInt()),
     PINK(0xFFDB2777.toInt()),
-    GRAPHITE(0xFF5B6472.toInt()),
     /** the phone's Material You accent ([helium314.keyboard.latin.utils.SystemAccent.keyboardAccent]); [color] is the violet used where there is none */
     AUTO(0xFF8B5CF6.toInt()),
     /** the color the user mixed himself, stored in [Settings.PREF_KEYBOARD_ACCENT_CUSTOM]; [color] is not used */
