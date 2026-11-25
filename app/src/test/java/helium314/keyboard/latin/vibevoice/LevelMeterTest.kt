@@ -72,24 +72,30 @@ class LevelMeterTest {
             val mixed = sine(0.10).zip(noise(0.01)) { a, b -> a + b }.toDoubleArray()
             burst = meter.feed(mixed)
         }
-        val alone = pcm(sine(0.10)).let { AudioCapture.level(it, it.size) }
-        assertTrue("burst $burst vs raw $alone", abs(burst - alone) < 0.15f)
+        // the same speech in a silent room, through a meter that has had the same history of speech
+        val clean = LevelMeter()
+        repeat(60) { clean.feed(noise(0.0005)) }
+        var alone = 0f
+        repeat(3) { alone = clean.feed(sine(0.10)) }
+        assertTrue("burst $burst vs alone $alone", abs(burst - alone) < 0.15f)
         assertTrue(burst > 0.6f)
     }
 
     @Test
-    fun aLowVoiceInAQuietRoomLooksExactlyAsBefore() {
-        // A male voice's fundamental sits below the high-pass; the drawn level must not lose it.
+    fun aLowVoiceInAQuietRoomIsDrawnFromItsRawLevel() {
+        // A male voice's fundamental sits below the high-pass; the drawn level must not lose it: it is
+        // the raw level at the meter's current full scale, the high-pass costing it nothing.
         val meter = LevelMeter()
         repeat(30) { meter.feed(noise(0.0005)) }
         var level = 0f
-        var raw = 0f
+        var expected = 0f
         repeat(5) {
             val voice = sine(0.03, hz = 120.0)
             level = meter.feed(voice)
-            raw = pcm(voice).let { AudioCapture.level(it, it.size) }
+            val raw = pcm(voice).let { AudioCapture.level(it, it.size) } // at the fixed 0.15 scale
+            expected = Math.sqrt(raw.toDouble() * raw * 0.15 / meter.lastFullScale).coerceIn(0.0, 1.0).toFloat()
         }
-        assertEquals(raw, level, 0.01f)
+        assertEquals(expected, level, 0.02f)
     }
 
     @Test

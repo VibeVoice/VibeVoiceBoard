@@ -9,7 +9,6 @@ import android.provider.Settings as AndroidSettings
 import android.util.AttributeSet
 import android.view.View
 import helium314.keyboard.latin.BuildConfig
-import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.prefs
@@ -48,7 +47,7 @@ class VoiceWaveView @JvmOverloads constructor(
     @Volatile private var client: WeakReference<VoiceSession>? = null
 
     /** The wave colour, resolved once per session rather than per frame. */
-    private var baseColor = VoiceGlow.FALLBACK_ACCENT
+    private var baseColor = VoiceGlow.RECORDING_COLOR
     private var phase = 0f
     private var level = 0f
     /** 0 while sound arrives, 1 once the microphone has been delivering nothing; eased between. */
@@ -107,11 +106,7 @@ class VoiceWaveView @JvmOverloads constructor(
         // try/catch is the honest way to say so -- but it belongs on a once-per-session call, not
         // on a path that runs thirty times a second. A theme change re-inflates the input view, so
         // a new view with a freshly resolved colour is what follows it anyway.
-        baseColor = try {
-            Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
-        } catch (e: Exception) {
-            VoiceGlow.FALLBACK_ACCENT
-        }
+        baseColor = VoiceGlow.RECORDING_COLOR
         if (running) return
         running = true
         phase = 0f
@@ -120,6 +115,17 @@ class VoiceWaveView @JvmOverloads constructor(
         visibility = VISIBLE
         VibeVoiceDebugLogger.log("VoiceWaveView start, size=${width}x${height}, animated=$animationsEnabled")
         invalidate()
+    }
+
+    /** Keeps what this session learned about how loud the speaker is, so the next one starts there. */
+    private fun saveSpeechPeak() {
+        if (demo) return
+        val peak = LevelMeter.currentSpeechPeak
+        if (peak.isNaN()) return
+        try {
+            context.prefs().edit().putFloat(Settings.PREF_WAVE_SPEECH_PEAK, peak.toFloat()).apply()
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -152,6 +158,7 @@ class VoiceWaveView @JvmOverloads constructor(
      */
     fun stop() {
         running = false
+        saveSpeechPeak()
         client = null
         demo = false
         level = 0f
@@ -324,6 +331,8 @@ class VoiceWaveView @JvmOverloads constructor(
             .toInt().coerceIn(1, 12)
         // Consumed by the meter inside the capture, which has no access to preferences.
         LevelMeter.noiseFloorFactor = p.getFloat(Settings.PREF_WAVE_NOISE_FLOOR, Defaults.PREF_WAVE_NOISE_FLOOR).toDouble()
+        // Where the speech-level estimate starts: what the last session learned about this speaker.
+        LevelMeter.speechPeakSeed = p.getFloat(Settings.PREF_WAVE_SPEECH_PEAK, Defaults.PREF_WAVE_SPEECH_PEAK).toDouble()
     }
 
     /**

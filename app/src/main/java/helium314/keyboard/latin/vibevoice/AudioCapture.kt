@@ -223,7 +223,7 @@ class AudioCapture(
                 micSilentNow = meter.silentNow
                 levelLog?.onRead(
                     SystemClock.elapsedRealtime(), meter.lastWholeRms, meter.lastTailRms, meter.lastFilteredRms,
-                    currentLevel, meter.lastFloor, meter.lastGate
+                    currentLevel, meter.lastFloor, meter.lastGate, meter.lastFullScale
                 )
 
                 var isAllZeros = true

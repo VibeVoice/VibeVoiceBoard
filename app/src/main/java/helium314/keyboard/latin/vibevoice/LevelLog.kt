@@ -69,7 +69,7 @@ class LevelLog(private val sink: (String) -> Unit, private val intervalMs: Long 
      * One read of audio. [gate] is 0..1 and counts as open above [GATE_OPEN]. Emits a line when [intervalMs]
      * has passed since the last one.
      */
-    fun onRead(nowMs: Long, rawRms: Double, tailRms: Double, filteredRms: Double, fed: Float, floor: Double, gate: Double) {
+    fun onRead(nowMs: Long, rawRms: Double, tailRms: Double, filteredRms: Double, fed: Float, floor: Double, gate: Double, fullScale: Double = 0.0) {
         if (!active) return
         val drawn = drawnLevel
         reads++
@@ -79,7 +79,7 @@ class LevelLog(private val sink: (String) -> Unit, private val intervalMs: Long 
         drawnStats.add(drawn.toDouble())
         if (nowMs - lastEmitMs < intervalMs) return
         lastEmitMs = nowMs
-        sink(line(rawRms, tailRms, filteredRms, fed, floor, gate, drawn))
+        sink(line(rawRms, tailRms, filteredRms, fed, floor, gate, drawn, fullScale))
     }
 
     fun end() {
@@ -100,11 +100,11 @@ class LevelLog(private val sink: (String) -> Unit, private val intervalMs: Long 
          */
         @Volatile @JvmField var drawnLevel = 0f
 
-        internal fun line(rawRms: Double, tailRms: Double, filteredRms: Double, fed: Float, floor: Double, gate: Double, drawn: Float): String =
+        internal fun line(rawRms: Double, tailRms: Double, filteredRms: Double, fed: Float, floor: Double, gate: Double, drawn: Float, fullScale: Double): String =
             String.format(
                 Locale.US,
-                "[LEVEL] raw=%.4f tail=%.4f hp=%.4f fed=%.3f floor=%.4f gate=%s(%.2f) drawn=%.3f",
-                rawRms, tailRms, filteredRms, fed, floor, if (gate > GATE_OPEN) "open" else "closed", gate, drawn
+                "[LEVEL] raw=%.4f tail=%.4f hp=%.4f fed=%.3f floor=%.4f gate=%s(%.2f) fs=%.4f drawn=%.3f",
+                rawRms, tailRms, filteredRms, fed, floor, if (gate > GATE_OPEN) "open" else "closed", gate, fullScale, drawn
             )
     }
 }

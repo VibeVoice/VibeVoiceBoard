@@ -41,8 +41,8 @@ class LevelLogTest {
     fun lineCarriesEveryValueAndTheGateState() {
         log.begin(0L)
         LevelLog.drawnLevel = 0.25f
-        log.onRead(600L, 0.0123, 0.0150, 0.0040, 0.314f, 0.0035, 0.92)
-        assertEquals("[LEVEL] raw=0.0123 tail=0.0150 hp=0.0040 fed=0.314 floor=0.0035 gate=open(0.92) drawn=0.250", lines.last())
+        log.onRead(600L, 0.0123, 0.0150, 0.0040, 0.314f, 0.0035, 0.92, 0.042)
+        assertEquals("[LEVEL] raw=0.0123 tail=0.0150 hp=0.0040 fed=0.314 floor=0.0035 gate=open(0.92) fs=0.0420 drawn=0.250", lines.last())
         log.onRead(1_200L, 0.002, 0.002, 0.001, 0.0f, 0.002, 0.1)
         assertTrue(lines.last().contains("gate=closed(0.10)"))
         LevelLog.drawnLevel = 0f

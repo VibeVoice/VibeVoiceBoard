@@ -153,6 +153,8 @@ object Defaults {
     const val PREF_WAVE_COUNT = 6.0f
     /** How far above the room's steady noise a sound must rise before the waves react to it. */
     const val PREF_WAVE_NOISE_FLOOR = 1.75f
+    /** Where the wave level's adaptive full scale starts for a speaker never measured (RMS of their loudest speech). */
+    const val PREF_WAVE_SPEECH_PEAK = 0.08f
     /** How fast the waves follow a rising voice. */
     const val PREF_WAVE_ATTACK = 0.70f
     /** How fast they settle once it stops. Low values let them swing on like a resonator. */
