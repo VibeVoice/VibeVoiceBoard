@@ -55,6 +55,17 @@ object VoiceGlow {
      */
     const val FALLBACK_ACCENT = 0xFF629DF6.toInt()
 
+    /**
+     * The colour of everything VibeVoice draws while it listens: the waves behind the keys, the glow
+     * behind the toolbar mark, the floating mark's bars and its glow. A blue-turquoise of its own.
+     *
+     * These used to take ColorType.GESTURE_TRAIL, so they changed with the theme, the keyboard style
+     * and, since the accent was added, with the accent: a pastel wallpaper colour on one phone, a
+     * greyish blue on another. The recording colour is the product's, not the keyboard's, so it is
+     * the same on every phone and under every preset and accent. The swipe trail still follows the theme.
+     */
+    const val RECORDING_COLOR = 0xFF35B6E8.toInt()
+
 
     private const val MIN_BLUR_PX = 1.5f
 

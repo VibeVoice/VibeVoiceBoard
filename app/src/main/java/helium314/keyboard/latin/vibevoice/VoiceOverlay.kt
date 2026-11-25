@@ -107,14 +107,13 @@ class VoiceOverlay(context: Context) : View(context) {
     /** Both from the keyboard's own theme, so the mark reads as part of it. */
     var discColor = Color.argb(235, 20, 20, 24)
         private set
-    var barColor = VoiceGlow.FALLBACK_ACCENT
+    var barColor = VoiceGlow.RECORDING_COLOR
         private set
 
     private fun readThemeColors() {
         try {
             val colors = Settings.getValues().mColors
             discColor = colors.get(ColorType.MAIN_BACKGROUND)
-            barColor = colors.get(ColorType.GESTURE_TRAIL)
             drawable = ContextCompat.getDrawable(context, VoiceGlow.markFor(discColor))
         } catch (e: Exception) {
             // Settings not loaded; the defaults above stand in for one session.

@@ -854,7 +854,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             // allocations on the UI thread each time -- during a rotation, exactly when there is
             // least room for it.
             val prefs = context.prefs()
-            val accent = Settings.getValues().mColors.get(ColorType.GESTURE_TRAIL)
+            val accent = VoiceGlow.RECORDING_COLOR // the same colour as the waves and the floating mark
             // The black mark on a light keyboard, the white one on a dark keyboard.
             val markRes = VoiceGlow.markFor(Settings.getValues().mColors.get(ColorType.MAIN_BACKGROUND))
             val key = "$inkPx|$accent|$markRes|" +
